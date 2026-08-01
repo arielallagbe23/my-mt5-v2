@@ -11,6 +11,9 @@ export default defineConfig({
     VitePWA({
       registerType: 'autoUpdate',
       injectRegister: null,
+      strategies: 'injectManifest',
+      srcDir: 'src',
+      filename: 'sw.js',
       manifest: {
         name: 'mymt5',
         short_name: 'mymt5',
@@ -26,16 +29,8 @@ export default defineConfig({
           { src: '/pwa/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
         ],
       },
-      workbox: {
-        // Ne jamais mettre en cache les appels API : les prix/bougies/statuts
-        // doivent toujours venir du réseau, pas d'une réponse figée.
-        navigateFallbackDenylist: [/^\/api\//],
-        runtimeCaching: [
-          {
-            urlPattern: /^\/api\//,
-            handler: 'NetworkOnly',
-          },
-        ],
+      injectManifest: {
+        injectionPoint: 'self.__WB_MANIFEST',
       },
     }),
   ],

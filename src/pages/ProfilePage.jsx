@@ -3,6 +3,7 @@ import { useAuth } from '../context/useAuth'
 import { api } from '../lib/api'
 import { PAGE, PAGE_TITLE, FIELD_INPUT } from '../lib/layout'
 import { requestAndPoll, isFreshTs } from '../lib/onDemand'
+import { isPushSupported, getPushSubscription, enablePush, disablePush } from '../lib/push'
 
 function formatAmount(amount, currency) {
   if (typeof amount !== 'number') return '—'
@@ -19,6 +20,33 @@ export function ProfilePage() {
 
   const [status, setStatus] = useState(null)
   const [statusLoading, setStatusLoading] = useState(true)
+
+  const [pushEnabled, setPushEnabled] = useState(false)
+  const [pushLoading, setPushLoading] = useState(false)
+  const [pushError, setPushError] = useState('')
+
+  useEffect(() => {
+    if (!isPushSupported()) return
+    getPushSubscription().then((sub) => setPushEnabled(Boolean(sub)))
+  }, [])
+
+  async function togglePush() {
+    setPushError('')
+    setPushLoading(true)
+    try {
+      if (pushEnabled) {
+        await disablePush()
+        setPushEnabled(false)
+      } else {
+        await enablePush()
+        setPushEnabled(true)
+      }
+    } catch (err) {
+      setPushError(err.message)
+    } finally {
+      setPushLoading(false)
+    }
+  }
 
   useEffect(() => {
     let cancelled = false
@@ -78,6 +106,26 @@ export function ProfilePage() {
               : 'VPS non connecté'}
         </p>
       </div>
+
+      {isPushSupported() && (
+        <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3">
+          <p className="text-sm font-semibold text-white">Notifications</p>
+          <p className="mt-1 text-sm text-slate-400">
+            Reçois une notification sur ce téléphone quand une tâche s'exécute.
+          </p>
+          {pushError && <p className="mt-2 text-sm text-red-400">{pushError}</p>}
+          <button
+            type="button"
+            onClick={togglePush}
+            disabled={pushLoading}
+            className={`mt-3 min-h-10 rounded-full px-5 text-sm font-semibold disabled:opacity-60 ${
+              pushEnabled ? 'bg-white/10 text-slate-300' : 'bg-indigo-600 text-white'
+            }`}
+          >
+            {pushLoading ? '...' : pushEnabled ? 'Désactiver les notifications' : 'Activer les notifications'}
+          </button>
+        </div>
+      )}
 
       <form onSubmit={handleSave} className="flex flex-col gap-3">
         <label className="flex flex-col gap-1.5 text-sm text-slate-400">

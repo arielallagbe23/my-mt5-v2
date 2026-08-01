@@ -34,6 +34,8 @@ export const api = {
   candle: (symbol) => request(`/api/candles/${symbol}`),
   requestCandle: (symbol, timeframe, time) =>
     request(`/api/candles/${symbol}/request`, { method: 'POST', body: { timeframe, time } }),
+  subscribePush: (subscription) => request('/api/push/subscribe', { method: 'POST', body: subscription }),
+  unsubscribePush: () => request('/api/push/subscribe', { method: 'DELETE' }),
   listTasks: () => request('/api/tasks'),
   getTask: (id) => request(`/api/tasks/${id}`),
   createTask: (task) => request('/api/tasks', { method: 'POST', body: task }),

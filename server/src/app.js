@@ -9,6 +9,7 @@ import candlesRouter from './routes/candles.js'
 import ordersRouter from './routes/orders.js'
 import tasksRouter from './routes/tasks.js'
 import cronRouter from './routes/cron.js'
+import pushRouter from './routes/push.js'
 import { isAllowedOrigin } from './lib/origin.js'
 
 if (!process.env.JWT_SECRET) {
@@ -36,6 +37,7 @@ app.use('/api/candles', candlesRouter)
 app.use('/api/orders', ordersRouter)
 app.use('/api/tasks', tasksRouter)
 app.use('/api/cron', cronRouter)
+app.use('/api/push', pushRouter)
 
 app.get('/api/health', (req, res) => res.json({ ok: true }))
 
