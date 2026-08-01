@@ -14,7 +14,9 @@ Pré-requis (sur le VPS) :
 
 import os
 import time
+import urllib.request
 from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 
 _DIR = os.path.dirname(os.path.abspath(__file__))
 
@@ -32,6 +34,12 @@ SA_PATH = os.path.join(_DIR, "service-account.json")
 POLL_INTERVAL = float(os.environ.get("POLL_INTERVAL", "10"))
 PRICE_SYMBOL = "USDJPY"
 MAGIC = int(os.environ.get("MT5_MAGIC", "234000"))
+
+# Déclenchement précis (±10s) du hello world de test, depuis la boucle du VPS
+# plutôt que via Vercel Cron (qui peut avoir plusieurs minutes de retard).
+BACKEND_URL = os.environ.get("BACKEND_URL", "https://mymt5-v2.vercel.app")
+CRON_SECRET = _read("cron_secret.txt") or os.environ.get("CRON_SECRET")
+HELLO_TIMES = ["11:00", "11:15", "12:00", "13:00", "14:00", "15:00"]
 
 ORDER_TYPES = {
     "BUY": "ORDER_TYPE_BUY",
@@ -268,6 +276,38 @@ def check_order_request(db):
     print(f"[ORDER] {symbol} {action} vol={volume} @ {price} -> ticket={res.order}")
 
 
+def check_hello_schedule(db):
+    """Déclenche /api/cron/hello à l'heure de Paris pile (précision ~POLL_INTERVAL),
+    au lieu de compter sur le cron Vercel qui peut retarder de plusieurs minutes."""
+    if not CRON_SECRET:
+        return
+
+    now_paris = datetime.now(ZoneInfo("Europe/Paris"))
+    slot = now_paris.strftime("%H:%M")
+    if slot not in HELLO_TIMES:
+        return
+
+    today = now_paris.strftime("%Y-%m-%d")
+    ref = db.collection("cron_runs").document("vps_hello_state")
+    doc = ref.get()
+    state = doc.to_dict() if doc.exists else {}
+    if state.get("date") == today and state.get("slot") == slot:
+        return  # déjà déclenché pour ce créneau aujourd'hui
+
+    req = urllib.request.Request(
+        f"{BACKEND_URL}/api/cron/hello",
+        headers={"Authorization": f"Bearer {CRON_SECRET}"},
+    )
+    try:
+        urllib.request.urlopen(req, timeout=10)
+        print(f"[HELLO] déclenché pour {slot}")
+    except Exception as e:
+        print(f"[HELLO] échec pour {slot} : {e}")
+        return
+
+    ref.set({"date": today, "slot": slot})
+
+
 def run():
     from google.cloud import firestore
 
@@ -283,6 +323,7 @@ def run():
             check_price_request(db)
             check_candle_request(db)
             check_order_request(db)
+            check_hello_schedule(db)
         except Exception as e:
             print(f"[LOOP] erreur : {e}")
         time.sleep(POLL_INTERVAL)
