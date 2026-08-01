@@ -1,0 +1,4 @@
+service-account.json
+vps_id.txt
+__pycache__/
+*.pyc
