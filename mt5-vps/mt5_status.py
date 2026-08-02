@@ -204,13 +204,39 @@ def check_candle_request(db):
     print(f"[PUB] {symbol} {timeframe} O={candle['open']} H={candle['high']} L={candle['low']} C={candle['close']} (sur demande)")
 
 
-CONTRACT_SIZE = 100000  # 1 lot standard = 100 000 unités de la devise de base
-FEE_BUFFER = 0.05  # marge de 5% pour commissions/spread (voir mémoire risk-sizing-strategy)
+CONTRACT_SIZE = 100000  # 1 lot standard = 100 000 unités de la devise de base (ex: USD pour USDJPY)
+FEE_BUFFER = 0.05  # on réduit le lot de 5% pour laisser de la marge aux commissions/spread
 MAX_RISK_PERCENT = 2  # garde-fou : jamais plus de 2% du capital risqué, même si l'API a été contournée
 
 
 def compute_lot_size(risk_amount, entry_price, sl_price, current_price):
-    """Port direct de src/lib/scenarios/shared.js computeLotSize — garder synchronisé."""
+    """Calcule la taille de position (en lots) pour risquer exactement `risk_amount`
+    (dans la devise du compte) si le prix va de `entry_price` jusqu'à `sl_price`.
+
+    Port direct de l'ancien src/lib/scenarios/shared.js computeLotSize (supprimé —
+    ce fichier est maintenant la seule implémentation vivante, à garder cohérente
+    si la formule change un jour).
+
+    Formule, en 3 étapes :
+      1. `distance` = écart de prix entre l'entrée et le SL (toujours positif, peu
+         importe le sens achat/vente).
+      2. `risk_per_lot` = perte en devise du compte SI on tradait 1 lot entier et que
+         le prix touchait le SL. Pour une paire cotée en JPY (comme USDJPY) avec un
+         compte en USD :
+           perte_JPY = distance × CONTRACT_SIZE
+           perte_USD = perte_JPY ÷ current_price   (conversion JPY → USD au cours actuel)
+         D'où : risk_per_lot = (distance × CONTRACT_SIZE) / current_price
+      3. `lots` = combien de lots pour que la perte totale (si le SL est touché) égale
+         exactement `risk_amount` : lots = risk_amount / risk_per_lot
+         On réduit ensuite de 5% (FEE_BUFFER) pour ne pas dépasser le risque prévu une
+         fois les commissions et le spread pris en compte.
+
+    Le résultat est arrondi au centième de lot, avec un plancher de 0,01 (taille
+    minimale tradable) — même si ça peut faire dépasser légèrement le risque visé sur
+    de très petits comptes, c'est un choix assumé (voir mémoire risk-sizing-strategy).
+
+    Retourne None si une donnée manque (risk_amount/distance/current_price nul ou 0).
+    """
     distance = abs(entry_price - sl_price)
     if not risk_amount or not distance or not current_price:
         return None
@@ -224,29 +250,51 @@ def compute_lot_size(risk_amount, entry_price, sl_price, current_price):
 
 
 def fibo_price(hi, lo, level):
+    """Prix correspondant à un niveau de retracement Fibonacci entre `lo` (0%) et
+    `hi` (100%). Ex: level=0.236 -> prix à 23,6% en remontant de lo vers hi. Les
+    niveaux hors [0, 1] (ex: -0.05, 1.0 utilisés ailleurs) sont valides aussi,
+    c'est juste une interpolation (ou extrapolation) linéaire."""
     return lo + (hi - lo) * level
 
 
 def evaluate_sell_1(task, candle, account_size):
-    """Port direct de src/lib/scenarios/sellScenario1.js evaluate — garder synchronisé.
+    """Scénario Vente 1 — seul scénario existant pour l'instant (scenarioId "sell-1").
 
-    Condition (les deux) : close bougie <= condition de prix, ET open bougie >=
-    borne haute de la golden zone (23,6% du Fibo 1 et du Fibo 2). Si rempli :
-    Sell Limit, entrée = prix support, SL = Fibo1 -0,05%, TP = Fibo1 58,8%.
+    Condition d'entrée (les DEUX doivent être vraies) :
+      1. close de la bougie de référence <= "condition de prix" choisie par l'utilisateur
+      2. open de cette même bougie >= borne haute de la "golden zone" (golden zone =
+         entre les niveaux 23,6% du Fibo 1 saisi à la main et du Fibo 2 dérivé
+         automatiquement du low de la bougie de référence)
+
+    Si les deux sont vraies → on place un Sell Limit :
+      - Entrée = "prix support intéressant" (saisi à la main dans la tâche)
+      - SL     = niveau -0,05% du Fibo 1
+      - TP     = niveau 58,8% du Fibo 1
+
+    Pourquoi le CLOSE de la bougie et pas un prix live ? Comparer contre un prix
+    "live" au moment de la décision serait risqué (le marché peut bouger pendant
+    le calcul). Le close est une valeur figée, déjà connue, aucun risque de timing.
     """
-    fibo100 = task["fibo100"]
-    fibo0 = task["fibo0"]
+    fibo100 = task["fibo100"]  # borne haute du Fibo 1 (100%), saisie par l'utilisateur
+    fibo0 = task["fibo0"]  # borne basse du Fibo 1 (0%), saisie par l'utilisateur
 
-    fibo1_236 = fibo_price(fibo100, fibo0, 0.236)
-    sl = fibo_price(fibo100, fibo0, -0.05)
-    tp = fibo_price(fibo100, fibo0, 0.588)
+    fibo1_236 = fibo_price(fibo100, fibo0, 0.236)  # niveau 23,6% du Fibo 1
+    sl = fibo_price(fibo100, fibo0, -0.05)  # niveau -0,05% du Fibo 1 -> stop loss
+    tp = fibo_price(fibo100, fibo0, 0.588)  # niveau 58,8% du Fibo 1 -> take profit
 
+    # Fibo 2 : 100% = fibo0 (le 0% du Fibo 1), 0% = low de la bougie de référence
+    # (dérivé automatiquement, contrairement au Fibo 1 saisi à la main).
     fibo2_236 = fibo_price(fibo0, candle["low"], 0.236)
+
+    # Golden zone = zone entre les niveaux 23,6% des deux Fibo. On ne sait pas à
+    # l'avance lequel des deux est le plus haut, donc on prend le max comme borne
+    # haute de la condition d'entrée.
     golden_high = max(fibo1_236, fibo2_236)
 
-    threshold = task["priceCondition"]
-    entry_price = task["supportPrice"]
+    threshold = task["priceCondition"]  # seuil de comparaison sur le close, saisi par l'utilisateur
+    entry_price = task["supportPrice"]  # prix d'entrée du Sell Limit, saisi par l'utilisateur
 
+    # --- Les deux conditions du scénario ---
     close_below = candle["close"] <= threshold
     open_above = candle["open"] >= golden_high
     if not (close_below and open_above):
@@ -255,12 +303,18 @@ def evaluate_sell_1(task, candle, account_size):
             "reason": f"Condition non remplie (close={candle['close']}, open={candle['open']})",
         }
 
+    # --- Garde-fou de sécurité : un Sell Limit n'a de sens que si SL > Entrée > TP.
+    # Si les niveaux Fibo sont mal configurés (ex: inversés), on bloque plutôt que
+    # d'envoyer un ordre incohérent qui exposerait à un risque mal calculé. ---
     if not (sl > entry_price > tp):
         return {
             "matched": False,
             "reason": f"Ordre incohérent (SL {sl} / Entrée {entry_price} / TP {tp})",
         }
 
+    # Montant risqué en devise du compte, dérivé du % de risque choisi sur la tâche
+    # et du capital de référence fixe (voir mémoire risk-sizing-strategy — ce n'est
+    # PAS l'équité live, c'est intentionnel).
     risk_amount = (task["risk"] / 100) * account_size if account_size else None
     lot = compute_lot_size(risk_amount, entry_price, sl, candle["close"])
 
@@ -274,12 +328,17 @@ def evaluate_sell_1(task, candle, account_size):
     }
 
 
+# Un seul scénario existe pour l'instant. Quand d'autres seront ajoutés (achat,
+# autres scénarios de vente...), ils viendront s'ajouter ici avec leur propre
+# scenarioId — c'est ce qui permet à evaluate_task de router vers la bonne fonction.
 SCENARIO_EVALUATORS = {
     "sell-1": evaluate_sell_1,
 }
 
 
 def evaluate_task(task, candle, account_size):
+    """Point d'entrée unique pour évaluer une tâche : vérifie d'abord le risque
+    (garde-fou), puis délègue au bon scénario."""
     # Filet de sécurité indépendant de l'API : même si une tâche avec un risque
     # aberrant arrivait jusqu'ici (bug, édition manuelle dans Firestore...), on
     # refuse de l'exécuter plutôt que de laisser passer un ordre disproportionné.
@@ -294,6 +353,9 @@ def evaluate_task(task, candle, account_size):
 
 
 def _account_size(db):
+    """Lit le capital de référence fixe (PAS l'équité live) depuis
+    vps_status/{VPS_ID}.accounts.{login}.account_size — un champ maintenu
+    manuellement dans Firestore, jamais écrit par ce script."""
     doc = db.collection("vps_status").document(VPS_ID).get()
     if not doc.exists:
         return None
@@ -304,6 +366,10 @@ def _account_size(db):
 
 
 def _notify(title, body):
+    """Envoie une notification push via l'API Vercel (POST /api/notify) — c'est
+    la seule façon d'en envoyer, la clé VAPID privée n'existe que côté serveur.
+    Ne fait rien si CRON_SECRET est absent ; n'échoue jamais bruyamment (une
+    notif ratée ne doit pas empêcher la suite du traitement de la tâche)."""
     if not CRON_SECRET:
         return
     req = urllib.request.Request(
@@ -319,9 +385,17 @@ def _notify(title, body):
 
 
 def check_due_tasks(db):
-    """Scanne les tâches Firestore encore en attente et exécute celles dont
-    l'heure est passée — évaluation, calcul de lot et (hors DRY_RUN) envoi
-    de l'ordre, entièrement côté VPS."""
+    """Scanne les tâches Firestore encore en attente (status "pending") et
+    exécute celles dont l'heure est passée. Une fois traitée (dry-run ou réel),
+    _execute_task change le status ("dry_run_done"/"done") donc une tâche ne
+    ressort plus de cette requête au tour suivant — pas besoin de dédoublonnage
+    explicite ici.
+
+    Note timing : `executionTime` est saisi via un sélecteur datetime-local côté
+    app, donc sans fuseau horaire — cette chaîne "naïve" représente l'heure
+    locale de Paris telle que vue par l'utilisateur (pas UTC). On la rend
+    explicite en lui assignant Europe/Paris avant de comparer à l'heure réelle.
+    """
     now_utc = datetime.now(timezone.utc)
 
     for doc in db.collection("tasks").where("status", "==", "pending").stream():
@@ -348,11 +422,26 @@ def check_due_tasks(db):
 
 
 def _execute_task(db, ref, task_id, task, target_dt):
+    """Exécute une tâche due : récupère la bougie de référence via MT5, évalue
+    le scénario, puis notifie (DRY_RUN) ou place réellement l'ordre.
+
+    ATTENTION (limite connue, pas encore corrigée) : le statut de la tâche n'est
+    marqué "done" qu'à la toute fin (ref.update en bas de fonction). Si order_send
+    réussit mais qu'une erreur survient juste après (ex: coupure réseau avant
+    l'écriture Firestore), le status resterait "pending" et la tâche serait
+    retentée — donc potentiellement exécutée deux fois. Risque faible en
+    pratique (fenêtre de quelques lignes de code) mais réel ; à corriger avant
+    d'utiliser cette app avec des montants qui feraient mal en cas de doublon
+    (ex: marquer "done" AVANT d'appeler order_send une fois le résultat connu,
+    ou utiliser une transaction Firestore).
+    """
     m = _ensure_mt5()
     if m is None:
         print(f"[TASK] {task_id} : MT5 indisponible, réessai au prochain tour")
         return
 
+    # --- 1. Récupération de la bougie de référence, même logique que check_candle_request
+    # (voir son commentaire plus haut sur pourquoi une plage plutôt qu'un point précis) ---
     symbol = PRICE_SYMBOL
     timeframe = task.get("timeframe", "H1")
     tf_map = {"M15": m.TIMEFRAME_M15, "H1": m.TIMEFRAME_H1, "H4": m.TIMEFRAME_H4}
@@ -365,6 +454,9 @@ def _execute_task(db, ref, task_id, task, target_dt):
     m.symbol_select(symbol, True)
     rates = m.copy_rates_range(symbol, tf, range_from, range_to)
     if rates is None or len(rates) == 0:
+        # On NE marque PAS la tâche "done" ici : elle reste "pending" et sera
+        # retentée au prochain tour de boucle (~10s), au cas où MT5 n'a
+        # simplement pas encore la donnée.
         print(f"[TASK] {task_id} : bougie introuvable, réessai au prochain tour")
         return
 
@@ -375,10 +467,13 @@ def _execute_task(db, ref, task_id, task, target_dt):
         "close": float(rates[-1]["close"]),
     }
 
+    # --- 2. Évaluation : est-ce que la condition du scénario est remplie ? ---
     account_size = _account_size(db)
     result = evaluate_task(task, candle, account_size)
     now_ms = int(time.time() * 1000)
 
+    # --- 3a. Mode simulation (DRY_RUN, activé par défaut) : on notifie ce qui
+    # AURAIT été fait, mais order_send n'est jamais appelé. ---
     if DRY_RUN:
         if result["matched"]:
             body = (
@@ -392,12 +487,14 @@ def _execute_task(db, ref, task_id, task, target_dt):
         print(f"[TASK] {task_id} (dry-run) : {result}")
         return
 
+    # --- 3b. Mode réel : condition non remplie -> rien à envoyer à MT5 ---
     if not result["matched"]:
         _notify("mymt5", f"Tâche non exécutée : {result['reason']}")
         ref.update({"status": "done", "result": result, "updatedAt": now_ms})
         print(f"[TASK] {task_id} : non exécutée ({result['reason']})")
         return
 
+    # --- 3c. Mode réel : condition remplie -> on construit et envoie l'ordre MT5 ---
     info = m.symbol_info(symbol)
     if info is None:
         result["error"] = f"Symbole inconnu : {symbol}"
@@ -407,7 +504,7 @@ def _execute_task(db, ref, task_id, task, target_dt):
 
     order_type = m.ORDER_TYPE_SELL_LIMIT if result["orderType"] == "Sell Limit" else m.ORDER_TYPE_BUY_LIMIT
     request = {
-        "action": m.TRADE_ACTION_PENDING,
+        "action": m.TRADE_ACTION_PENDING,  # ordre en attente (Limit), pas un ordre au marché
         "symbol": symbol,
         "volume": float(result["lot"]),
         "type": order_type,
@@ -415,10 +512,10 @@ def _execute_task(db, ref, task_id, task, target_dt):
         "sl": float(result["sl"]),
         "tp": float(result["tp"]),
         "deviation": 20,
-        "magic": MAGIC,
-        "comment": f"task-{task_id}"[:28],
-        "type_time": m.ORDER_TIME_GTC,
-        "type_filling": m.ORDER_FILLING_RETURN,
+        "magic": MAGIC,  # identifiant pour repérer les ordres passés par ce script dans MT5
+        "comment": f"task-{task_id}"[:28],  # commentaire MT5 limité à 28 caractères
+        "type_time": m.ORDER_TIME_GTC,  # l'ordre reste actif jusqu'à annulation explicite
+        "type_filling": m.ORDER_FILLING_RETURN,  # mode de remplissage requis pour un ordre en attente
     }
 
     res = m.order_send(request)
