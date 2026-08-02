@@ -7,6 +7,7 @@ import { ProfilePage } from './pages/ProfilePage'
 import { AccountsPage } from './pages/AccountsPage'
 import { TasksPage } from './pages/TasksPage'
 import { TasksListPage } from './pages/TasksListPage'
+import { JournalPage } from './pages/JournalPage'
 import { Navbar } from './components/Navbar'
 import { SAFE_AREA_SCREEN } from './lib/layout'
 
@@ -35,11 +36,12 @@ function App() {
     <div className="flex min-h-dvh flex-col bg-linear-to-b from-slate-950 via-slate-900 to-slate-950">
       <Navbar page={page} onNavigate={setPage} />
       <main className="flex-1 pt-6 pr-[max(1.25rem,env(safe-area-inset-right))] pb-[max(1.5rem,env(safe-area-inset-bottom))] pl-[max(1.25rem,env(safe-area-inset-left))]">
-        {page === 'home' && <HomePage />}
+        {page === 'home' && <HomePage onNavigate={setPage} />}
         {page === 'profile' && <ProfilePage />}
         {page === 'accounts' && <AccountsPage />}
         {page === 'tasks' && <TasksPage />}
         {page === 'tasksList' && <TasksListPage />}
+        {page === 'journal' && <JournalPage />}
       </main>
     </div>
   )

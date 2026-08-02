@@ -45,6 +45,7 @@ export function Navbar({ page, onNavigate }) {
                   { key: 'accounts', label: 'Mes comptes' },
                   { key: 'tasks', label: 'Gestion tâche' },
                   { key: 'tasksList', label: 'Liste des tâches' },
+                  { key: 'journal', label: 'Journal' },
                 ].map((item) => (
                   <button
                     key={item.key}

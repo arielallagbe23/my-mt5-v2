@@ -7,10 +7,11 @@ function formatPrice(value) {
   return typeof value === 'number' ? value.toFixed(3) : '—'
 }
 
-export function HomePage() {
+export function HomePage({ onNavigate }) {
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [netPnl, setNetPnl] = useState(null)
 
   function load() {
     setError('')
@@ -32,6 +33,10 @@ export function HomePage() {
 
   useEffect(() => {
     load()
+    api
+      .trades()
+      .then((res) => setNetPnl(res.trades.reduce((sum, t) => sum + t.net, 0)))
+      .catch(() => {})
   }, [])
 
   const orders = data?.orders ?? []
@@ -51,6 +56,30 @@ export function HomePage() {
       </div>
 
       {error && <p className="text-sm text-red-400">{error}</p>}
+
+      <button
+        type="button"
+        onClick={() => onNavigate?.('journal')}
+        className={`rounded-2xl border p-4 text-left ${
+          netPnl === null
+            ? 'border-white/10 bg-white/5'
+            : netPnl >= 0
+              ? 'border-green-500/30 bg-green-500/10'
+              : 'border-red-500/30 bg-red-500/10'
+        }`}
+      >
+        <div className="flex items-center justify-between">
+          <p className="text-xs font-bold tracking-[0.14em] text-slate-400 uppercase">Journal — P&amp;L net</p>
+          <span className="text-xs text-slate-500">Voir le détail →</span>
+        </div>
+        <p
+          className={`mt-1 text-2xl font-bold ${
+            netPnl === null ? 'text-white' : netPnl >= 0 ? 'text-green-400' : 'text-red-400'
+          }`}
+        >
+          {netPnl === null ? '—' : `${netPnl >= 0 ? '+' : ''}${netPnl.toFixed(2)} $`}
+        </p>
+      </button>
 
       <section className="flex flex-col gap-2">
         <p className="text-xs font-bold tracking-[0.14em] text-slate-500 uppercase">Ordres différés</p>
