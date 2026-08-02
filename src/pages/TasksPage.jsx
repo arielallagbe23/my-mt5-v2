@@ -16,6 +16,7 @@ const MIN_LABEL_GAP = 4 // % minimum entre deux libellés pour éviter le chevau
 // (Python) au moment de l'exécution, pas ici. Cet id sert juste à enregistrer
 // quel scénario a été choisi.
 const SCENARIO_IDS = { buy: null, sell: 'sell-1' }
+const MAX_RISK_PERCENT = 2 // garde-fou : jamais plus de 2% du capital risqué sur une tâche
 
 export function TasksPage() {
   const [fibo100, setFibo100] = useState('')
@@ -190,6 +191,10 @@ export function TasksPage() {
 
     if (Object.values(payload).some((v) => typeof v === 'number' && !Number.isFinite(v))) {
       setTaskSaveError('Remplis tous les champs (Fibo, prix, risque) avant d\'enregistrer.')
+      return
+    }
+    if (payload.risk <= 0 || payload.risk > MAX_RISK_PERCENT) {
+      setTaskSaveError(`Risque invalide (doit être entre 0 et ${MAX_RISK_PERCENT}%).`)
       return
     }
 

@@ -6,6 +6,7 @@ const router = Router()
 
 const SCENARIOS = new Set(['buy', 'sell'])
 const TIMEFRAMES = new Set(['M15', 'H1', 'H4'])
+const MAX_RISK_PERCENT = 2 // garde-fou : jamais plus de 2% du capital risqué sur une tâche
 
 function serialize(doc) {
   const data = doc.data()
@@ -42,6 +43,7 @@ function validateTaskBody(body) {
   ]) {
     if (typeof value !== 'number' || !Number.isFinite(value)) return `Champ ${label} invalide`
   }
+  if (risk <= 0 || risk > MAX_RISK_PERCENT) return `Risque invalide (doit être entre 0 et ${MAX_RISK_PERCENT}%)`
   return null
 }
 

@@ -95,7 +95,10 @@ export function TaskLauncher({
           <input
             type="number"
             inputMode="decimal"
-            placeholder="Ex: 3"
+            min="0"
+            max="2"
+            step="0.1"
+            placeholder="Max 2%"
             value={risk}
             onChange={(event) => onRiskChange(event.target.value)}
             className={COMPACT_INPUT}

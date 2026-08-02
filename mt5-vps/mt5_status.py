@@ -206,6 +206,7 @@ def check_candle_request(db):
 
 CONTRACT_SIZE = 100000  # 1 lot standard = 100 000 unités de la devise de base
 FEE_BUFFER = 0.05  # marge de 5% pour commissions/spread (voir mémoire risk-sizing-strategy)
+MAX_RISK_PERCENT = 2  # garde-fou : jamais plus de 2% du capital risqué, même si l'API a été contournée
 
 
 def compute_lot_size(risk_amount, entry_price, sl_price, current_price):
@@ -279,6 +280,13 @@ SCENARIO_EVALUATORS = {
 
 
 def evaluate_task(task, candle, account_size):
+    # Filet de sécurité indépendant de l'API : même si une tâche avec un risque
+    # aberrant arrivait jusqu'ici (bug, édition manuelle dans Firestore...), on
+    # refuse de l'exécuter plutôt que de laisser passer un ordre disproportionné.
+    risk = task.get("risk")
+    if not isinstance(risk, (int, float)) or risk <= 0 or risk > MAX_RISK_PERCENT:
+        return {"matched": False, "reason": f"Risque invalide ou hors limite (max {MAX_RISK_PERCENT}%) : {risk}"}
+
     evaluator = SCENARIO_EVALUATORS.get(task.get("scenarioId"))
     if evaluator is None:
         return {"matched": False, "reason": f"Scénario inconnu : {task.get('scenarioId')}"}
