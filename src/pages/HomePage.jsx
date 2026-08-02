@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { api } from '../lib/api'
-import { PAGE, PAGE_TITLE } from '../lib/layout'
+import { PAGE } from '../lib/layout'
 import { requestAndPoll, isFreshTs } from '../lib/onDemand'
 
 function formatPrice(value) {
@@ -39,8 +39,7 @@ export function HomePage() {
 
   return (
     <div className={PAGE}>
-      <div className="flex items-center justify-between gap-2">
-        <h1 className={PAGE_TITLE}>Accueil</h1>
+      <div className="flex items-center justify-end gap-2">
         <button
           type="button"
           onClick={load}
