@@ -53,3 +53,48 @@ def fibo_price(hi, lo, level):
     niveaux hors [0, 1] (ex: -0.05, 1.0 utilisés ailleurs) sont valides aussi,
     c'est juste une interpolation (ou extrapolation) linéaire."""
     return lo + (hi - lo) * level
+
+
+def golden_zone(fibo100, fibo0, candle_low):
+    """Golden zone (entre les niveaux 23,6% du Fibo 1 et du Fibo 2) + SL1/TP1,
+    partagés par tous les scénarios de vente basés sur la golden zone (Sell
+    2/3/4 — Sell 1 a sa propre entrée/SL manuels).
+
+    Fibo 2 : 100% = fibo0 (le 0% du Fibo 1), 0% = low de la bougie de référence.
+
+    Retourne (borne_basse, milieu, borne_haute, sl1, tp1).
+    """
+    fibo1_236 = fibo_price(fibo100, fibo0, 0.236)
+    fibo2_236 = fibo_price(fibo0, candle_low, 0.236)
+
+    low = min(fibo1_236, fibo2_236)
+    high = max(fibo1_236, fibo2_236)
+    mid = (low + high) / 2
+
+    sl1 = fibo_price(fibo0, candle_low, 0.8)  # niveau 80% du Fibo 2
+    tp1 = fibo_price(fibo100, fibo0, 0.588)  # niveau 58,8% du Fibo 1
+
+    return low, mid, high, sl1, tp1
+
+
+def finish_sell_order(entry_price, sl, tp, candle_close, task, account_size):
+    """Vérifie l'ordre SL > Entrée > TP, calcule le lot, et construit le
+    résultat "matched". Partagé par Sell 2/3/4 (Sell 1 a sa propre logique
+    d'entrée manuelle, donc son propre code équivalent)."""
+    if not (sl > entry_price > tp):
+        return {
+            "matched": False,
+            "reason": f"Ordre incohérent (SL {sl} / Entrée {entry_price} / TP {tp})",
+        }
+
+    risk_amount = (task["risk"] / 100) * account_size if account_size else None
+    lot = compute_lot_size(risk_amount, entry_price, sl, candle_close)
+
+    return {
+        "matched": True,
+        "orderType": "Sell Limit",
+        "entry": entry_price,
+        "sl": sl,
+        "tp": tp,
+        "lot": lot,
+    }
