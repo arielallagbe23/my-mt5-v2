@@ -55,15 +55,6 @@ HELLO_TIMES = ["11:00", "11:15", "12:00", "13:00", "14:00", "15:00"]
 # "false" dans ce fichier une fois le comportement vérifié plusieurs fois.
 DRY_RUN = (_read("dry_run.txt") or os.environ.get("DRY_RUN", "true")).strip().lower() != "false"
 
-ORDER_TYPES = {
-    "BUY": "ORDER_TYPE_BUY",
-    "SELL": "ORDER_TYPE_SELL",
-    "BUY_LIMIT": "ORDER_TYPE_BUY_LIMIT",
-    "SELL_LIMIT": "ORDER_TYPE_SELL_LIMIT",
-    "BUY_STOP": "ORDER_TYPE_BUY_STOP",
-    "SELL_STOP": "ORDER_TYPE_SELL_STOP",
-}
-
 mt5 = None
 
 
@@ -213,81 +204,6 @@ def check_candle_request(db):
     })
     ref.update({"status": "done"})
     print(f"[PUB] {symbol} {timeframe} O={candle['open']} H={candle['high']} L={candle['low']} C={candle['close']} (sur demande)")
-
-
-def check_order_request(db):
-    """Place un ordre réel sur MT5 si l'app en a fait la demande (commands/order_request)."""
-    ref = db.collection("commands").document("order_request")
-    doc = ref.get()
-    if not doc.exists or doc.to_dict().get("status") != "pending":
-        return
-
-    data = doc.to_dict()
-    request_id = data.get("request_id")
-    symbol = data.get("symbol") or PRICE_SYMBOL
-    action = str(data.get("action", "")).upper()
-    volume = data.get("volume")
-    price = data.get("price")
-    sl = data.get("sl")
-    tp = data.get("tp")
-
-    def finish(result):
-        if request_id:
-            db.collection("orders").document(request_id).set({**result, "ts": int(time.time())})
-        ref.update({"status": "done"})
-
-    if action not in ORDER_TYPES:
-        finish({"ok": False, "error": f"Action inconnue : {action}"})
-        return
-    if not isinstance(volume, (int, float)) or volume <= 0:
-        finish({"ok": False, "error": "Volume invalide"})
-        return
-    if not isinstance(price, (int, float)) or price <= 0:
-        finish({"ok": False, "error": "Prix invalide"})
-        return
-
-    m = _ensure_mt5()
-    if m is None:
-        finish({"ok": False, "error": "MT5 indisponible"})
-        return
-
-    m.symbol_select(symbol, True)
-    info = m.symbol_info(symbol)
-    if info is None:
-        finish({"ok": False, "error": f"Symbole inconnu : {symbol}"})
-        return
-
-    is_market = action in ("BUY", "SELL")
-    order_type = getattr(m, ORDER_TYPES[action])
-
-    request = {
-        "action": m.TRADE_ACTION_DEAL if is_market else m.TRADE_ACTION_PENDING,
-        "symbol": symbol,
-        "volume": float(volume),
-        "type": order_type,
-        "price": float(price),
-        "deviation": 20,
-        "magic": MAGIC,
-        "comment": str(data.get("comment", "app"))[:28],
-        "type_time": m.ORDER_TIME_GTC,
-        "type_filling": m.ORDER_FILLING_IOC if is_market else m.ORDER_FILLING_RETURN,
-    }
-    if sl:
-        request["sl"] = float(sl)
-    if tp:
-        request["tp"] = float(tp)
-
-    res = m.order_send(request)
-    if res is None:
-        finish({"ok": False, "error": f"order_send() a retourné None : {m.last_error()}"})
-        return
-    if res.retcode != m.TRADE_RETCODE_DONE:
-        finish({"ok": False, "error": res.comment, "retcode": res.retcode})
-        print(f"[ORDER] échec {symbol} {action} : {res.comment} (retcode {res.retcode})")
-        return
-
-    finish({"ok": True, "ticket": res.order, "price": res.price, "volume": res.volume})
-    print(f"[ORDER] {symbol} {action} vol={volume} @ {price} -> ticket={res.order}")
 
 
 CONTRACT_SIZE = 100000  # 1 lot standard = 100 000 unités de la devise de base
@@ -562,7 +478,6 @@ def run():
             check_status_request(db)
             check_price_request(db)
             check_candle_request(db)
-            check_order_request(db)
             check_due_tasks(db)
             check_hello_schedule(db)
         except Exception as e:
