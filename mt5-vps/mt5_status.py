@@ -4,8 +4,8 @@ mt5_status.py — Point d'entrée du VPS. Toutes les POLL_INTERVAL secondes :
     en continu ;
   - scanne les tâches de trading dues et les exécute (tasks.py) ;
   - surveille les ordres différés et positions ouvertes : notifie un
-    déclenchement d'ordre, et la progression d'une position vers son TP
-    (positions.py).
+    déclenchement d'ordre, la progression vers le TP, et déplace le SL par
+    paliers (BE, 25%, 50%) — respecte DRY_RUN comme le reste (positions.py).
 
 Tout tourne côté VPS, en connexions sortantes uniquement (Firestore + appels
 à l'API Vercel pour les notifications) — aucun port n'est jamais ouvert ici,
@@ -34,7 +34,7 @@ import time
 
 from config import POLL_INTERVAL, SA_PATH, VPS_ID
 from on_demand import check_candle_request, check_positions_request, check_price_request, check_status_request
-from positions import check_order_fills, check_tp_progress
+from positions import check_order_fills, check_tp_progress, check_trailing_stop
 from tasks import check_due_tasks
 
 
@@ -56,6 +56,7 @@ def run():
             check_due_tasks(db)
             check_order_fills(db)
             check_tp_progress(db)
+            check_trailing_stop(db)
         except Exception as e:
             print(f"[LOOP] erreur : {e}")
         time.sleep(POLL_INTERVAL)
