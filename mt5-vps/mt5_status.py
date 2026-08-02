@@ -11,7 +11,7 @@ le frontend ne se connecte jamais directement au VPS.
 Découpage du code (tout dans ce même dossier mt5-vps/) :
   config.py      — constantes et paramètres (fichiers locaux / variables d'env)
   mt5_client.py  — connexion MT5 avec reconnexion automatique
-  on_demand.py   — réponses aux demandes ponctuelles (équité, prix, bougie)
+  on_demand.py   — réponses aux demandes ponctuelles (équité, prix, bougie, positions)
   scenarios.py   — logique de trading pure (taille de position, conditions d'entrée)
   tasks.py       — scan + exécution des tâches dues (utilise mt5_client + scenarios)
 
@@ -28,7 +28,7 @@ import os
 import time
 
 from config import POLL_INTERVAL, SA_PATH, VPS_ID
-from on_demand import check_candle_request, check_price_request, check_status_request
+from on_demand import check_candle_request, check_positions_request, check_price_request, check_status_request
 from tasks import check_due_tasks
 
 
@@ -46,6 +46,7 @@ def run():
             check_status_request(db)
             check_price_request(db)
             check_candle_request(db)
+            check_positions_request(db)
             check_due_tasks(db)
         except Exception as e:
             print(f"[LOOP] erreur : {e}")

@@ -70,6 +70,63 @@ def check_price_request(db):
     print(f"[PUB] {symbol} bid={tick.bid} ask={tick.ask} (sur demande)")
 
 
+ORDER_TYPE_NAMES = {2: "Buy Limit", 3: "Sell Limit", 4: "Buy Stop", 5: "Sell Stop"}
+POSITION_TYPE_NAMES = {0: "Buy", 1: "Sell"}
+
+
+def check_positions_request(db):
+    """Ne publie les ordres différés et positions ouvertes que si l'app en a
+    fait la demande (commands/positions_request) — un seul appel MT5 groupé
+    pour les deux, pas de polling continu."""
+    ref = db.collection("commands").document("positions_request")
+    doc = ref.get()
+    if not doc.exists or doc.to_dict().get("status") != "pending":
+        return
+
+    m = ensure_mt5()
+    if m is None:
+        return
+
+    orders = m.orders_get(symbol=PRICE_SYMBOL) or ()
+    positions = m.positions_get(symbol=PRICE_SYMBOL) or ()
+
+    payload = {
+        "orders": [
+            {
+                "ticket": o.ticket,
+                "symbol": o.symbol,
+                "type": ORDER_TYPE_NAMES.get(o.type, str(o.type)),
+                "volume": o.volume_current,
+                "price": o.price_open,
+                "sl": o.sl,
+                "tp": o.tp,
+                "comment": o.comment,
+            }
+            for o in orders
+        ],
+        "positions": [
+            {
+                "ticket": p.ticket,
+                "symbol": p.symbol,
+                "type": POSITION_TYPE_NAMES.get(p.type, str(p.type)),
+                "volume": p.volume,
+                "priceOpen": p.price_open,
+                "priceCurrent": p.price_current,
+                "sl": p.sl,
+                "tp": p.tp,
+                "profit": p.profit,
+                "comment": p.comment,
+            }
+            for p in positions
+        ],
+        "ts": int(time.time()),
+    }
+
+    db.collection("positions").document("main").set(payload)
+    ref.update({"status": "done"})
+    print(f"[PUB] {len(payload['orders'])} ordre(s) différé(s), {len(payload['positions'])} position(s) (sur demande)")
+
+
 def check_candle_request(db):
     """Ne publie le close d'une bougie que si l'app en a fait la demande (commands/candle_request)."""
     ref = db.collection("commands").document("candle_request")
