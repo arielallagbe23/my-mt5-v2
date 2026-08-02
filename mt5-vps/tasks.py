@@ -4,16 +4,15 @@ l'automatisation). C'est la seule partie du VPS qui agit de son propre chef,
 sans qu'on le lui demande — tout le reste (on_demand.py) ne fait que répondre.
 """
 
-import json
 import time
-import urllib.request
 from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
 from google.cloud.firestore_v1.base_query import FieldFilter
 
-from config import BACKEND_URL, CRON_SECRET, DRY_RUN, MAGIC, PRICE_SYMBOL, VPS_ID
+from config import DRY_RUN, MAGIC, PRICE_SYMBOL, VPS_ID
 from mt5_client import ensure_mt5
+from notify import notify
 from scenarios import evaluate_task
 
 
@@ -28,25 +27,6 @@ def _account_size(db):
     login = data.get("login")
     entry = (data.get("accounts") or {}).get(str(login)) or {}
     return entry.get("account_size")
-
-
-def _notify(title, body):
-    """Envoie une notification push via l'API Vercel (POST /api/notify) — c'est
-    la seule façon d'en envoyer, la clé VAPID privée n'existe que côté serveur.
-    Ne fait rien si CRON_SECRET est absent ; n'échoue jamais bruyamment (une
-    notif ratée ne doit pas empêcher la suite du traitement de la tâche)."""
-    if not CRON_SECRET:
-        return
-    req = urllib.request.Request(
-        f"{BACKEND_URL}/api/notify",
-        data=json.dumps({"title": title, "body": body}).encode("utf-8"),
-        headers={"Authorization": f"Bearer {CRON_SECRET}", "Content-Type": "application/json"},
-        method="POST",
-    )
-    try:
-        urllib.request.urlopen(req, timeout=10)
-    except Exception as e:
-        print(f"[NOTIFY] échec : {e}")
 
 
 def check_due_tasks(db):
@@ -162,14 +142,14 @@ def _execute_task(db, ref, task_id, task, target_dt):
             )
         else:
             body = f"[DRY-RUN] Non exécutée : {result['reason']}"
-        _notify("mymt5 — tâche évaluée (dry-run)", body)
+        notify("mymt5 — tâche évaluée (dry-run)", body)
         ref.update({"status": "dry_run_done", "result": result, "updatedAt": now_ms})
         print(f"[TASK] {task_id} (dry-run) : {result}")
         return
 
     # --- 3b. Mode réel : condition non remplie -> rien à envoyer à MT5 ---
     if not result["matched"]:
-        _notify("mymt5", f"Tâche non exécutée : {result['reason']}")
+        notify("mymt5", f"Tâche non exécutée : {result['reason']}")
         ref.update({"status": "done", "result": result, "updatedAt": now_ms})
         print(f"[TASK] {task_id} : non exécutée ({result['reason']})")
         return
@@ -179,7 +159,7 @@ def _execute_task(db, ref, task_id, task, target_dt):
     if info is None:
         result["error"] = f"Symbole inconnu : {symbol}"
         ref.update({"status": "done", "result": result, "updatedAt": now_ms})
-        _notify("mymt5 — échec", result["error"])
+        notify("mymt5 — échec", result["error"])
         return
 
     order_type = m.ORDER_TYPE_SELL_LIMIT if result["orderType"] == "Sell Limit" else m.ORDER_TYPE_BUY_LIMIT
@@ -202,11 +182,11 @@ def _execute_task(db, ref, task_id, task, target_dt):
     if res is None or res.retcode != m.TRADE_RETCODE_DONE:
         error = str(m.last_error()) if res is None else res.comment
         result["error"] = error
-        _notify("mymt5 — échec d'ordre", f"{result['orderType']} : {error}")
+        notify("mymt5 — échec d'ordre", f"{result['orderType']} : {error}")
         print(f"[TASK] {task_id} : échec ordre : {error}")
     else:
         result["ticket"] = res.order
-        _notify(
+        notify(
             "mymt5 — ordre placé",
             f"{result['orderType']} @ {result['entry']} lot {result['lot']} (ticket {res.order})",
         )
