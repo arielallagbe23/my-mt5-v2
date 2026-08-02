@@ -55,23 +55,27 @@ def fibo_price(hi, lo, level):
     return lo + (hi - lo) * level
 
 
-def golden_zone(fibo100, fibo0, candle_low):
+def golden_zone(fibo100, fibo0, fibo2_bound):
     """Golden zone (entre les niveaux 23,6% du Fibo 1 et du Fibo 2) + SL1/TP1,
-    partagés par tous les scénarios de vente basés sur la golden zone (Sell
-    2/3/4 — Sell 1 a sa propre entrée/SL manuels).
+    partagés par tous les scénarios basés sur la golden zone (Sell/Buy 2/3/4 —
+    les scénarios "1" ont leur propre entrée/SL manuels).
 
-    Fibo 2 : 100% = fibo0 (le 0% du Fibo 1), 0% = low de la bougie de référence.
+    Fibo 2 : 100% = fibo0 (le 0% du Fibo 1), 0% = `fibo2_bound` — le **low** de
+    la bougie de clôture pour un scénario de vente, le **high** pour un achat.
 
-    Retourne (borne_basse, milieu, borne_haute, sl1, tp1).
+    Retourne (borne_basse, milieu, borne_haute, sl1, tp1). Ces mêmes niveaux
+    numériques (0,236 / 0,8 / 0,588) donnent automatiquement le bon prix dans
+    le bon sens pour l'achat comme pour la vente, grâce à la convention de
+    saisie du Fibo 1 (inversée pour une vente, normale pour un achat).
     """
     fibo1_236 = fibo_price(fibo100, fibo0, 0.236)
-    fibo2_236 = fibo_price(fibo0, candle_low, 0.236)
+    fibo2_236 = fibo_price(fibo0, fibo2_bound, 0.236)
 
     low = min(fibo1_236, fibo2_236)
     high = max(fibo1_236, fibo2_236)
     mid = (low + high) / 2
 
-    sl1 = fibo_price(fibo0, candle_low, 0.8)  # niveau 80% du Fibo 2
+    sl1 = fibo_price(fibo0, fibo2_bound, 0.8)  # niveau 80% du Fibo 2
     tp1 = fibo_price(fibo100, fibo0, 0.588)  # niveau 58,8% du Fibo 1
 
     return low, mid, high, sl1, tp1
@@ -93,6 +97,29 @@ def finish_sell_order(entry_price, sl, tp, candle_close, task, account_size):
     return {
         "matched": True,
         "orderType": "Sell Limit",
+        "entry": entry_price,
+        "sl": sl,
+        "tp": tp,
+        "lot": lot,
+    }
+
+
+def finish_buy_order(entry_price, sl, tp, candle_close, task, account_size):
+    """Équivalent de finish_sell_order pour un achat : vérifie SL < Entrée <
+    TP (ordre inversé par rapport à la vente), calcule le lot, construit le
+    résultat "matched". Partagé par Buy 2/3/4."""
+    if not (sl < entry_price < tp):
+        return {
+            "matched": False,
+            "reason": f"Ordre incohérent (SL {sl} / Entrée {entry_price} / TP {tp})",
+        }
+
+    risk_amount = (task["risk"] / 100) * account_size if account_size else None
+    lot = compute_lot_size(risk_amount, entry_price, sl, candle_close)
+
+    return {
+        "matched": True,
+        "orderType": "Buy Limit",
         "entry": entry_price,
         "sl": sl,
         "tp": tp,
