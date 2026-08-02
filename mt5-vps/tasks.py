@@ -10,6 +10,8 @@ import urllib.request
 from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
+from google.cloud.firestore_v1.base_query import FieldFilter
+
 from config import BACKEND_URL, CRON_SECRET, DRY_RUN, MAGIC, PRICE_SYMBOL, VPS_ID
 from mt5_client import ensure_mt5
 from scenarios import evaluate_task
@@ -61,7 +63,7 @@ def check_due_tasks(db):
     """
     now_utc = datetime.now(timezone.utc)
 
-    for doc in db.collection("tasks").where("status", "==", "pending").stream():
+    for doc in db.collection("tasks").where(filter=FieldFilter("status", "==", "pending")).stream():
         task = doc.to_dict()
         exec_raw = task.get("executionTime")
         if not exec_raw:
