@@ -1,30 +1,30 @@
 """
-scenarios.py — Registre des scénarios : associe chaque scenarioId à sa
-fonction d'évaluation, et sert de point d'entrée unique (evaluate_task) pour
-tasks.py. Un fichier par scénario (sell_1.py, et les suivants à venir) ; la
-logique partagée (taille de position, Fibonacci) vit dans scenario_shared.py.
+scenarios.py — Point d'entrée unique pour évaluer une tâche.
 
-Pour ajouter un scénario : créer son fichier (ex: buy_1.py), l'importer ici,
-et l'ajouter à SCENARIO_EVALUATORS avec son scenarioId.
+Il n'y a plus de "choix" de scénario à la création d'une tâche de vente : le
+système vérifie automatiquement la condition commune (close de la bougie de
+clôture <= prix de comparaison choisi), puis détermine LEQUEL de Sell 1/2/3/4
+s'applique selon la position de l'open (de la bougie qui vient de s'ouvrir)
+par rapport à la golden zone, et exécute celui-là.
+
+`candle` attendu ici a DEUX origines différentes (voir tasks.py) :
+  - close, low, high : bougie qui SE TERMINE à l'heure fixée de la tâche
+  - open              : bougie qui COMMENCE à cette même heure (la suivante)
+
+"buy" n'est pas encore implémenté.
 """
 
 from config import MAX_RISK_PERCENT
+from scenario_shared import golden_zone
 from sell_1 import evaluate_sell_1
 from sell_2 import evaluate_sell_2
 from sell_3 import evaluate_sell_3
 from sell_4 import evaluate_sell_4
 
-SCENARIO_EVALUATORS = {
-    "sell-1": evaluate_sell_1,
-    "sell-2": evaluate_sell_2,
-    "sell-3": evaluate_sell_3,
-    "sell-4": evaluate_sell_4,
-}
-
 
 def evaluate_task(task, candle, account_size):
-    """Point d'entrée unique pour évaluer une tâche : vérifie d'abord le risque
-    (garde-fou), puis délègue au bon scénario."""
+    """Vérifie d'abord le risque (garde-fou), puis délègue selon le sens
+    (achat/vente) de la tâche."""
     # Filet de sécurité indépendant de l'API : même si une tâche avec un risque
     # aberrant arrivait jusqu'ici (bug, édition manuelle dans Firestore...), on
     # refuse de l'exécuter plutôt que de laisser passer un ordre disproportionné.
@@ -32,7 +32,31 @@ def evaluate_task(task, candle, account_size):
     if not isinstance(risk, (int, float)) or risk <= 0 or risk > MAX_RISK_PERCENT:
         return {"matched": False, "reason": f"Risque invalide ou hors limite (max {MAX_RISK_PERCENT}%) : {risk}"}
 
-    evaluator = SCENARIO_EVALUATORS.get(task.get("scenarioId"))
-    if evaluator is None:
-        return {"matched": False, "reason": f"Scénario inconnu : {task.get('scenarioId')}"}
-    return evaluator(task, candle, account_size)
+    scenario = task.get("scenario")
+    if scenario == "sell":
+        return evaluate_sell(task, candle, account_size)
+
+    return {"matched": False, "reason": f"Scénario non implémenté : {scenario}"}
+
+
+def evaluate_sell(task, candle, account_size):
+    """Condition commune aux 4 sous-cas, puis routage automatique vers
+    Sell 1/2/3/4 selon la position de l'open par rapport à la golden zone."""
+    threshold = task["priceCondition"]
+    close = candle["close"]
+    if close > threshold:
+        return {
+            "matched": False,
+            "reason": f"Condition non remplie (close={close} > seuil {threshold})",
+        }
+
+    golden_low, golden_mid, golden_high, sl1, tp1 = golden_zone(task["fibo100"], task["fibo0"], candle["low"])
+    open_price = candle["open"]
+
+    if open_price >= golden_high:
+        return evaluate_sell_1(task, candle, account_size)
+    if open_price >= golden_mid:
+        return evaluate_sell_2(task, candle, account_size, golden_high, sl1, tp1)
+    if open_price >= golden_low:
+        return evaluate_sell_3(task, candle, account_size, golden_mid, sl1, tp1)
+    return evaluate_sell_4(task, candle, account_size, golden_low, sl1, tp1)

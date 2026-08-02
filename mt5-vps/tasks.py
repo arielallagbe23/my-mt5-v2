@@ -105,32 +105,46 @@ def _execute_task(db, ref, task_id, task, target_dt):
         print(f"[TASK] {task_id} : MT5 indisponible, réessai au prochain tour")
         return
 
-    # --- 1. Récupération de la bougie de référence, même logique que
-    # check_candle_request dans on_demand.py (voir son commentaire sur pourquoi
-    # une plage plutôt qu'un point précis) ---
     symbol = PRICE_SYMBOL
     timeframe = task.get("timeframe", "H1")
     tf_map = {"M15": m.TIMEFRAME_M15, "H1": m.TIMEFRAME_H1, "H4": m.TIMEFRAME_H4}
     tf = tf_map.get(timeframe, m.TIMEFRAME_H1)
     tf_minutes = {"M15": 15, "H1": 60, "H4": 240}.get(timeframe, 60)
-
-    range_from = target_dt - timedelta(minutes=tf_minutes * 3)
-    range_to = target_dt - timedelta(seconds=1)
-
     m.symbol_select(symbol, True)
-    rates = m.copy_rates_range(symbol, tf, range_from, range_to)
-    if rates is None or len(rates) == 0:
+
+    # --- 1a. Bougie qui SE TERMINE à l'heure fixée (ex: 23h-3h si target_dt=3h) :
+    # son close (condition commune) et son low (Fibo 2 / golden zone). Même
+    # logique que check_candle_request dans on_demand.py (voir son commentaire
+    # sur pourquoi une plage plutôt qu'un point précis). ---
+    closing_range_from = target_dt - timedelta(minutes=tf_minutes * 3)
+    closing_range_to = target_dt - timedelta(seconds=1)
+    closing_rates = m.copy_rates_range(symbol, tf, closing_range_from, closing_range_to)
+    if closing_rates is None or len(closing_rates) == 0:
         # On NE marque PAS la tâche "done" ici : elle reste "pending" et sera
         # retentée au prochain tour de boucle (~10s), au cas où MT5 n'a
         # simplement pas encore la donnée.
-        print(f"[TASK] {task_id} : bougie introuvable, réessai au prochain tour")
+        print(f"[TASK] {task_id} : bougie de clôture introuvable, réessai au prochain tour")
         return
+    closing_bar = closing_rates[-1]
+
+    # --- 1b. Bougie qui COMMENCE à l'heure fixée (celle qui vient tout juste
+    # de s'ouvrir) : son open (pour savoir où se situer dans la golden zone).
+    # C'est une bougie DIFFÉRENTE de la précédente — pas juste son propre champ
+    # "open". On demande la plage [target_dt, maintenant] et on prend la
+    # première bougie ; si le marché n'a pas encore coché depuis target_dt (on
+    # peut arriver ici quelques secondes après), la liste est vide et on
+    # retente au tour suivant, comme pour la bougie de clôture. ---
+    opening_rates = m.copy_rates_range(symbol, tf, target_dt, datetime.now(timezone.utc))
+    if opening_rates is None or len(opening_rates) == 0:
+        print(f"[TASK] {task_id} : bougie d'ouverture introuvable, réessai au prochain tour")
+        return
+    opening_bar = opening_rates[0]
 
     candle = {
-        "open": float(rates[-1]["open"]),
-        "high": float(rates[-1]["high"]),
-        "low": float(rates[-1]["low"]),
-        "close": float(rates[-1]["close"]),
+        "open": float(opening_bar["open"]),
+        "close": float(closing_bar["close"]),
+        "low": float(closing_bar["low"]),
+        "high": float(closing_bar["high"]),
     }
 
     # --- 2. Évaluation : est-ce que la condition du scénario est remplie ? ---

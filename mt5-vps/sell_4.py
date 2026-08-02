@@ -1,38 +1,24 @@
 """
-sell_4.py — Scénario Vente 4 (scenarioId "sell-4").
+sell_4.py — Sous-cas Vente 4 : l'open est sous (ou à) la borne basse de la
+golden zone. Le routeur (scenarios.py) a déjà calculé la golden zone et
+vérifié cette position — cette fonction ne fait que construire l'ordre.
 """
 
-from scenario_shared import fibo_price, finish_sell_order, golden_zone
+from scenario_shared import fibo_price, finish_sell_order
 
 MIN_RRP = 1.20  # ratio récompense/risque minimum ; en dessous, on vise TP2 au lieu de TP1
 
 
-def evaluate_sell_4(task, candle, account_size):
-    """Condition d'entrée : l'open de la bougie de référence est sous (ou à)
-    la borne basse de la golden zone :
+def evaluate_sell_4(task, candle, account_size, golden_low, sl1, tp1):
+    """Entrée = borne basse de la golden zone, SL = SL1 (80% Fibo 2).
 
-      open_bougie <= borne_basse_golden_zone
-
-    Si vraie → Sell Limit à la borne basse du range, SL = SL1 (80% du Fibo 2).
-
-    TP : normalement TP1 (58,8% du Fibo 1), comme Sell 2/3. MAIS si le ratio
-    récompense/risque avec TP1 est trop faible (RRP < 1,20 — reward/risk =
-    distance(entrée, TP) / distance(entrée, SL)), on vise plus loin : TP2
-    (97,5% du Fibo 1) à la place, pour un ratio plus intéressant.
+    TP : normalement TP1 (58,8% du Fibo 1). MAIS si le ratio récompense/risque
+    avec TP1 est trop faible (RRP < 1,20 — reward/risk = distance(entrée, TP)
+    / distance(entrée, SL)), on vise plus loin : TP2 (97,5% du Fibo 1) à la
+    place, pour un ratio plus intéressant.
     """
-    golden_low, golden_mid, golden_high, sl1, tp1 = golden_zone(task["fibo100"], task["fibo0"], candle["low"])
-
-    open_price = candle["open"]
-    if not (open_price <= golden_low):
-        return {
-            "matched": False,
-            "reason": f"Condition non remplie (open={open_price}, borne basse={golden_low:.3f})",
-        }
-
     entry_price = golden_low
 
-    # RRP calculé avec TP1 en référence, pour décider si on garde TP1 ou si
-    # on vise TP2 (plus loin, meilleur ratio).
     rrp = abs(tp1 - entry_price) / abs(sl1 - entry_price)
     if rrp < MIN_RRP:
         tp2 = fibo_price(task["fibo100"], task["fibo0"], 0.975)  # niveau 97,5% du Fibo 1
