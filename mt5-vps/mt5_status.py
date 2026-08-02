@@ -19,6 +19,7 @@ Découpage du code (tout dans ce même dossier mt5-vps/) :
   scenarios.py   — logique de trading pure (taille de position, conditions d'entrée)
   tasks.py       — scan + exécution des tâches dues (utilise mt5_client + scenarios)
   positions.py   — surveillance des déclenchements d'ordres et progression vers le TP
+  trades.py      — historique des trades fermés (import + alimentation automatique)
 
 Pré-requis (sur le VPS) :
   pip install -r requirements.txt
@@ -36,6 +37,7 @@ from config import POLL_INTERVAL, SA_PATH, VPS_ID
 from on_demand import check_candle_request, check_positions_request, check_price_request, check_status_request
 from positions import check_order_fills, check_tp_progress, check_trailing_stop
 from tasks import check_due_tasks
+from trades import check_closed_positions, check_trades_sync_request
 
 
 def run():
@@ -53,10 +55,12 @@ def run():
             check_price_request(db)
             check_candle_request(db)
             check_positions_request(db)
+            check_trades_sync_request(db)
             check_due_tasks(db)
             check_order_fills(db)
             check_tp_progress(db)
             check_trailing_stop(db)
+            check_closed_positions(db)
         except Exception as e:
             print(f"[LOOP] erreur : {e}")
         time.sleep(POLL_INTERVAL)

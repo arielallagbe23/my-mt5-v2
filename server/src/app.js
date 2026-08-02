@@ -8,6 +8,7 @@ import pricesRouter from './routes/prices.js'
 import candlesRouter from './routes/candles.js'
 import tasksRouter from './routes/tasks.js'
 import positionsRouter from './routes/positions.js'
+import tradesRouter from './routes/trades.js'
 import pushRouter from './routes/push.js'
 import notifyRouter from './routes/notify.js'
 import { isAllowedOrigin } from './lib/origin.js'
@@ -36,6 +37,7 @@ app.use('/api/prices', pricesRouter)
 app.use('/api/candles', candlesRouter)
 app.use('/api/tasks', tasksRouter)
 app.use('/api/positions', positionsRouter)
+app.use('/api/trades', tradesRouter)
 app.use('/api/push', pushRouter)
 app.use('/api/notify', notifyRouter)
 

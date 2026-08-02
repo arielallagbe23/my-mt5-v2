@@ -36,6 +36,8 @@ export const api = {
     request(`/api/candles/${symbol}/request`, { method: 'POST', body: { timeframe, time } }),
   positions: () => request('/api/positions'),
   requestPositions: () => request('/api/positions/request', { method: 'POST' }),
+  trades: () => request('/api/trades'),
+  syncTrades: () => request('/api/trades/sync', { method: 'POST' }),
   subscribePush: (subscription) => request('/api/push/subscribe', { method: 'POST', body: subscription }),
   unsubscribePush: () => request('/api/push/subscribe', { method: 'DELETE' }),
   listTasks: () => request('/api/tasks'),
