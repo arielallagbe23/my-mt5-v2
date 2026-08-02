@@ -10,9 +10,11 @@ et l'ajouter à SCENARIO_EVALUATORS avec son scenarioId.
 
 from config import MAX_RISK_PERCENT
 from sell_1 import evaluate_sell_1
+from sell_2 import evaluate_sell_2
 
 SCENARIO_EVALUATORS = {
     "sell-1": evaluate_sell_1,
+    "sell-2": evaluate_sell_2,
 }
 
 
