@@ -1,17 +1,26 @@
 """
-mt5_status.py — Publie l'équité et le prix USDJPY dans Firestore, sur demande uniquement
+mt5_status.py — Publie l'équité/prix sur demande, et exécute les tâches de trading
 ═══════════════════════════════════════════════════════════════════════════════
-Se connecte au terminal MT5 local. Toutes les POLL_INTERVAL secondes, vérifie si
-l'app a déposé une demande (commands/status_request, commands/price_request) et
-ne publie dans Firestore que si c'est le cas — aucune écriture en continu.
-L'exécution d'ordres viendra dans une étape suivante.
+Se connecte au terminal MT5 local. Toutes les POLL_INTERVAL secondes :
+  - répond aux demandes ponctuelles de l'app (commands/status_request,
+    price_request, candle_request, order_request) — aucune écriture en continu ;
+  - scanne les tâches Firestore (collection "tasks") dont l'heure est passée,
+    évalue le scénario correspondant et exécute l'ordre (ou simule en DRY_RUN).
+
+Tout tourne côté VPS, en connexions sortantes uniquement (Firestore + appels
+à l'API Vercel pour les notifications) — aucun port n'est jamais ouvert ici,
+le frontend ne se connecte jamais directement au VPS.
 
 Pré-requis (sur le VPS) :
-  pip install MetaTrader5 google-cloud-firestore
+  pip install -r requirements.txt
   service-account.json — clé Firebase Admin (même projet que l'app React)
   vps_id.txt            — optionnel, identifiant de ce VPS (défaut "main")
+  cron_secret.txt        — même valeur que CRON_SECRET côté Vercel (notifications)
+  dry_run.txt             — "true" (défaut) ou "false" — passer à "false" une
+                            fois le comportement vérifié pour exécuter en réel
 """
 
+import json
 import os
 import time
 import urllib.request
@@ -40,6 +49,11 @@ MAGIC = int(os.environ.get("MT5_MAGIC", "234000"))
 BACKEND_URL = os.environ.get("BACKEND_URL", "https://mymt5-v2.vercel.app")
 CRON_SECRET = _read("cron_secret.txt") or os.environ.get("CRON_SECRET")
 HELLO_TIMES = ["11:00", "11:15", "12:00", "13:00", "14:00", "15:00"]
+
+# Tant que dry_run.txt contient "true" (ou n'existe pas), les tâches sont évaluées
+# et notifiées normalement mais AUCUN ordre réel n'est envoyé à MT5. Repasser à
+# "false" dans ce fichier une fois le comportement vérifié plusieurs fois.
+DRY_RUN = (_read("dry_run.txt") or os.environ.get("DRY_RUN", "true")).strip().lower() != "false"
 
 ORDER_TYPES = {
     "BUY": "ORDER_TYPE_BUY",
@@ -276,6 +290,232 @@ def check_order_request(db):
     print(f"[ORDER] {symbol} {action} vol={volume} @ {price} -> ticket={res.order}")
 
 
+CONTRACT_SIZE = 100000  # 1 lot standard = 100 000 unités de la devise de base
+FEE_BUFFER = 0.05  # marge de 5% pour commissions/spread (voir mémoire risk-sizing-strategy)
+
+
+def compute_lot_size(risk_amount, entry_price, sl_price, current_price):
+    """Port direct de src/lib/scenarios/shared.js computeLotSize — garder synchronisé."""
+    distance = abs(entry_price - sl_price)
+    if not risk_amount or not distance or not current_price:
+        return None
+
+    risk_per_lot = (distance * CONTRACT_SIZE) / current_price
+    if not risk_per_lot:
+        return None
+
+    lots = (risk_amount / risk_per_lot) * (1 - FEE_BUFFER)
+    return max(0.01, round(lots, 2))
+
+
+def fibo_price(hi, lo, level):
+    return lo + (hi - lo) * level
+
+
+def evaluate_sell_1(task, candle, account_size):
+    """Port direct de src/lib/scenarios/sellScenario1.js evaluate — garder synchronisé.
+
+    Condition (les deux) : close bougie <= condition de prix, ET open bougie >=
+    borne haute de la golden zone (23,6% du Fibo 1 et du Fibo 2). Si rempli :
+    Sell Limit, entrée = prix support, SL = Fibo1 -0,05%, TP = Fibo1 58,8%.
+    """
+    fibo100 = task["fibo100"]
+    fibo0 = task["fibo0"]
+
+    fibo1_236 = fibo_price(fibo100, fibo0, 0.236)
+    sl = fibo_price(fibo100, fibo0, -0.05)
+    tp = fibo_price(fibo100, fibo0, 0.588)
+
+    fibo2_236 = fibo_price(fibo0, candle["low"], 0.236)
+    golden_high = max(fibo1_236, fibo2_236)
+
+    threshold = task["priceCondition"]
+    entry_price = task["supportPrice"]
+
+    close_below = candle["close"] <= threshold
+    open_above = candle["open"] >= golden_high
+    if not (close_below and open_above):
+        return {
+            "matched": False,
+            "reason": f"Condition non remplie (close={candle['close']}, open={candle['open']})",
+        }
+
+    if not (sl > entry_price > tp):
+        return {
+            "matched": False,
+            "reason": f"Ordre incohérent (SL {sl} / Entrée {entry_price} / TP {tp})",
+        }
+
+    risk_amount = (task["risk"] / 100) * account_size if account_size else None
+    lot = compute_lot_size(risk_amount, entry_price, sl, candle["close"])
+
+    return {
+        "matched": True,
+        "orderType": "Sell Limit",
+        "entry": entry_price,
+        "sl": sl,
+        "tp": tp,
+        "lot": lot,
+    }
+
+
+SCENARIO_EVALUATORS = {
+    "sell-1": evaluate_sell_1,
+}
+
+
+def evaluate_task(task, candle, account_size):
+    evaluator = SCENARIO_EVALUATORS.get(task.get("scenarioId"))
+    if evaluator is None:
+        return {"matched": False, "reason": f"Scénario inconnu : {task.get('scenarioId')}"}
+    return evaluator(task, candle, account_size)
+
+
+def _account_size(db):
+    doc = db.collection("vps_status").document(VPS_ID).get()
+    if not doc.exists:
+        return None
+    data = doc.to_dict()
+    login = data.get("login")
+    entry = (data.get("accounts") or {}).get(str(login)) or {}
+    return entry.get("account_size")
+
+
+def _notify(title, body):
+    if not CRON_SECRET:
+        return
+    req = urllib.request.Request(
+        f"{BACKEND_URL}/api/notify",
+        data=json.dumps({"title": title, "body": body}).encode("utf-8"),
+        headers={"Authorization": f"Bearer {CRON_SECRET}", "Content-Type": "application/json"},
+        method="POST",
+    )
+    try:
+        urllib.request.urlopen(req, timeout=10)
+    except Exception as e:
+        print(f"[NOTIFY] échec : {e}")
+
+
+def check_due_tasks(db):
+    """Scanne les tâches Firestore encore en attente et exécute celles dont
+    l'heure est passée — évaluation, calcul de lot et (hors DRY_RUN) envoi
+    de l'ordre, entièrement côté VPS."""
+    now_utc = datetime.now(timezone.utc)
+
+    for doc in db.collection("tasks").where("status", "==", "pending").stream():
+        task = doc.to_dict()
+        exec_raw = task.get("executionTime")
+        if not exec_raw:
+            continue
+
+        try:
+            exec_dt = datetime.fromisoformat(exec_raw)
+        except ValueError:
+            continue
+
+        if exec_dt.tzinfo is None:
+            # Saisi via le sélecteur datetime-local de l'app : heure de Paris,
+            # sans indicateur de fuseau.
+            exec_dt = exec_dt.replace(tzinfo=ZoneInfo("Europe/Paris"))
+        target_dt = exec_dt.astimezone(timezone.utc)
+
+        if now_utc < target_dt:
+            continue  # pas encore l'heure
+
+        _execute_task(db, doc.reference, doc.id, task, target_dt)
+
+
+def _execute_task(db, ref, task_id, task, target_dt):
+    m = _ensure_mt5()
+    if m is None:
+        print(f"[TASK] {task_id} : MT5 indisponible, réessai au prochain tour")
+        return
+
+    symbol = PRICE_SYMBOL
+    timeframe = task.get("timeframe", "H1")
+    tf_map = {"M15": m.TIMEFRAME_M15, "H1": m.TIMEFRAME_H1, "H4": m.TIMEFRAME_H4}
+    tf = tf_map.get(timeframe, m.TIMEFRAME_H1)
+    tf_minutes = {"M15": 15, "H1": 60, "H4": 240}.get(timeframe, 60)
+
+    range_from = target_dt - timedelta(minutes=tf_minutes * 3)
+    range_to = target_dt - timedelta(seconds=1)
+
+    m.symbol_select(symbol, True)
+    rates = m.copy_rates_range(symbol, tf, range_from, range_to)
+    if rates is None or len(rates) == 0:
+        print(f"[TASK] {task_id} : bougie introuvable, réessai au prochain tour")
+        return
+
+    candle = {
+        "open": float(rates[-1]["open"]),
+        "high": float(rates[-1]["high"]),
+        "low": float(rates[-1]["low"]),
+        "close": float(rates[-1]["close"]),
+    }
+
+    account_size = _account_size(db)
+    result = evaluate_task(task, candle, account_size)
+    now_ms = int(time.time() * 1000)
+
+    if DRY_RUN:
+        if result["matched"]:
+            body = (
+                f"[DRY-RUN] {result['orderType']} @ {result['entry']} "
+                f"SL {result['sl']} TP {result['tp']} lot {result['lot']}"
+            )
+        else:
+            body = f"[DRY-RUN] Non exécutée : {result['reason']}"
+        _notify("mymt5 — tâche évaluée (dry-run)", body)
+        ref.update({"status": "dry_run_done", "result": result, "updatedAt": now_ms})
+        print(f"[TASK] {task_id} (dry-run) : {result}")
+        return
+
+    if not result["matched"]:
+        _notify("mymt5", f"Tâche non exécutée : {result['reason']}")
+        ref.update({"status": "done", "result": result, "updatedAt": now_ms})
+        print(f"[TASK] {task_id} : non exécutée ({result['reason']})")
+        return
+
+    info = m.symbol_info(symbol)
+    if info is None:
+        result["error"] = f"Symbole inconnu : {symbol}"
+        ref.update({"status": "done", "result": result, "updatedAt": now_ms})
+        _notify("mymt5 — échec", result["error"])
+        return
+
+    order_type = m.ORDER_TYPE_SELL_LIMIT if result["orderType"] == "Sell Limit" else m.ORDER_TYPE_BUY_LIMIT
+    request = {
+        "action": m.TRADE_ACTION_PENDING,
+        "symbol": symbol,
+        "volume": float(result["lot"]),
+        "type": order_type,
+        "price": float(result["entry"]),
+        "sl": float(result["sl"]),
+        "tp": float(result["tp"]),
+        "deviation": 20,
+        "magic": MAGIC,
+        "comment": f"task-{task_id}"[:28],
+        "type_time": m.ORDER_TIME_GTC,
+        "type_filling": m.ORDER_FILLING_RETURN,
+    }
+
+    res = m.order_send(request)
+    if res is None or res.retcode != m.TRADE_RETCODE_DONE:
+        error = str(m.last_error()) if res is None else res.comment
+        result["error"] = error
+        _notify("mymt5 — échec d'ordre", f"{result['orderType']} : {error}")
+        print(f"[TASK] {task_id} : échec ordre : {error}")
+    else:
+        result["ticket"] = res.order
+        _notify(
+            "mymt5 — ordre placé",
+            f"{result['orderType']} @ {result['entry']} lot {result['lot']} (ticket {res.order})",
+        )
+        print(f"[TASK] {task_id} : ordre placé, ticket={res.order}")
+
+    ref.update({"status": "done", "result": result, "updatedAt": now_ms})
+
+
 def check_hello_schedule(db):
     """Déclenche /api/cron/hello à l'heure de Paris pile (précision ~POLL_INTERVAL),
     au lieu de compter sur le cron Vercel qui peut retarder de plusieurs minutes."""
@@ -323,6 +563,7 @@ def run():
             check_price_request(db)
             check_candle_request(db)
             check_order_request(db)
+            check_due_tasks(db)
             check_hello_schedule(db)
         except Exception as e:
             print(f"[LOOP] erreur : {e}")

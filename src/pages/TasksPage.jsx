@@ -3,7 +3,6 @@ import { api } from '../lib/api'
 import { PAGE } from '../lib/layout'
 import { requestAndPoll, isFreshTs } from '../lib/onDemand'
 import { TONE_CLASSES, EDGE_PADDING, computeFiboLevels } from '../lib/fibo'
-import { SCENARIOS } from '../lib/scenarios'
 import { ScenarioToggle } from '../components/tasks/ScenarioToggle'
 import { FiboInputs } from '../components/tasks/FiboInputs'
 import { CandleReferenceForm } from '../components/tasks/CandleReferenceForm'
@@ -12,6 +11,11 @@ import { FiboChart } from '../components/tasks/FiboChart'
 import { TaskLauncher } from '../components/tasks/TaskLauncher'
 
 const MIN_LABEL_GAP = 4 // % minimum entre deux libellés pour éviter le chevauchement
+
+// Un seul scénario par sens pour le moment — l'évaluation réelle tourne côté VPS
+// (Python) au moment de l'exécution, pas ici. Cet id sert juste à enregistrer
+// quel scénario a été choisi.
+const SCENARIO_IDS = { buy: null, sell: 'sell-1' }
 
 export function TasksPage() {
   const [fibo100, setFibo100] = useState('')
@@ -29,7 +33,6 @@ export function TasksPage() {
   const [priceCondition, setPriceCondition] = useState('')
   const [supportPrice, setSupportPrice] = useState('')
   const [risk, setRisk] = useState('')
-  const [taskResult, setTaskResult] = useState(null)
   const [accountSize, setAccountSize] = useState(null)
   const [taskSaving, setTaskSaving] = useState(false)
   const [taskSaveError, setTaskSaveError] = useState('')
@@ -152,43 +155,12 @@ export function TasksPage() {
       }
     : null
 
-  // Niveaux utilisés par les scénarios de tâche
-  const sl1 = levels2?.find((l) => l.level === 0.8)?.price ?? null // 80% du Fibo 2
-  const sl2 = levels?.find((l) => l.level === -0.05)?.price ?? null // -5% du Fibo 1
-  const tp1 = levels?.find((l) => l.level === 0.588)?.price ?? null // 58,8% du Fibo 1
-  const tp2 = levels?.find((l) => l.level === 0.975)?.price ?? null // 97,5% du Fibo 1
-
   const riskPercent = parseFloat(risk)
   const riskAmount =
     accountSize != null && Number.isFinite(riskPercent) ? (riskPercent / 100) * accountSize : null
 
-  // Un seul scénario par sens pour le moment (le premier de la liste) — un sélecteur
-  // sera ajouté dès qu'il y en aura plusieurs par sens.
-  const activeScenario = scenario ? SCENARIOS[scenario]?.[0] : null
-
   function toggleScenario(next) {
     setScenario((current) => (current === next ? null : next))
-  }
-
-  function activateTask() {
-    if (!activeScenario) {
-      setTaskResult({ matched: false, reason: 'Aucun scénario disponible pour ce sens pour le moment.' })
-      return
-    }
-
-    const result = activeScenario.evaluate({
-      candle,
-      fibo236Bounds,
-      priceCondition,
-      supportPrice,
-      sl1,
-      sl2,
-      tp1,
-      tp2,
-      riskAmount,
-    })
-
-    setTaskResult(result)
   }
 
   async function saveTask() {
@@ -206,7 +178,7 @@ export function TasksPage() {
 
     const payload = {
       scenario,
-      scenarioId: activeScenario?.id ?? null,
+      scenarioId: SCENARIO_IDS[scenario] ?? null,
       fibo100: parseFloat(fibo100),
       fibo0: parseFloat(fibo0),
       timeframe,
@@ -310,8 +282,6 @@ export function TasksPage() {
         risk={risk}
         onRiskChange={setRisk}
         riskAmount={riskAmount}
-        onActivate={activateTask}
-        result={taskResult}
         onSave={saveTask}
         saving={taskSaving}
         saveError={taskSaveError}
