@@ -128,15 +128,30 @@ def _execute_task(db, ref, task_id, task, target_dt):
     # --- 1b. Bougie qui COMMENCE à l'heure fixée (celle qui vient tout juste
     # de s'ouvrir) : son open (pour savoir où se situer dans la golden zone).
     # C'est une bougie DIFFÉRENTE de la précédente — pas juste son propre champ
-    # "open". On demande la plage [target_dt, maintenant] et on prend la
-    # première bougie ; si le marché n'a pas encore coché depuis target_dt (on
-    # peut arriver ici quelques secondes après), la liste est vide et on
-    # retente au tour suivant, comme pour la bougie de clôture. ---
-    opening_rates = m.copy_rates_range(symbol, tf, target_dt, datetime.now(timezone.utc))
+    # "open".
+    #
+    # ATTENTION (bug corrigé) : on cherchait avant une bougie dont l'heure de
+    # DÉBUT est exactement target_dt (copy_rates_range(target_dt, maintenant)).
+    # Si target_dt ne tombe pas pile sur une frontière de la grille MT5 réelle
+    # (décalage broker/DST), cette recherche ne trouve JAMAIS rien et la tâche
+    # boucle indéfiniment (jusqu'à une pleine période de la timeframe, ex: 4h
+    # en H4). Fix : on demande directement à MT5 la bougie courante par
+    # POSITION (0 = la plus récente, potentiellement encore en formation) —
+    # immunisé contre tout problème d'alignement de date, même logique que le
+    # bug de frontière de bougie déjà corrigé pour la bougie de clôture. ---
+    opening_rates = m.copy_rates_from_pos(symbol, tf, 0, 1)
     if opening_rates is None or len(opening_rates) == 0:
         print(f"[TASK] {task_id} : bougie d'ouverture introuvable, réessai au prochain tour")
         return
     opening_bar = opening_rates[0]
+
+    # Garde-fou : si la bougie "courante" a démarré AVANT target_dt (marché
+    # fermé depuis, pas encore de nouveau tick...), ce n'est pas encore la
+    # bonne bougie — on retente au tour suivant plutôt que d'utiliser une
+    # bougie périmée.
+    if int(opening_bar["time"]) < int(target_dt.timestamp()):
+        print(f"[TASK] {task_id} : bougie d'ouverture pas encore démarrée, réessai au prochain tour")
+        return
 
     candle = {
         "open": float(opening_bar["open"]),
