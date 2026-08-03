@@ -7,11 +7,17 @@ function formatPrice(value) {
   return typeof value === 'number' ? value.toFixed(3) : '—'
 }
 
+function formatExecutionTime(value) {
+  if (!value) return '—'
+  return new Date(value).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' })
+}
+
 export function HomePage({ onNavigate }) {
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [netPnl, setNetPnl] = useState(null)
+  const [reports, setReports] = useState([])
 
   function load() {
     setError('')
@@ -37,7 +43,17 @@ export function HomePage({ onNavigate }) {
       .trades()
       .then((res) => setNetPnl(res.trades.reduce((sum, t) => sum + t.net, 0)))
       .catch(() => {})
+    api.reports().then(setReports).catch(() => {})
   }, [])
+
+  async function archiveReport(id) {
+    setReports((current) => current.filter((r) => r.id !== id))
+    try {
+      await api.archiveReport(id)
+    } catch {
+      api.reports().then(setReports).catch(() => {})
+    }
+  }
 
   const orders = data?.orders ?? []
   const positions = data?.positions ?? []
@@ -80,6 +96,33 @@ export function HomePage({ onNavigate }) {
           {netPnl === null ? '—' : `${netPnl >= 0 ? '+' : ''}${netPnl.toFixed(2)} $`}
         </p>
       </button>
+
+      {reports.length > 0 && (
+        <section className="flex flex-col gap-2">
+          <p className="text-xs font-bold tracking-[0.14em] text-slate-500 uppercase">
+            Tâches non exécutées ({reports.length})
+          </p>
+          {reports.map((r) => (
+            <div key={r.id} className="rounded-2xl border border-white/10 bg-white/5 p-3">
+              <div className="flex items-start justify-between gap-2">
+                <div>
+                  <p className="text-sm text-white">
+                    {r.scenario === 'sell' ? 'Vente' : 'Achat'} {r.timeframe} — {formatExecutionTime(r.executionTime)}
+                  </p>
+                  <p className="mt-1 text-xs text-slate-400">L'heure est arrivée mais {r.reason?.toLowerCase()} — tâche supprimée.</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => archiveReport(r.id)}
+                  className="min-h-8 shrink-0 rounded-full border border-white/10 px-3 text-xs font-semibold text-slate-300"
+                >
+                  Archiver
+                </button>
+              </div>
+            </div>
+          ))}
+        </section>
+      )}
 
       <section className="flex flex-col gap-2">
         <p className="text-xs font-bold tracking-[0.14em] text-slate-500 uppercase">Ordres différés</p>

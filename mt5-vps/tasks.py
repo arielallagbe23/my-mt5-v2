@@ -29,6 +29,24 @@ def _account_size(db):
     return entry.get("account_size")
 
 
+def _report_and_delete(db, ref, task_id, task, reason, now_ms):
+    """Une tâche dont l'heure est passée mais dont la condition n'a pas été
+    remplie n'a plus d'utilité à rester dans "tasks" — plutôt que de
+    l'accumuler pour que l'utilisateur la supprime lui-même, on écrit un
+    petit rapport (execution_reports) et on supprime la tâche."""
+    db.collection("execution_reports").add({
+        "userId": task.get("userId"),
+        "taskId": task_id,
+        "scenario": task.get("scenario"),
+        "timeframe": task.get("timeframe"),
+        "executionTime": task.get("executionTime"),
+        "reason": reason,
+        "archived": False,
+        "createdAt": now_ms,
+    })
+    ref.delete()
+
+
 def check_due_tasks(db):
     """Scanne les tâches Firestore encore en attente (status "pending") et
     exécute celles dont l'heure est passée. Une fois traitée (dry-run ou réel),
@@ -140,18 +158,18 @@ def _execute_task(db, ref, task_id, task, target_dt):
                 f"[DRY-RUN] {result['orderType']} @ {result['entry']} "
                 f"SL {result['sl']} TP {result['tp']} lot {result['lot']}"
             )
+            notify("mymt5 — tâche évaluée (dry-run)", body)
+            ref.update({"status": "dry_run_done", "result": result, "updatedAt": now_ms})
+            print(f"[TASK] {task_id} (dry-run) : {result}")
         else:
-            body = f"[DRY-RUN] Non exécutée : {result['reason']}"
-        notify("mymt5 — tâche évaluée (dry-run)", body)
-        ref.update({"status": "dry_run_done", "result": result, "updatedAt": now_ms})
-        print(f"[TASK] {task_id} (dry-run) : {result}")
+            _report_and_delete(db, ref, task_id, task, result["reason"], now_ms)
+            print(f"[TASK] {task_id} (dry-run) : non exécutée, rapport écrit ({result['reason']})")
         return
 
-    # --- 3b. Mode réel : condition non remplie -> rien à envoyer à MT5 ---
+    # --- 3b. Mode réel : condition non remplie -> rien à envoyer à MT5, rapport + suppression ---
     if not result["matched"]:
-        notify("mymt5", f"Tâche non exécutée : {result['reason']}")
-        ref.update({"status": "done", "result": result, "updatedAt": now_ms})
-        print(f"[TASK] {task_id} : non exécutée ({result['reason']})")
+        _report_and_delete(db, ref, task_id, task, result["reason"], now_ms)
+        print(f"[TASK] {task_id} : non exécutée, rapport écrit ({result['reason']})")
         return
 
     # --- 3c. Mode réel : condition remplie -> on construit et envoie l'ordre MT5 ---
