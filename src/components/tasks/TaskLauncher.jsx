@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 
 const COMPACT_INPUT =
   'min-h-9 rounded-xl border border-white/10 bg-white/5 px-3 text-sm text-white ' +
@@ -17,13 +17,20 @@ export function TaskLauncher({
   risk,
   onRiskChange,
   riskAmount,
-  onSave,
+  onSaveDraft,
+  onFinalize,
   saving,
   saveError,
-  saved,
+  savedStatus,
 }) {
   const [customRisk, setCustomRisk] = useState(risk !== '' && !RISK_PRESETS.includes(risk))
   const operator = scenario === 'sell' ? '<=' : '>='
+
+  // Reprend un brouillon dont le risque a été rempli avant que ce composant
+  // existe (donc après le calcul initial de customRisk au montage).
+  useEffect(() => {
+    setCustomRisk(risk !== '' && !RISK_PRESETS.includes(risk))
+  }, [risk])
 
   return (
     <div className="flex flex-col gap-3 rounded-2xl border border-white/10 bg-white/5 p-3">
@@ -111,19 +118,32 @@ export function TaskLauncher({
         )}
       </label>
 
-      <button
-        type="button"
-        onClick={onSave}
-        disabled={saving}
-        className="min-h-10 rounded-xl bg-indigo-600 text-sm font-semibold text-white disabled:opacity-60"
-      >
-        {saving ? 'Enregistrement...' : 'Enregistrer la tâche'}
-      </button>
+      <div className="flex gap-2">
+        <button
+          type="button"
+          onClick={onSaveDraft}
+          disabled={saving}
+          className="min-h-10 flex-1 rounded-xl border border-white/10 bg-white/5 text-sm font-semibold text-slate-300 disabled:opacity-60"
+        >
+          {saving ? '...' : 'Enregistrer comme brouillon'}
+        </button>
+        <button
+          type="button"
+          onClick={onFinalize}
+          disabled={saving}
+          className="min-h-10 flex-1 rounded-xl bg-indigo-600 text-sm font-semibold text-white disabled:opacity-60"
+        >
+          {saving ? '...' : 'Confirmer la tâche'}
+        </button>
+      </div>
 
       {saveError && <p className="text-sm text-red-400">{saveError}</p>}
-      {saved && (
+      {savedStatus === 'draft' && (
+        <p className="text-sm text-amber-400">Brouillon enregistré — tu peux revenir le terminer plus tard.</p>
+      )}
+      {savedStatus === 'pending' && (
         <p className="text-sm text-green-400">
-          Tâche enregistrée — elle s'exécutera automatiquement à l'heure prévue.
+          Tâche confirmée — elle s'exécutera automatiquement à l'heure prévue.
         </p>
       )}
     </div>

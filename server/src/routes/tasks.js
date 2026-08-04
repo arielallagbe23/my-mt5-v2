@@ -47,6 +47,32 @@ function validateTaskBody(body) {
   return null
 }
 
+// Un brouillon peut avoir n'importe quel champ manquant (l'utilisateur n'a pas
+// fini de le remplir) — on valide juste que ce qui EST rempli a le bon type,
+// pour ne jamais enregistrer une valeur incohérente en base.
+function validateDraftBody(body) {
+  const { scenario, fibo100, fibo0, timeframe, executionTime, priceCondition, supportPrice, risk } = body ?? {}
+
+  if (scenario != null && !SCENARIOS.has(scenario)) return 'Scénario invalide (buy ou sell)'
+  if (timeframe != null && !TIMEFRAMES.has(timeframe)) return 'Timeframe invalide (M15, H1 ou H4)'
+  if (executionTime != null && executionTime !== '' && Number.isNaN(Date.parse(executionTime))) {
+    return 'Heure d\'exécution invalide'
+  }
+  for (const [label, value] of [
+    ['fibo100', fibo100],
+    ['fibo0', fibo0],
+    ['priceCondition', priceCondition],
+    ['supportPrice', supportPrice],
+    ['risk', risk],
+  ]) {
+    if (value != null && (typeof value !== 'number' || !Number.isFinite(value))) return `Champ ${label} invalide`
+  }
+  if (typeof risk === 'number' && (risk <= 0 || risk > MAX_RISK_PERCENT)) {
+    return `Risque invalide (doit être entre 0 et ${MAX_RISK_PERCENT}%)`
+  }
+  return null
+}
+
 router.get('/', requireAuth, async (req, res) => {
   const snapshot = await db.collection('tasks').where('userId', '==', req.userId).get()
   const tasks = snapshot.docs.map(serialize).sort((a, b) => (a.executionTime > b.executionTime ? 1 : -1))
@@ -62,7 +88,8 @@ router.get('/:id', requireAuth, async (req, res) => {
 })
 
 router.post('/', requireAuth, async (req, res) => {
-  const error = validateTaskBody(req.body)
+  const status = req.body?.status === 'draft' ? 'draft' : 'pending'
+  const error = status === 'draft' ? validateDraftBody(req.body) : validateTaskBody(req.body)
   if (error) return res.status(400).json({ error })
 
   const { scenario, scenarioId, fibo100, fibo0, timeframe, executionTime, priceCondition, supportPrice, risk } =
@@ -71,16 +98,16 @@ router.post('/', requireAuth, async (req, res) => {
   const now = Date.now()
   const docRef = await db.collection('tasks').add({
     userId: req.userId,
-    scenario,
+    scenario: scenario ?? null,
     scenarioId: typeof scenarioId === 'string' ? scenarioId : null,
-    fibo100,
-    fibo0,
-    timeframe,
-    executionTime,
-    priceCondition,
-    supportPrice,
-    risk,
-    status: 'pending',
+    fibo100: fibo100 ?? null,
+    fibo0: fibo0 ?? null,
+    timeframe: timeframe ?? null,
+    executionTime: executionTime ?? null,
+    priceCondition: priceCondition ?? null,
+    supportPrice: supportPrice ?? null,
+    risk: risk ?? null,
+    status,
     result: null,
     createdAt: now,
     updatedAt: now,
@@ -97,22 +124,25 @@ router.patch('/:id', requireAuth, async (req, res) => {
     return res.status(404).json({ error: 'Tâche introuvable' })
   }
 
-  const error = validateTaskBody({ ...doc.data(), ...req.body })
+  const status = req.body?.status === 'draft' ? 'draft' : 'pending'
+  const merged = { ...doc.data(), ...req.body }
+  const error = status === 'draft' ? validateDraftBody(merged) : validateTaskBody(merged)
   if (error) return res.status(400).json({ error })
 
   const { scenario, scenarioId, fibo100, fibo0, timeframe, executionTime, priceCondition, supportPrice, risk } =
-    req.body
+    merged
 
   await ref.update({
-    scenario,
+    scenario: scenario ?? null,
     scenarioId: typeof scenarioId === 'string' ? scenarioId : null,
-    fibo100,
-    fibo0,
-    timeframe,
-    executionTime,
-    priceCondition,
-    supportPrice,
-    risk,
+    fibo100: fibo100 ?? null,
+    fibo0: fibo0 ?? null,
+    timeframe: timeframe ?? null,
+    executionTime: executionTime ?? null,
+    priceCondition: priceCondition ?? null,
+    supportPrice: supportPrice ?? null,
+    risk: risk ?? null,
+    status,
     updatedAt: Date.now(),
   })
 

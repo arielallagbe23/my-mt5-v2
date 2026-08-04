@@ -7,7 +7,14 @@ function formatDateTime(iso) {
   return new Date(iso).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' })
 }
 
-export function TasksListPage() {
+const STATUS_LABELS = {
+  draft: 'Brouillon',
+  pending: 'En attente',
+  dry_run_done: 'Simulée (dry-run)',
+  done: 'Terminée',
+}
+
+export function TasksListPage({ onEditTask }) {
   const [tasks, setTasks] = useState(null)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(true)
@@ -54,40 +61,55 @@ export function TasksListPage() {
             <div className="flex items-center justify-between gap-2">
               <span
                 className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
-                  task.scenario === 'sell' ? 'bg-red-500/15 text-red-300' : 'bg-blue-500/15 text-blue-300'
+                  task.scenario === 'sell'
+                    ? 'bg-red-500/15 text-red-300'
+                    : task.scenario === 'buy'
+                      ? 'bg-blue-500/15 text-blue-300'
+                      : 'bg-white/10 text-slate-300'
                 }`}
               >
-                {task.scenario === 'sell' ? 'Vendre' : 'Acheter'}
+                {task.scenario === 'sell' ? 'Vendre' : task.scenario === 'buy' ? 'Acheter' : 'Brouillon'}
               </span>
               <span className="text-xs text-slate-400">{formatDateTime(task.executionTime)}</span>
             </div>
 
             <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-slate-400">
               <span>
-                Timeframe : <span className="font-semibold text-white">{task.timeframe}</span>
+                Timeframe : <span className="font-semibold text-white">{task.timeframe ?? '—'}</span>
               </span>
               <span>
-                Risque : <span className="font-semibold text-white">{task.risk}%</span>
+                Risque : <span className="font-semibold text-white">{task.risk != null ? `${task.risk}%` : '—'}</span>
               </span>
               <span>
-                Condition : <span className="font-semibold text-white">{task.priceCondition}</span>
+                Condition : <span className="font-semibold text-white">{task.priceCondition ?? '—'}</span>
               </span>
               <span>
-                Support : <span className="font-semibold text-white">{task.supportPrice}</span>
+                Support : <span className="font-semibold text-white">{task.supportPrice ?? '—'}</span>
               </span>
               <span className="col-span-2">
-                Statut : <span className="font-semibold text-white">{task.status}</span>
+                Statut : <span className="font-semibold text-white">{STATUS_LABELS[task.status] ?? task.status}</span>
               </span>
             </div>
 
-            <button
-              type="button"
-              onClick={() => handleDelete(task.id)}
-              disabled={deletingId === task.id}
-              className="mt-3 min-h-9 w-full rounded-xl bg-red-500/15 text-sm font-semibold text-red-300 disabled:opacity-60"
-            >
-              {deletingId === task.id ? 'Suppression...' : 'Supprimer'}
-            </button>
+            <div className="mt-3 flex gap-2">
+              {task.status === 'draft' && (
+                <button
+                  type="button"
+                  onClick={() => onEditTask?.(task.id)}
+                  className="min-h-9 flex-1 rounded-xl bg-indigo-500/15 text-sm font-semibold text-indigo-300"
+                >
+                  Continuer
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => handleDelete(task.id)}
+                disabled={deletingId === task.id}
+                className="min-h-9 flex-1 rounded-xl bg-red-500/15 text-sm font-semibold text-red-300 disabled:opacity-60"
+              >
+                {deletingId === task.id ? 'Suppression...' : 'Supprimer'}
+              </button>
+            </div>
           </li>
         ))}
       </ul>

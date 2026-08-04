@@ -18,10 +18,10 @@ const MIN_LABEL_GAP = 4 // % minimum entre deux libellés pour éviter le chevau
 const SCENARIO_IDS = { buy: null, sell: 'sell-1' }
 const MAX_RISK_PERCENT = 2 // garde-fou : jamais plus de 2% du capital risqué sur une tâche
 
-export function TasksPage() {
+export function TasksPage({ taskId } = {}) {
   const [fibo100, setFibo100] = useState('')
   const [fibo0, setFibo0] = useState('')
-  const [priceLoading, setPriceLoading] = useState(true)
+  const [priceLoading, setPriceLoading] = useState(!taskId)
   const [scenario, setScenario] = useState(null)
 
   const [timeframe, setTimeframe] = useState('H1')
@@ -37,10 +37,65 @@ export function TasksPage() {
   const [accountSize, setAccountSize] = useState(null)
   const [taskSaving, setTaskSaving] = useState(false)
   const [taskSaveError, setTaskSaveError] = useState('')
-  const [taskSaved, setTaskSaved] = useState(false)
+  const [taskSavedStatus, setTaskSavedStatus] = useState(null)
+
+  // Tâche en cours d'édition : null tant qu'aucun brouillon n'a encore été
+  // enregistré (le premier "Enregistrer comme brouillon" crée la tâche et
+  // remplit cet id, les suivants la mettent à jour au lieu d'en recréer une).
+  const [currentTaskId, setCurrentTaskId] = useState(taskId ?? null)
+  const [loadingTask, setLoadingTask] = useState(!!taskId)
+
+  // Reprise d'un brouillon existant : on charge ses valeurs telles quelles,
+  // sans toucher au prix live (voir l'effet suivant, qui se désactive dans ce cas).
+  // Si on repart sur une tâche neuve (taskId redevient null sans que ce
+  // composant soit démonté — ex: navigation depuis le menu après édition
+  // d'un brouillon), on réinitialise le formulaire au lieu de laisser
+  // traîner les valeurs de l'ancien brouillon.
+  useEffect(() => {
+    if (!taskId) {
+      setCurrentTaskId(null)
+      setScenario(null)
+      setFibo100('')
+      setFibo0('')
+      setTimeframe('H1')
+      setExecutionTime('')
+      setPriceCondition('')
+      setSupportPrice('')
+      setRisk('')
+      setCandle(null)
+      setCandleDateTime('')
+      setLoadingTask(false)
+      return
+    }
+    let cancelled = false
+    setLoadingTask(true)
+    api
+      .getTask(taskId)
+      .then((task) => {
+        if (cancelled) return
+        setScenario(task.scenario ?? null)
+        setFibo100(task.fibo100 != null ? String(task.fibo100) : '')
+        setFibo0(task.fibo0 != null ? String(task.fibo0) : '')
+        setTimeframe(task.timeframe ?? 'H1')
+        setExecutionTime(task.executionTime ? task.executionTime.slice(0, 16) : '')
+        setPriceCondition(task.priceCondition != null ? String(task.priceCondition) : '')
+        setSupportPrice(task.supportPrice != null ? String(task.supportPrice) : '')
+        setRisk(task.risk != null ? String(task.risk) : '')
+        setCurrentTaskId(task.id)
+      })
+      .catch(() => setTaskSaveError('Impossible de charger le brouillon'))
+      .finally(() => {
+        if (!cancelled) setLoadingTask(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [taskId])
 
   useEffect(() => {
+    if (taskId) return // reprise d'un brouillon : ne pas écraser ses valeurs avec le prix live
     let cancelled = false
+    setPriceLoading(true)
 
     requestAndPoll({
       request: () => api.requestPrice('USDJPY'),
@@ -62,7 +117,7 @@ export function TasksPage() {
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [taskId])
 
   useEffect(() => {
     api
@@ -164,9 +219,57 @@ export function TasksPage() {
     setScenario((current) => (current === next ? null : next))
   }
 
-  async function saveTask() {
+  function buildPayload() {
+    const parsedFibo100 = parseFloat(fibo100)
+    const parsedFibo0 = parseFloat(fibo0)
+    const parsedPriceCondition = parseFloat(priceCondition)
+    const parsedSupportPrice = parseFloat(supportPrice)
+    const parsedRisk = parseFloat(risk)
+
+    return {
+      scenario: scenario ?? null,
+      scenarioId: (scenario && SCENARIO_IDS[scenario]) ?? null,
+      fibo100: Number.isFinite(parsedFibo100) ? parsedFibo100 : null,
+      fibo0: Number.isFinite(parsedFibo0) ? parsedFibo0 : null,
+      timeframe: timeframe || null,
+      executionTime: executionTime ? `${executionTime}:00` : null,
+      priceCondition: Number.isFinite(parsedPriceCondition) ? parsedPriceCondition : null,
+      supportPrice: Number.isFinite(parsedSupportPrice) ? parsedSupportPrice : null,
+      risk: Number.isFinite(parsedRisk) ? parsedRisk : null,
+    }
+  }
+
+  async function persist(payload) {
+    setTaskSaving(true)
+    try {
+      if (currentTaskId) {
+        await api.updateTask(currentTaskId, payload)
+      } else {
+        const created = await api.createTask(payload)
+        setCurrentTaskId(created.id)
+      }
+      setTaskSavedStatus(payload.status)
+    } catch (err) {
+      setTaskSaveError(err.message)
+    } finally {
+      setTaskSaving(false)
+    }
+  }
+
+  // Enregistre l'état actuel du formulaire tel quel, même incomplet — pour
+  // pouvoir revenir le terminer plus tard. Aucune tâche "brouillon" n'est
+  // jamais scannée/exécutée côté VPS (qui ne regarde que status=="pending").
+  async function saveDraft() {
     setTaskSaveError('')
-    setTaskSaved(false)
+    setTaskSavedStatus(null)
+    await persist({ ...buildPayload(), status: 'draft' })
+  }
+
+  // Valide tous les champs requis puis passe la tâche en "pending" — c'est
+  // seulement à partir de là qu'elle sera scannée et exécutée par le VPS.
+  async function finalizeTask() {
+    setTaskSaveError('')
+    setTaskSavedStatus(null)
 
     if (!scenario) {
       setTaskSaveError('Choisis Acheter ou Vendre.')
@@ -177,19 +280,9 @@ export function TasksPage() {
       return
     }
 
-    const payload = {
-      scenario,
-      scenarioId: SCENARIO_IDS[scenario] ?? null,
-      fibo100: parseFloat(fibo100),
-      fibo0: parseFloat(fibo0),
-      timeframe,
-      executionTime: `${executionTime}:00`,
-      priceCondition: parseFloat(priceCondition),
-      supportPrice: parseFloat(supportPrice),
-      risk: parseFloat(risk),
-    }
+    const payload = { ...buildPayload(), status: 'pending' }
 
-    if (Object.values(payload).some((v) => typeof v === 'number' && !Number.isFinite(v))) {
+    if ([payload.fibo100, payload.fibo0, payload.priceCondition, payload.supportPrice, payload.risk].includes(null)) {
       setTaskSaveError('Remplis tous les champs (Fibo, prix, risque) avant d\'enregistrer.')
       return
     }
@@ -198,15 +291,7 @@ export function TasksPage() {
       return
     }
 
-    setTaskSaving(true)
-    try {
-      await api.createTask(payload)
-      setTaskSaved(true)
-    } catch (err) {
-      setTaskSaveError(err.message)
-    } finally {
-      setTaskSaving(false)
-    }
+    await persist(payload)
   }
 
   async function fetchCandleClose() {
@@ -239,6 +324,7 @@ export function TasksPage() {
       <div className="flex items-center gap-2">
         <div className="text-sm font-bold text-white">USDJPY</div>
         {priceLoading && <span className="text-sm text-slate-400">Récupération du prix...</span>}
+        {loadingTask && <span className="text-sm text-slate-400">Chargement du brouillon...</span>}
       </div>
 
       <ScenarioToggle scenario={scenario} onToggle={toggleScenario} />
@@ -287,10 +373,11 @@ export function TasksPage() {
         risk={risk}
         onRiskChange={setRisk}
         riskAmount={riskAmount}
-        onSave={saveTask}
+        onSaveDraft={saveDraft}
+        onFinalize={finalizeTask}
         saving={taskSaving}
         saveError={taskSaveError}
-        saved={taskSaved}
+        savedStatus={taskSavedStatus}
       />
     </div>
   )
