@@ -1,14 +1,13 @@
 """
-positions.py — Surveille les positions et ordres différés à chaque tour de
-boucle :
+positions.py — Surveille les positions et ordres différés :
   - check_order_fills : détecte quand un ordre différé se transforme en
-    position ouverte (déclenché) ;
+    position ouverte (déclenché) — à chaque tour de boucle ;
   - check_tp_progress : notifie la progression d'une position vers son TP
-    (50% / 75% / 95% / TP atteint) ;
+    (50% / 75% / 95% / TP atteint) — vérifié toutes les 15 minutes, à partir
+    du pic (high/low) de la dernière bougie clôturée du timeframe concerné ;
   - check_trailing_stop : déplace le SL par paliers (BE à 50%, 25% à 75%,
-    50% à 95%), en se basant sur le pic (high/low) de la bougie H1/H4 qui
-    vient de se terminer — vérifié une seule fois par nouvelle bougie, pas
-    à chaque tour de boucle.
+    50% à 95%), à partir du même pic — vérifié une seule fois par nouvelle
+    bougie H1/H4.
 
 Ces trois fonctions ne concernent que les positions issues d'une tâche H1 ou
 H4 (le M15 est exclu — trop de bruit).
@@ -30,6 +29,7 @@ from notify import notify
 POSITION_TYPE_NAMES = {0: "Buy", 1: "Sell"}
 PROGRESS_THRESHOLDS = [50, 75, 95, 100]
 ELIGIBLE_TIMEFRAMES = {"H1", "H4"}  # le M15 est exclu — trop de bruit
+_TF_CONSTANTS = {"H1": "TIMEFRAME_H1", "H4": "TIMEFRAME_H4"}
 
 # État en mémoire (pas en Firestore, pour ne rien coûter en lecture/écriture)
 # du dernier ensemble de tickets d'ordres différés connu. None = pas encore
@@ -81,7 +81,7 @@ def check_order_fills(db):
 
 # ticket -> timeframe de la tâche d'origine ("H1"/"H4"/autre), ou None si
 # introuvable/non éligible. Rempli une seule fois par position (via un
-# Firestore.get() ponctuel), puis réutilisé à chaque tour.
+# Firestore.get() ponctuel), puis réutilisé ensuite.
 _position_timeframe_cache = {}
 
 # ticket -> ensemble des seuils déjà notifiés pour cette position.
@@ -102,10 +102,36 @@ def _task_timeframe(db, comment):
     return doc.to_dict().get("timeframe")
 
 
+def _candles_current_and_previous(m, symbol, timeframe):
+    """Renvoie (bougie précédente, bougie courante) pour ce timeframe, ou
+    (None, None) si indisponible. Position 0 = courante (en formation),
+    position 1 = celle qui vient de se terminer. Partagée par
+    check_tp_progress et check_trailing_stop."""
+    tf_constant = getattr(m, _TF_CONSTANTS[timeframe])
+    rates = m.copy_rates_from_pos(symbol, tf_constant, 0, 2)
+    if rates is None or len(rates) < 2:
+        return None, None
+    return rates[0], rates[-1]  # ordre chronologique : [précédente, courante]
+
+
+def _candle_peak(pos, previous_bar):
+    """Pic atteint par la bougie précédente dans le sens favorable à la
+    position : high pour un achat, low pour une vente."""
+    is_buy = pos.type == 0  # POSITION_TYPE_BUY
+    return float(previous_bar["high"]) if is_buy else float(previous_bar["low"])
+
+
+PROGRESS_CHECK_INTERVAL_SECONDS = 15 * 60  # 15 minutes
+_last_progress_check = None
+
+
 def check_tp_progress(db):
     """Notifie la progression d'une position ouverte vers son TP (50% / 75%
     / 95% / TP atteint), pour les positions issues d'une tâche H1 ou H4
-    uniquement. Chaque seuil n'est notifié qu'une fois par position.
+    uniquement. Vérifié toutes les 15 minutes (une simple minuterie, pas liée
+    à une détection de nouvelle bougie) — à partir du pic (high/low) de la
+    dernière bougie clôturée du timeframe de la position, pas du prix live.
+    Chaque seuil n'est notifié qu'une fois par position.
 
     Note : le seuil 100% (TP atteint) peut ne jamais se déclencher depuis
     cette fonction en pratique — dès que le TP est vraiment touché, MT5 clôt
@@ -115,6 +141,15 @@ def check_tp_progress(db):
     deals plutôt que les positions ouvertes — pas fait ici, à ajouter si ce
     seuil s'avère peu fiable en pratique.
     """
+    global _last_progress_check
+    now_utc = datetime.now(timezone.utc)
+    if (
+        _last_progress_check is not None
+        and (now_utc - _last_progress_check).total_seconds() < PROGRESS_CHECK_INTERVAL_SECONDS
+    ):
+        return
+    _last_progress_check = now_utc
+
     m = ensure_mt5()
     if m is None:
         return
@@ -129,16 +164,21 @@ def check_tp_progress(db):
 
         if ticket not in _position_timeframe_cache:
             _position_timeframe_cache[ticket] = _task_timeframe(db, pos.comment)
-        if _position_timeframe_cache[ticket] not in ELIGIBLE_TIMEFRAMES:
+        timeframe = _position_timeframe_cache[ticket]
+        if timeframe not in ELIGIBLE_TIMEFRAMES:
+            continue
+
+        previous_bar, _ = _candles_current_and_previous(m, pos.symbol, timeframe)
+        if previous_bar is None:
             continue
 
         entry = pos.price_open
-        current = pos.price_current
+        peak = _candle_peak(pos, previous_bar)
         total_distance = abs(tp - entry)
         if not total_distance:
             continue
 
-        progress = abs(current - entry) / total_distance * 100
+        progress = abs(peak - entry) / total_distance * 100
         already_notified = _notified_thresholds.setdefault(ticket, set())
 
         for threshold in PROGRESS_THRESHOLDS:
@@ -147,10 +187,10 @@ def check_tp_progress(db):
                 label = "TP atteint" if threshold == 100 else f"{threshold}% du chemin vers le TP"
                 notify(
                     f"mymt5 — {label}",
-                    f"{pos.symbol} {side} (ticket {ticket}) : {current:.3f}, entrée {entry:.3f}, TP {tp:.3f}",
+                    f"{pos.symbol} {side} (ticket {ticket}) : pic {peak:.3f}, entrée {entry:.3f}, TP {tp:.3f}",
                 )
                 already_notified.add(threshold)
-                print(f"[TP] ticket {ticket} : {label} (prix {current:.3f})")
+                print(f"[TP] ticket {ticket} : {label} (pic {peak:.3f})")
 
     # Nettoyage : une position fermée (SL, TP, manuelle...) ne doit pas rester
     # indéfiniment en mémoire.
@@ -166,7 +206,6 @@ def check_tp_progress(db):
 # haut palier au plus bas pour ne retenir que le plus avancé atteint.
 SL_STAGES = [(95, 50), (75, 25), (50, 0)]
 
-_TF_CONSTANTS = {"H1": "TIMEFRAME_H1", "H4": "TIMEFRAME_H4"}
 SAFETY_DELAY_SECONDS = 2  # attendre un peu après l'ouverture d'une nouvelle bougie avant de la lire
 
 # timeframe -> candle_time de la dernière bougie déjà traitée pour ce
@@ -176,17 +215,6 @@ _last_processed_candle_time = {}
 # ticket -> target_pct déjà appliqué (le plus avancé) : évite de repasser
 # deux fois le même palier ou de reculer le SL.
 _sl_applied = {}
-
-
-def _candles_current_and_previous(m, symbol, timeframe):
-    """Renvoie (bougie précédente, bougie courante) pour ce timeframe, ou
-    (None, None) si indisponible. Position 0 = courante (en formation),
-    position 1 = celle qui vient de se terminer."""
-    tf_constant = getattr(m, _TF_CONSTANTS[timeframe])
-    rates = m.copy_rates_from_pos(symbol, tf_constant, 0, 2)
-    if rates is None or len(rates) < 2:
-        return None, None
-    return rates[0], rates[-1]  # ordre chronologique : [précédente, courante]
 
 
 def check_trailing_stop(db):
@@ -213,6 +241,7 @@ def check_trailing_stop(db):
         return
 
     now_utc = datetime.now(timezone.utc)
+    positions_fetched = None  # ne sert qu'au nettoyage en fin de fonction
 
     for timeframe in ELIGIBLE_TIMEFRAMES:
         previous_bar, current_bar = _candles_current_and_previous(m, PRICE_SYMBOL, timeframe)
@@ -229,8 +258,8 @@ def check_trailing_stop(db):
 
         _last_processed_candle_time[timeframe] = current_time
 
-        positions = m.positions_get(symbol=PRICE_SYMBOL) or ()
-        for pos in positions:
+        positions_fetched = m.positions_get(symbol=PRICE_SYMBOL) or ()
+        for pos in positions_fetched:
             ticket = pos.ticket
             tp = pos.tp
             if not tp:
@@ -242,8 +271,7 @@ def check_trailing_stop(db):
                 continue
 
             entry = pos.price_open
-            is_buy = pos.type == 0  # POSITION_TYPE_BUY
-            peak = float(previous_bar["high"]) if is_buy else float(previous_bar["low"])
+            peak = _candle_peak(pos, previous_bar)
 
             total_distance = abs(tp - entry)
             if not total_distance:
@@ -296,9 +324,11 @@ def check_trailing_stop(db):
             )
             print(f"[TRAILING] ticket {ticket} : SL déplacé à {label} ({new_sl:.3f})")
 
-    # Nettoyage : une position fermée ne doit pas rester en mémoire.
-    all_positions = m.positions_get(symbol=PRICE_SYMBOL) or ()
-    current_tickets = {p.ticket for p in all_positions}
-    for ticket in list(_sl_applied):
-        if ticket not in current_tickets:
-            del _sl_applied[ticket]
+    # Nettoyage : une position fermée ne doit pas rester en mémoire. Seulement
+    # si on a effectivement récupéré les positions ce tour-ci (pas d'appel
+    # MT5 supplémentaire sinon).
+    if positions_fetched is not None:
+        current_tickets = {p.ticket for p in positions_fetched}
+        for ticket in list(_sl_applied):
+            if ticket not in current_tickets:
+                del _sl_applied[ticket]
