@@ -251,7 +251,7 @@ function Donut({ breakdown }) {
             fill="none"
             stroke={a.color}
             strokeWidth={DONUT_STROKE_WIDTH}
-            strokeLinecap="round"
+            strokeLinecap="butt"
             strokeDasharray={`${a.dash} ${DONUT_CIRCUMFERENCE}`}
             strokeDashoffset={a.offset}
           />
