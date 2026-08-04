@@ -10,14 +10,18 @@ positions.py — Surveille les positions et ordres différés :
     bougie H1/H4.
 
 Ces trois fonctions ne concernent que les positions issues d'une tâche H1 ou
-H4 (le M15 est exclu — trop de bruit).
+H4, OU d'une position quelconque (ouverte manuellement, par un autre EA...)
+dont le suivi a été activé manuellement depuis l'app avec un timeframe H1/H4
+(managed_positions/{ticket}) — le M15 est exclu — trop de bruit.
 
 Tourne en continu, mais ne compare qu'en mémoire (aucune lecture/écriture
 Firestore en continu) — seuls les appels à l'API de notification et, pour le
 trailing stop, à MT5 order_send() ont lieu, et seulement quand un événement
-réel est détecté. La seule exception est un Firestore.get() ponctuel, une
-seule fois par position (mis en cache ensuite), pour retrouver le timeframe
-de la tâche à l'origine d'une position.
+réel est détecté. La seule exception est un Firestore.get() ponctuel pour
+retrouver le timeframe éligible d'une position (tâche d'origine, sinon
+activation manuelle) : mis en cache dès qu'un timeframe éligible est trouvé,
+sinon re-tenté au prochain contrôle (peu coûteux, ces contrôles sont déjà
+espacés dans le temps).
 """
 
 from datetime import datetime, timedelta, timezone
@@ -79,9 +83,10 @@ def check_order_fills(db):
     _last_pending_tickets = current_tickets
 
 
-# ticket -> timeframe de la tâche d'origine ("H1"/"H4"/autre), ou None si
-# introuvable/non éligible. Rempli une seule fois par position (via un
-# Firestore.get() ponctuel), puis réutilisé ensuite.
+# ticket -> timeframe éligible ("H1"/"H4"), via la tâche d'origine ou une
+# activation manuelle. N'est rempli QUE quand un timeframe éligible a été
+# trouvé (voir _resolve_timeframe) — jamais mis en cache à None/non-éligible,
+# pour qu'une activation manuelle faite après coup soit prise en compte.
 _position_timeframe_cache = {}
 
 # ticket -> ensemble des seuils déjà notifiés pour cette position.
@@ -100,6 +105,32 @@ def _task_timeframe(db, comment):
     if not doc.exists:
         return None
     return doc.to_dict().get("timeframe")
+
+
+def _manual_timeframe(db, ticket):
+    """Timeframe activé manuellement depuis l'app pour une position qui n'a
+    PAS été ouverte par une tâche mymt5 (managed_positions/{ticket}, écrit
+    par le bouton "Activer le suivi" côté app)."""
+    doc = db.collection("managed_positions").document(str(ticket)).get()
+    if not doc.exists:
+        return None
+    return doc.to_dict().get("timeframe")
+
+
+def _resolve_timeframe(db, ticket, comment):
+    """Timeframe éligible (H1/H4) d'une position, via sa tâche d'origine en
+    priorité, sinon via une activation manuelle. Mis en cache UNIQUEMENT
+    quand un timeframe éligible est trouvé : une position sans timeframe
+    éligible reste non mise en cache, pour qu'une activation manuelle faite
+    après coup soit prise en compte au prochain contrôle (toutes les 15 min
+    pour check_tp_progress, à la bougie suivante pour check_trailing_stop —
+    donc peu coûteux de re-vérifier)."""
+    if ticket in _position_timeframe_cache:
+        return _position_timeframe_cache[ticket]
+    timeframe = _task_timeframe(db, comment) or _manual_timeframe(db, ticket)
+    if timeframe in ELIGIBLE_TIMEFRAMES:
+        _position_timeframe_cache[ticket] = timeframe
+    return timeframe
 
 
 def _candles_current_and_previous(m, symbol, timeframe):
@@ -162,9 +193,7 @@ def check_tp_progress(db):
         if not tp:
             continue  # pas de TP défini sur cette position, rien à mesurer
 
-        if ticket not in _position_timeframe_cache:
-            _position_timeframe_cache[ticket] = _task_timeframe(db, pos.comment)
-        timeframe = _position_timeframe_cache[ticket]
+        timeframe = _resolve_timeframe(db, ticket, pos.comment)
         if timeframe not in ELIGIBLE_TIMEFRAMES:
             continue
 
@@ -265,9 +294,7 @@ def check_trailing_stop(db):
             if not tp:
                 continue
 
-            if ticket not in _position_timeframe_cache:
-                _position_timeframe_cache[ticket] = _task_timeframe(db, pos.comment)
-            if _position_timeframe_cache[ticket] != timeframe:
+            if _resolve_timeframe(db, ticket, pos.comment) != timeframe:
                 continue
 
             entry = pos.price_open

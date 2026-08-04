@@ -36,6 +36,8 @@ export const api = {
     request(`/api/candles/${symbol}/request`, { method: 'POST', body: { timeframe, time } }),
   positions: () => request('/api/positions'),
   requestPositions: () => request('/api/positions/request', { method: 'POST' }),
+  activatePositionMonitoring: (ticket, timeframe) =>
+    request(`/api/positions/${ticket}/activate-monitoring`, { method: 'POST', body: { timeframe } }),
   trades: () => request('/api/trades'),
   syncTrades: () => request('/api/trades/sync', { method: 'POST' }),
   reports: () => request('/api/reports'),
