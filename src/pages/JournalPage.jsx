@@ -14,6 +14,10 @@ function pct(value) {
   return typeof value === 'number' ? `${value.toFixed(1)}%` : '—'
 }
 
+function formatSignedPct(value) {
+  return typeof value === 'number' ? `${value >= 0 ? '+' : ''}${value.toFixed(2)}%` : '—'
+}
+
 function formatDate(ts) {
   if (typeof ts !== 'number') return '—'
   return new Date(ts * 1000).toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' })
@@ -122,34 +126,84 @@ function exportCsv(trades) {
   URL.revokeObjectURL(url)
 }
 
-function PerformanceCurve({ curve }) {
+function formatAxisValue(value, unit) {
+  return unit === 'pct' ? formatSignedPct(value) : money(value)
+}
+
+function PerformanceCurve({ curve, unit }) {
   if (curve.length < 2) {
     return <p className="text-sm text-slate-400">Pas assez de trades pour tracer une courbe.</p>
   }
+
   const min = Math.min(0, ...curve)
   const max = Math.max(0, ...curve)
   const range = max - min || 1
-  const points = curve
-    .map((v, i) => {
-      const x = (i / (curve.length - 1)) * 100
-      const y = 100 - ((v - min) / range) * 100
-      return `${x},${y}`
-    })
-    .join(' ')
-  const zeroY = 100 - ((0 - min) / range) * 100
   const last = curve[curve.length - 1]
+  const color = last >= 0 ? '#4ade80' : '#f87171'
+
+  function yFor(v) {
+    return 100 - ((v - min) / range) * 100
+  }
+
+  const points = curve.map((v, i) => ({ x: (i / (curve.length - 1)) * 100, y: yFor(v) }))
+  const linePoints = points.map((p) => `${p.x},${p.y}`).join(' ')
+  const zeroY = yFor(0)
+  const areaPoints = `0,${zeroY} ${linePoints} 100,${zeroY}`
+  const lastPoint = points[points.length - 1]
 
   return (
-    <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="h-32 w-full">
-      <line x1="0" y1={zeroY} x2="100" y2={zeroY} stroke="currentColor" strokeWidth="0.3" className="text-white/15" />
-      <polyline
-        points={points}
-        fill="none"
-        stroke={last >= 0 ? '#4ade80' : '#f87171'}
-        strokeWidth="1.2"
-        vectorEffect="non-scaling-stroke"
-      />
-    </svg>
+    <div className="flex gap-2">
+      <div className="relative h-32 w-14 shrink-0 font-mono text-[11px] text-slate-500">
+        {max > 0 && (
+          <span className="absolute right-0 -translate-y-1/2" style={{ top: `${yFor(max)}%` }}>
+            {formatAxisValue(max, unit)}
+          </span>
+        )}
+        <span className="absolute right-0 -translate-y-1/2" style={{ top: `${zeroY}%` }}>
+          {unit === 'pct' ? '0.00%' : '0 $'}
+        </span>
+        {min < 0 && (
+          <span className="absolute right-0 -translate-y-1/2" style={{ top: `${yFor(min)}%` }}>
+            {formatAxisValue(min, unit)}
+          </span>
+        )}
+      </div>
+      <div className="relative h-32 flex-1">
+        <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="h-full w-full overflow-visible">
+          <defs>
+            <linearGradient id="performanceGradient" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor={color} stopOpacity="0.35" />
+              <stop offset="100%" stopColor={color} stopOpacity="0" />
+            </linearGradient>
+          </defs>
+          <line
+            x1="0"
+            y1={zeroY}
+            x2="100"
+            y2={zeroY}
+            stroke="currentColor"
+            strokeWidth="1"
+            strokeDasharray="3,3"
+            className="text-slate-600"
+            vectorEffect="non-scaling-stroke"
+          />
+          <polygon points={areaPoints} fill="url(#performanceGradient)" />
+          <polyline
+            points={linePoints}
+            fill="none"
+            stroke={color}
+            strokeWidth="1.8"
+            strokeLinejoin="round"
+            strokeLinecap="round"
+            vectorEffect="non-scaling-stroke"
+          />
+        </svg>
+        <div
+          className="absolute h-2.5 w-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full ring-2 ring-slate-950"
+          style={{ left: `${lastPoint.x}%`, top: `${lastPoint.y}%`, backgroundColor: color }}
+        />
+      </div>
+    </div>
   )
 }
 
@@ -219,6 +273,7 @@ export function JournalPage() {
   const [syncing, setSyncing] = useState(false)
   const [error, setError] = useState('')
   const [page, setPage] = useState(1)
+  const [accountSize, setAccountSize] = useState(null)
 
   function load() {
     setError('')
@@ -231,6 +286,13 @@ export function JournalPage() {
 
   useEffect(() => {
     load()
+    api
+      .accountStatus()
+      .then((data) => {
+        const size = data.accounts?.[String(data.login)]?.account_size
+        if (typeof size === 'number') setAccountSize(size)
+      })
+      .catch(() => {})
   }, [])
 
   async function handleSync() {
@@ -251,7 +313,15 @@ export function JournalPage() {
   const streak = useMemo(() => (trades ? computeStreak(trades) : null), [trades])
   const breakdown = useMemo(() => (trades ? computeBreakdown(trades) : null), [trades])
   const monthly = useMemo(() => (trades ? computeMonthly(trades) : []), [trades])
-  const curve = useMemo(() => (trades ? computeCurve(trades) : []), [trades])
+  const dollarCurve = useMemo(() => (trades ? computeCurve(trades) : []), [trades])
+  // Le % est toujours rapporté au capital de base FIXE (account_size), jamais
+  // à l'équité live — même règle que le sizing des tâches (risk_sizing_strategy).
+  // Tant que account_size n'est pas encore chargé, on retombe sur les dollars.
+  const curveUnit = accountSize ? 'pct' : 'usd'
+  const curve = useMemo(
+    () => (accountSize ? dollarCurve.map((v) => (v / accountSize) * 100) : dollarCurve),
+    [dollarCurve, accountSize],
+  )
 
   const totalPages = trades ? Math.max(1, Math.ceil(trades.length / PAGE_SIZE)) : 1
   const pageTrades = trades ? trades.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE) : []
@@ -336,12 +406,14 @@ export function JournalPage() {
           <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
             <div className="mb-2 flex items-center justify-between">
               <p className="text-xs font-bold tracking-[0.14em] text-slate-400 uppercase">Courbe de performance</p>
-              <span className={`text-sm font-semibold ${kpis.netTotal >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                {money(kpis.netTotal)}
+              <span className={`text-sm font-bold ${kpis.netTotal >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                {curveUnit === 'pct' ? formatSignedPct((kpis.netTotal / accountSize) * 100) : money(kpis.netTotal)}
               </span>
             </div>
-            <PerformanceCurve curve={curve} />
-            <p className="mt-1 text-xs text-slate-500">P&amp;L cumulé, en dollars</p>
+            <PerformanceCurve curve={curve} unit={curveUnit} />
+            <p className="mt-2 text-xs text-slate-500">
+              P&amp;L cumulé {curveUnit === 'pct' ? '· % du capital de base' : ', en dollars'}
+            </p>
           </div>
 
           <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
