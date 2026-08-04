@@ -1,11 +1,12 @@
 """
 mt5_status.py — Point d'entrée du VPS. Toutes les POLL_INTERVAL secondes :
-  - répond aux demandes ponctuelles de l'app (on_demand.py) — aucune écriture
-    en continu ;
+  - répond aux demandes ponctuelles de l'app en UNE requête Firestore groupée
+    (on_demand.py) — pas de lecture fixe par type de commande ;
   - scanne les tâches de trading dues et les exécute (tasks.py) ;
   - surveille les ordres différés et positions ouvertes : notifie un
     déclenchement d'ordre, la progression vers le TP, et déplace le SL par
-    paliers (BE, 25%, 50%) — respecte DRY_RUN comme le reste (positions.py).
+    paliers (BE, 25%, 50%) — respecte DRY_RUN comme le reste (positions.py) ;
+  - alimente l'historique des trades fermés (trades.py).
 
 Tout tourne côté VPS, en connexions sortantes uniquement (Firestore + appels
 à l'API Vercel pour les notifications) — aucun port n'est jamais ouvert ici,
@@ -34,10 +35,10 @@ import os
 import time
 
 from config import POLL_INTERVAL, SA_PATH, VPS_ID
-from on_demand import check_candle_request, check_positions_request, check_price_request, check_status_request
+from on_demand import check_all_requests
 from positions import check_order_fills, check_tp_progress, check_trailing_stop
 from tasks import check_due_tasks
-from trades import check_closed_positions, check_trades_sync_request
+from trades import check_closed_positions
 
 
 def run():
@@ -51,11 +52,7 @@ def run():
 
     while True:
         try:
-            check_status_request(db)
-            check_price_request(db)
-            check_candle_request(db)
-            check_positions_request(db)
-            check_trades_sync_request(db)
+            check_all_requests(db)
             check_due_tasks(db)
             check_order_fills(db)
             check_tp_progress(db)

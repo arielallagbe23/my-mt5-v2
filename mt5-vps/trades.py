@@ -1,10 +1,10 @@
 """
 trades.py — Historique des trades fermés, pour le Journal.
 
-  - check_trades_sync_request : à la demande (commands/trades_sync_request),
-    récupère TOUT l'historique de deals MT5 et écrit un doc trades/{positionId}
-    par position fermée — utilisé pour l'import initial et pour un
-    rafraîchissement manuel depuis l'app.
+  - handle_trades_sync_request : appelé par on_demand.py (requête groupée
+    commands/), récupère TOUT l'historique de deals MT5 et écrit un doc
+    trades/{positionId} par position fermée — utilisé pour l'import initial
+    et pour un rafraîchissement manuel depuis l'app.
   - check_closed_positions : en continu à chaque tour de boucle, détecte
     quand une position ouverte disparaît (fermée — SL, TP, manuelle...) et
     écrit son trade automatiquement, sans action de l'utilisateur. Une fois
@@ -68,15 +68,12 @@ def _deals_to_trade(m, position_id, deals):
     }
 
 
-def check_trades_sync_request(db):
+def handle_trades_sync_request(db, doc):
     """Réimporte tout l'historique de deals MT5 — import initial ou
     rafraîchissement manuel demandé depuis l'app (bouton "Actualiser" qui,
-    cette fois, écoute vraiment côté VPS)."""
-    ref = db.collection("commands").document("trades_sync_request")
-    doc = ref.get()
-    if not doc.exists or doc.to_dict().get("status") != "pending":
-        return
-
+    cette fois, écoute vraiment côté VPS). Appelé par on_demand.py's
+    check_all_requests, qui a déjà récupéré `doc` dans sa requête groupée."""
+    ref = doc.reference
     m = ensure_mt5()
     if m is None:
         return
