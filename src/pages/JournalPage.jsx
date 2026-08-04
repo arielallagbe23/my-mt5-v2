@@ -207,35 +207,58 @@ function PerformanceCurve({ curve, unit }) {
   )
 }
 
+const DONUT_RADIUS = 34
+const DONUT_STROKE_WIDTH = 17
+const DONUT_GAP_DEG = 6 // espace entre deux segments, en degrés
+const DONUT_CIRCUMFERENCE = 2 * Math.PI * DONUT_RADIUS
+
 function Donut({ breakdown }) {
   const { tp, slLoss, slProtected, other, total } = breakdown
   if (total === 0) return null
 
-  const segments = [
+  const rawSegments = [
     { value: tp, color: '#60a5fa', label: 'Take Profit' },
     { value: slLoss, color: '#f87171', label: 'Stop Loss' },
     { value: slProtected, color: '#4ade80', label: 'SL protégé (BE+)' },
     { value: other, color: '#fbbf24', label: 'Autre' },
   ].filter((s) => s.value > 0)
 
-  let acc = 0
-  const stops = segments
-    .map((s) => {
-      const start = (acc / total) * 100
-      acc += s.value
-      const end = (acc / total) * 100
-      return `${s.color} ${start}% ${end}%`
-    })
-    .join(', ')
+  // Chaque segment démarre où le précédent s'est arrêté, mais on ampute sa
+  // longueur dessinée d'un petit espace fixe (en degrés) pour créer la
+  // séparation visuelle entre segments — pas un vrai "trou" dans les données.
+  let angleAcc = 0
+  const arcs = rawSegments.map((s) => {
+    const sweepDeg = (s.value / total) * 360
+    const startDeg = angleAcc
+    angleAcc += sweepDeg
+    const visibleDeg = Math.max(0, sweepDeg - DONUT_GAP_DEG)
+    return {
+      ...s,
+      dash: (visibleDeg / 360) * DONUT_CIRCUMFERENCE,
+      offset: -((startDeg / 360) * DONUT_CIRCUMFERENCE),
+    }
+  })
 
   return (
     <div className="flex flex-col items-center gap-4">
-      <div
-        className="h-40 w-40 rounded-full"
-        style={{ background: `conic-gradient(${stops})`, WebkitMaskImage: 'radial-gradient(circle, transparent 55%, black 56%)', maskImage: 'radial-gradient(circle, transparent 55%, black 56%)' }}
-      />
+      <svg viewBox="0 0 100 100" className="h-40 w-40 -rotate-90">
+        {arcs.map((a) => (
+          <circle
+            key={a.label}
+            cx="50"
+            cy="50"
+            r={DONUT_RADIUS}
+            fill="none"
+            stroke={a.color}
+            strokeWidth={DONUT_STROKE_WIDTH}
+            strokeLinecap="round"
+            strokeDasharray={`${a.dash} ${DONUT_CIRCUMFERENCE}`}
+            strokeDashoffset={a.offset}
+          />
+        ))}
+      </svg>
       <div className="grid w-full grid-cols-2 gap-x-4 gap-y-1.5 text-xs text-slate-400">
-        {segments.map((s) => (
+        {rawSegments.map((s) => (
           <div key={s.label} className="flex items-center gap-1.5">
             <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: s.color }} />
             <span>
