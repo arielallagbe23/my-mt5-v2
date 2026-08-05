@@ -1,294 +1,17 @@
 import { useEffect, useMemo, useState } from 'react'
 import { api } from '../lib/api'
 import { PAGE } from '../lib/layout'
+import { JournalHeader } from '../components/journal/JournalHeader'
+import { NetPnlCard } from '../components/journal/NetPnlCard'
+import { KpiGrid } from '../components/journal/KpiGrid'
+import { PerformanceCard } from '../components/journal/PerformanceCard'
+import { ResultsBreakdownCard } from '../components/journal/ResultsBreakdownCard'
+import { BestWorstStreakCard } from '../components/journal/BestWorstStreakCard'
+import { MonthlyPnlCard } from '../components/journal/MonthlyPnlCard'
+import { TransactionsTable } from '../components/journal/TransactionsTable'
+import { computeKpis, computeStreak, computeBreakdown, computeMonthly, computeCurve, exportCsv } from '../components/journal/journalStats'
 
 const PAGE_SIZE = 10
-
-function money(value) {
-  if (typeof value !== 'number') return '—'
-  const sign = value > 0 ? '+' : ''
-  return `${sign}${value.toFixed(2)} $`
-}
-
-function pct(value) {
-  return typeof value === 'number' ? `${value.toFixed(1)}%` : '—'
-}
-
-function formatSignedPct(value) {
-  return typeof value === 'number' ? `${value >= 0 ? '+' : ''}${value.toFixed(2)}%` : '—'
-}
-
-function formatDate(ts) {
-  if (typeof ts !== 'number') return '—'
-  return new Date(ts * 1000).toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' })
-}
-
-// --- Calculs purs, à partir de la liste des trades (déjà triée closeTime desc par l'API) ---
-
-function computeKpis(trades) {
-  const total = trades.length
-  const wins = trades.filter((t) => t.net > 0)
-  const losses = trades.filter((t) => t.net < 0)
-  const netTotal = trades.reduce((sum, t) => sum + t.net, 0)
-  const grossWin = wins.reduce((sum, t) => sum + t.net, 0)
-  const grossLoss = Math.abs(losses.reduce((sum, t) => sum + t.net, 0))
-
-  return {
-    total,
-    netTotal,
-    winRate: total ? (wins.length / total) * 100 : null,
-    winCount: wins.length,
-    profitFactor: grossLoss ? grossWin / grossLoss : null,
-    avgWin: wins.length ? grossWin / wins.length : null,
-    avgLoss: losses.length ? -grossLoss / losses.length : null,
-    best: trades.reduce((m, t) => (m === null || t.net > m.net ? t : m), null),
-    worst: trades.reduce((m, t) => (m === null || t.net < m.net ? t : m), null),
-  }
-}
-
-function computeStreak(trades) {
-  // trades est trié du plus récent au plus ancien
-  if (trades.length === 0) return null
-  const isWin = trades[0].net > 0
-  let count = 0
-  for (const t of trades) {
-    if (t.net > 0 === isWin) count++
-    else break
-  }
-  return { isWin, count }
-}
-
-function computeBreakdown(trades) {
-  let tp = 0
-  let slLoss = 0
-  let slProtected = 0
-  let other = 0
-  for (const t of trades) {
-    if (t.reason === 'TP') tp++
-    else if (t.reason === 'SL') {
-      if (t.net >= 0) slProtected++
-      else slLoss++
-    } else other++
-  }
-  return { tp, slLoss, slProtected, other, total: trades.length }
-}
-
-function computeMonthly(trades) {
-  const byMonth = new Map()
-  for (const t of trades) {
-    const d = new Date(t.closeTime * 1000)
-    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
-    byMonth.set(key, (byMonth.get(key) ?? 0) + t.net)
-  }
-  return [...byMonth.entries()].sort(([a], [b]) => a.localeCompare(b))
-}
-
-function computeCurve(trades) {
-  const chronological = [...trades].sort((a, b) => a.closeTime - b.closeTime)
-  let cumulative = 0
-  return chronological.map((t) => {
-    cumulative += t.net
-    return cumulative
-  })
-}
-
-function exportCsv(trades) {
-  const header = 'Date,Symbole,Type,Volume,PrixOuverture,PrixCloture,Profit,Swap,Commission,Net,Raison\n'
-  const rows = trades
-    .map((t) =>
-      [
-        new Date(t.closeTime * 1000).toLocaleString('fr-FR'),
-        t.symbol,
-        t.type,
-        t.volume,
-        t.priceOpen,
-        t.priceClose,
-        t.profit.toFixed(2),
-        t.swap.toFixed(2),
-        t.commission.toFixed(2),
-        t.net.toFixed(2),
-        t.reason,
-      ].join(','),
-    )
-    .join('\n')
-  const blob = new Blob([header + rows], { type: 'text/csv' })
-  const file = new File([blob], 'journal.csv', { type: 'text/csv' })
-
-  if (navigator.canShare?.({ files: [file] })) {
-    navigator.share({ files: [file], title: 'Journal mymt5' }).catch(() => {})
-    return
-  }
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = 'journal.csv'
-  a.click()
-  URL.revokeObjectURL(url)
-}
-
-function formatAxisValue(value, unit) {
-  return unit === 'pct' ? formatSignedPct(value) : money(value)
-}
-
-function PerformanceCurve({ curve, unit }) {
-  if (curve.length < 2) {
-    return <p className="text-sm text-slate-400">Pas assez de trades pour tracer une courbe.</p>
-  }
-
-  const min = Math.min(0, ...curve)
-  const max = Math.max(0, ...curve)
-  const range = max - min || 1
-  const last = curve[curve.length - 1]
-  const color = last >= 0 ? '#4ade80' : '#f87171'
-
-  function yFor(v) {
-    return 100 - ((v - min) / range) * 100
-  }
-
-  const points = curve.map((v, i) => ({ x: (i / (curve.length - 1)) * 100, y: yFor(v) }))
-  const linePoints = points.map((p) => `${p.x},${p.y}`).join(' ')
-  const zeroY = yFor(0)
-  const areaPoints = `0,${zeroY} ${linePoints} 100,${zeroY}`
-  const lastPoint = points[points.length - 1]
-
-  return (
-    <div className="flex gap-2">
-      <div className="relative h-32 w-14 shrink-0 font-mono text-[11px] text-slate-500">
-        {max > 0 && (
-          <span className="absolute right-0 -translate-y-1/2" style={{ top: `${yFor(max)}%` }}>
-            {formatAxisValue(max, unit)}
-          </span>
-        )}
-        <span className="absolute right-0 -translate-y-1/2" style={{ top: `${zeroY}%` }}>
-          {unit === 'pct' ? '0.00%' : '0 $'}
-        </span>
-        {min < 0 && (
-          <span className="absolute right-0 -translate-y-1/2" style={{ top: `${yFor(min)}%` }}>
-            {formatAxisValue(min, unit)}
-          </span>
-        )}
-      </div>
-      <div className="relative h-32 flex-1">
-        <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="h-full w-full overflow-visible">
-          <defs>
-            <linearGradient id="performanceGradient" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor={color} stopOpacity="0.35" />
-              <stop offset="100%" stopColor={color} stopOpacity="0" />
-            </linearGradient>
-          </defs>
-          <line
-            x1="0"
-            y1={zeroY}
-            x2="100"
-            y2={zeroY}
-            stroke="currentColor"
-            strokeWidth="1"
-            strokeDasharray="3,3"
-            className="text-slate-600"
-            vectorEffect="non-scaling-stroke"
-          />
-          <polygon points={areaPoints} fill="url(#performanceGradient)" />
-          <polyline
-            points={linePoints}
-            fill="none"
-            stroke={color}
-            strokeWidth="1.8"
-            strokeLinejoin="round"
-            strokeLinecap="round"
-            vectorEffect="non-scaling-stroke"
-          />
-        </svg>
-        <div
-          className="absolute h-2.5 w-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full ring-2 ring-slate-950"
-          style={{ left: `${lastPoint.x}%`, top: `${lastPoint.y}%`, backgroundColor: color }}
-        />
-      </div>
-    </div>
-  )
-}
-
-const DONUT_RADIUS = 34
-const DONUT_STROKE_WIDTH = 17
-const DONUT_GAP_DEG = 6 // espace entre deux segments, en degrés
-const DONUT_CIRCUMFERENCE = 2 * Math.PI * DONUT_RADIUS
-
-function Donut({ breakdown }) {
-  const { tp, slLoss, slProtected, other, total } = breakdown
-  if (total === 0) return null
-
-  const rawSegments = [
-    { value: tp, color: '#60a5fa', label: 'Take Profit' },
-    { value: slLoss, color: '#f87171', label: 'Stop Loss' },
-    { value: slProtected, color: '#4ade80', label: 'SL protégé (BE+)' },
-    { value: other, color: '#fbbf24', label: 'Autre' },
-  ].filter((s) => s.value > 0)
-
-  // Chaque segment démarre où le précédent s'est arrêté, mais on ampute sa
-  // longueur dessinée d'un petit espace fixe (en degrés) pour créer la
-  // séparation visuelle entre segments — pas un vrai "trou" dans les données.
-  let angleAcc = 0
-  const arcs = rawSegments.map((s) => {
-    const sweepDeg = (s.value / total) * 360
-    const startDeg = angleAcc
-    angleAcc += sweepDeg
-    const visibleDeg = Math.max(0, sweepDeg - DONUT_GAP_DEG)
-    return {
-      ...s,
-      dash: (visibleDeg / 360) * DONUT_CIRCUMFERENCE,
-      offset: -((startDeg / 360) * DONUT_CIRCUMFERENCE),
-    }
-  })
-
-  return (
-    <div className="flex flex-col items-center gap-4">
-      <svg viewBox="0 0 100 100" className="h-40 w-40 -rotate-90">
-        {arcs.map((a) => (
-          <circle
-            key={a.label}
-            cx="50"
-            cy="50"
-            r={DONUT_RADIUS}
-            fill="none"
-            stroke={a.color}
-            strokeWidth={DONUT_STROKE_WIDTH}
-            strokeLinecap="butt"
-            strokeDasharray={`${a.dash} ${DONUT_CIRCUMFERENCE}`}
-            strokeDashoffset={a.offset}
-          />
-        ))}
-      </svg>
-      <div className="grid w-full grid-cols-2 gap-x-4 gap-y-1.5 text-xs text-slate-400">
-        {rawSegments.map((s) => (
-          <div key={s.label} className="flex items-center gap-1.5">
-            <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: s.color }} />
-            <span>
-              {s.label} <span className="font-semibold text-white">{Math.round((s.value / total) * 100)}%</span>
-            </span>
-          </div>
-        ))}
-      </div>
-    </div>
-  )
-}
-
-function MonthlyBars({ monthly }) {
-  if (monthly.length === 0) return null
-  const maxAbs = Math.max(...monthly.map(([, v]) => Math.abs(v)), 1)
-
-  return (
-    <div className="flex h-24 items-end gap-2">
-      {monthly.map(([key, value]) => (
-        <div key={key} className="flex flex-1 flex-col items-center gap-1">
-          <div
-            className={`w-full rounded-t ${value >= 0 ? 'bg-blue-500' : 'bg-red-500'}`}
-            style={{ height: `${Math.max(4, (Math.abs(value) / maxAbs) * 80)}px` }}
-          />
-          <span className="text-[10px] text-slate-500">{key.slice(5)}</span>
-        </div>
-      ))}
-    </div>
-  )
-}
 
 export function JournalPage() {
   const [trades, setTrades] = useState(null)
@@ -351,30 +74,13 @@ export function JournalPage() {
 
   return (
     <div className={PAGE}>
-      <div className="flex items-start justify-between gap-2">
-        <div>
-          <h1 className="text-2xl font-bold text-white sm:text-3xl">Journal</h1>
-          <p className="text-sm text-slate-400">{trades ? `${trades.length} trades · tout l'historique` : '...'}</p>
-        </div>
-        <div className="flex shrink-0 gap-2">
-          <button
-            type="button"
-            onClick={() => trades && exportCsv(trades)}
-            disabled={!trades || trades.length === 0}
-            className="min-h-9 rounded-full border border-white/10 px-3 text-sm font-semibold text-white disabled:opacity-40"
-          >
-            Exporter
-          </button>
-          <button
-            type="button"
-            onClick={handleSync}
-            disabled={syncing}
-            className="min-h-9 rounded-full border border-white/10 px-3 text-sm font-semibold text-white disabled:opacity-60"
-          >
-            {syncing ? 'Synchro...' : 'Actualiser'}
-          </button>
-        </div>
-      </div>
+      <JournalHeader
+        tradesCount={trades?.length ?? null}
+        onExport={() => trades && exportCsv(trades)}
+        exportDisabled={!trades || trades.length === 0}
+        onSync={handleSync}
+        syncing={syncing}
+      />
 
       {error && <p className="text-sm text-red-400">{error}</p>}
       {loading && <p className="text-sm text-slate-400">Chargement...</p>}
@@ -386,145 +92,20 @@ export function JournalPage() {
 
       {kpis && trades.length > 0 && (
         <>
-          <div
-            className={`rounded-3xl border p-6 ${
-              kpis.netTotal >= 0 ? 'border-green-500/30 bg-green-500/10' : 'border-red-500/30 bg-red-500/10'
-            }`}
-          >
-            <p className="text-xs font-bold tracking-[0.14em] text-slate-400 uppercase">P&amp;L net total</p>
-            <p className={`mt-1 text-4xl font-bold ${kpis.netTotal >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-              {money(kpis.netTotal)}
-            </p>
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
-            <div className="rounded-2xl border border-white/10 bg-white/5 p-3">
-              <p className="text-xs text-slate-400 uppercase">Win rate</p>
-              <p className="text-xl font-bold text-white">{pct(kpis.winRate)}</p>
-              <p className="text-xs text-slate-500">
-                {kpis.winCount} / {kpis.total}
-              </p>
-            </div>
-            <div className="rounded-2xl border border-white/10 bg-white/5 p-3">
-              <p className="text-xs text-slate-400 uppercase">Profit factor</p>
-              <p className="text-xl font-bold text-white">
-                {kpis.profitFactor === null ? '—' : kpis.profitFactor.toFixed(2)}
-              </p>
-              <p className="text-xs text-slate-500">
-                {kpis.profitFactor === null ? '—' : kpis.profitFactor >= 1 ? 'favorable' : 'défavorable'}
-              </p>
-            </div>
-            <div className="rounded-2xl border border-white/10 bg-white/5 p-3">
-              <p className="text-xs text-slate-400 uppercase">Gain moyen</p>
-              <p className="text-xl font-bold text-blue-400">{money(kpis.avgWin)}</p>
-              <p className="text-xs text-slate-500">par trade gagnant</p>
-            </div>
-            <div className="rounded-2xl border border-white/10 bg-white/5 p-3">
-              <p className="text-xs text-slate-400 uppercase">Perte moyenne</p>
-              <p className="text-xl font-bold text-red-400">{money(kpis.avgLoss)}</p>
-              <p className="text-xs text-slate-500">par trade perdant</p>
-            </div>
-          </div>
-
-          <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
-            <div className="mb-2 flex items-center justify-between">
-              <p className="text-xs font-bold tracking-[0.14em] text-slate-400 uppercase">Courbe de performance</p>
-              <span className={`text-sm font-bold ${kpis.netTotal >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                {curveUnit === 'pct' ? formatSignedPct((kpis.netTotal / accountSize) * 100) : money(kpis.netTotal)}
-              </span>
-            </div>
-            <PerformanceCurve curve={curve} unit={curveUnit} />
-            <p className="mt-2 text-xs text-slate-500">
-              P&amp;L cumulé {curveUnit === 'pct' ? '· % du capital de base' : ', en dollars'}
-            </p>
-          </div>
-
-          <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
-            <p className="mb-3 text-xs font-bold tracking-[0.14em] text-slate-400 uppercase">Répartition des résultats</p>
-            <Donut breakdown={breakdown} />
-          </div>
-
-          <div className="rounded-2xl border border-white/10 bg-white/5 p-3">
-            <div className="flex items-center justify-between border-b border-white/10 py-2">
-              <span className="text-xs text-slate-400 uppercase">Meilleur trade</span>
-              <span className="text-sm font-semibold text-green-400">{kpis.best ? money(kpis.best.net) : '—'}</span>
-            </div>
-            <div className="flex items-center justify-between border-b border-white/10 py-2">
-              <span className="text-xs text-slate-400 uppercase">Pire trade</span>
-              <span className="text-sm font-semibold text-red-400">{kpis.worst ? money(kpis.worst.net) : '—'}</span>
-            </div>
-            <div className="flex items-center justify-between py-2">
-              <span className="text-xs text-slate-400 uppercase">Série en cours</span>
-              <span className={`text-sm font-semibold ${streak?.isWin ? 'text-green-400' : 'text-red-400'}`}>
-                {streak ? `${streak.count} ${streak.isWin ? 'victoire(s)' : 'défaite(s)'}` : '—'}
-              </span>
-            </div>
-          </div>
-
-          {monthly.length > 0 && (
-            <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
-              <p className="mb-3 text-xs font-bold tracking-[0.14em] text-slate-400 uppercase">P&amp;L mensuel</p>
-              <MonthlyBars monthly={monthly} />
-            </div>
-          )}
-
-          <div className="rounded-2xl border border-white/10 bg-white/5 p-3">
-            <div className="mb-2 flex items-center justify-between">
-              <p className="text-xs font-bold tracking-[0.14em] text-slate-400 uppercase">Transactions</p>
-              <span className="text-xs text-slate-500">{trades.length} au total</span>
-            </div>
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs">
-                <thead>
-                  <tr className="text-slate-500">
-                    <th className="pb-2 pr-2 font-normal">Date</th>
-                    <th className="pb-2 pr-2 font-normal">Type</th>
-                    <th className="pb-2 pr-2 font-normal">Vol.</th>
-                    <th className="pb-2 pr-2 font-normal">Prix</th>
-                    <th className="pb-2 font-normal">P&amp;L</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {pageTrades.map((t) => (
-                    <tr key={t.positionId} className="border-t border-white/5">
-                      <td className="py-2 pr-2 whitespace-nowrap text-slate-400">{formatDate(t.closeTime)}</td>
-                      <td className={`py-2 pr-2 font-semibold ${t.type === 'Sell' ? 'text-red-400' : 'text-blue-400'}`}>
-                        {t.type === 'Sell' ? 'SELL' : 'BUY'}
-                      </td>
-                      <td className="py-2 pr-2 text-slate-300">{t.volume}</td>
-                      <td className="py-2 pr-2 text-slate-300">{t.priceClose}</td>
-                      <td className={`py-2 font-semibold ${t.net >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                        {money(t.net)}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            {totalPages > 1 && (
-              <div className="mt-3 flex items-center justify-between">
-                <button
-                  type="button"
-                  onClick={() => setPage((p) => Math.max(1, p - 1))}
-                  disabled={page === 1}
-                  className="min-h-8 rounded-full border border-white/10 px-3 text-xs font-semibold text-white disabled:opacity-40"
-                >
-                  ← Préc.
-                </button>
-                <span className="text-xs text-slate-500">
-                  {page} / {totalPages}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                  disabled={page === totalPages}
-                  className="min-h-8 rounded-full border border-white/10 px-3 text-xs font-semibold text-white disabled:opacity-40"
-                >
-                  Suiv. →
-                </button>
-              </div>
-            )}
-          </div>
+          <NetPnlCard netTotal={kpis.netTotal} />
+          <KpiGrid kpis={kpis} />
+          <PerformanceCard netTotal={kpis.netTotal} curve={curve} unit={curveUnit} accountSize={accountSize} />
+          <ResultsBreakdownCard breakdown={breakdown} />
+          <BestWorstStreakCard kpis={kpis} streak={streak} />
+          <MonthlyPnlCard monthly={monthly} />
+          <TransactionsTable
+            trades={trades}
+            pageTrades={pageTrades}
+            page={page}
+            totalPages={totalPages}
+            onPrevPage={() => setPage((p) => Math.max(1, p - 1))}
+            onNextPage={() => setPage((p) => Math.min(totalPages, p + 1))}
+          />
         </>
       )}
     </div>
