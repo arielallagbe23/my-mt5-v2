@@ -12,6 +12,11 @@ function formatExecutionTime(value) {
   return new Date(value).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' })
 }
 
+// Tant qu'une tâche n'a pas encore été évaluée (brouillon ou en attente),
+// elle est "à venir" — une fois passée en dry_run_done/done, elle a déjà son
+// propre rapport dans la liste des tâches, pas besoin de la garder ici.
+const UPCOMING_STATUSES = new Set(['draft', 'pending'])
+
 // Le trailing stop côté VPS ne déplace jamais le SL ailleurs qu'à ces 3
 // paliers précis (entrée + 0/25/50% de la distance entrée→TP — voir
 // SL_STAGES dans mt5-vps/positions.py). On retrouve le palier actuel en
@@ -36,6 +41,7 @@ export function HomePage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [reports, setReports] = useState([])
+  const [upcomingTasks, setUpcomingTasks] = useState([])
   const [monitoringTimeframes, setMonitoringTimeframes] = useState({})
   const [activatingTicket, setActivatingTicket] = useState(null)
 
@@ -60,6 +66,16 @@ export function HomePage() {
   useEffect(() => {
     load()
     api.reports().then(setReports).catch(() => {})
+    api
+      .listTasks()
+      .then((tasks) =>
+        setUpcomingTasks(
+          tasks
+            .filter((t) => UPCOMING_STATUSES.has(t.status))
+            .sort((a, b) => (a.executionTime ?? '').localeCompare(b.executionTime ?? '')),
+        ),
+      )
+      .catch(() => {})
   }, [])
 
   async function archiveReport(id) {
@@ -134,6 +150,42 @@ export function HomePage() {
       )}
 
       <section className="flex flex-col gap-2">
+        <p className="text-xs font-bold tracking-[0.14em] text-slate-500 uppercase">
+          Tâches à venir {upcomingTasks.length > 0 && `(${upcomingTasks.length})`}
+        </p>
+        {upcomingTasks.length === 0 && <p className="text-sm text-slate-400">Aucune tâche à venir.</p>}
+        {upcomingTasks.map((t) => (
+          <div key={t.id} className="rounded-2xl border border-white/10 bg-white/5 p-3">
+            <div className="flex items-center justify-between gap-2">
+              <span
+                className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
+                  t.scenario === 'sell'
+                    ? 'bg-red-500/15 text-red-300'
+                    : t.scenario === 'buy'
+                      ? 'bg-blue-500/15 text-blue-300'
+                      : 'bg-white/10 text-slate-300'
+                }`}
+              >
+                {t.scenario === 'sell' ? 'Vendre' : t.scenario === 'buy' ? 'Acheter' : 'Brouillon'}
+              </span>
+              <span className="text-xs text-slate-400">{formatExecutionTime(t.executionTime)}</span>
+            </div>
+            <div className="mt-2 grid grid-cols-3 gap-2 text-xs text-slate-400">
+              <span>
+                Timeframe : <span className="font-semibold text-white">{t.timeframe ?? '—'}</span>
+              </span>
+              <span>
+                Risque : <span className="font-semibold text-white">{t.risk != null ? `${t.risk}%` : '—'}</span>
+              </span>
+              <span>
+                Statut : <span className="font-semibold text-white">{t.status === 'draft' ? 'Brouillon' : 'En attente'}</span>
+              </span>
+            </div>
+          </div>
+        ))}
+      </section>
+
+      <section className="flex flex-col gap-2">
         <p className="text-xs font-bold tracking-[0.14em] text-slate-500 uppercase">Positions ouvertes</p>
         {loading && !data && <p className="text-sm text-slate-400">Chargement...</p>}
         {!loading && positions.length === 0 && <p className="text-sm text-slate-400">Aucune position ouverte.</p>}
@@ -151,7 +203,7 @@ export function HomePage() {
                 </span>
                 <span
                   className={`text-sm font-semibold ${
-                    typeof p.profit === 'number' && p.profit >= 0 ? 'text-green-400' : 'text-red-400'
+                    typeof p.profit === 'number' && p.profit >= 0 ? 'text-blue-400' : 'text-red-400'
                   }`}
                 >
                   {typeof p.profit === 'number' ? p.profit.toFixed(2) : '—'}
