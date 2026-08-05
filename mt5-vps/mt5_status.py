@@ -36,7 +36,7 @@ import time
 
 from config import POLL_INTERVAL, SA_PATH, VPS_ID
 from on_demand import check_all_requests
-from positions import check_order_fills, check_tp_progress, check_trailing_stop
+from positions import check_order_fills, check_tp_progress, check_trailing_stop, check_untracked_positions
 from tasks import check_due_tasks
 from trades import check_closed_positions
 
@@ -55,6 +55,7 @@ def run():
             check_all_requests(db)
             check_due_tasks(db)
             check_order_fills(db)
+            check_untracked_positions(db)
             check_tp_progress(db)
             check_trailing_stop(db)
             check_closed_positions(db)
