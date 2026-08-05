@@ -12,6 +12,7 @@ import tradesRouter from './routes/trades.js'
 import reportsRouter from './routes/reports.js'
 import pushRouter from './routes/push.js'
 import notifyRouter from './routes/notify.js'
+import setOrderRouter from './routes/setOrder.js'
 import { isAllowedOrigin } from './lib/origin.js'
 
 if (!process.env.JWT_SECRET) {
@@ -42,6 +43,7 @@ app.use('/api/trades', tradesRouter)
 app.use('/api/reports', reportsRouter)
 app.use('/api/push', pushRouter)
 app.use('/api/notify', notifyRouter)
+app.use('/api/set-order', setOrderRouter)
 
 app.get('/api/health', (req, res) => res.json({ ok: true }))
 

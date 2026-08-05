@@ -49,4 +49,6 @@ export const api = {
   createTask: (task) => request('/api/tasks', { method: 'POST', body: task }),
   updateTask: (id, task) => request(`/api/tasks/${id}`, { method: 'PATCH', body: task }),
   deleteTask: (id) => request(`/api/tasks/${id}`, { method: 'DELETE' }),
+  requestSetOrder: (order) => request('/api/set-order/request', { method: 'POST', body: order }),
+  setOrderResult: () => request('/api/set-order/result'),
 }

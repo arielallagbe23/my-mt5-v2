@@ -14,8 +14,11 @@ from datetime import datetime, timedelta, timezone
 
 from google.cloud.firestore_v1.base_query import FieldFilter
 
-from config import PRICE_SYMBOL, VPS_ID
+from config import DRY_RUN, MAGIC, MAX_RISK_PERCENT, PRICE_SYMBOL, VPS_ID
 from mt5_client import ensure_mt5
+from notify import notify
+from scenario_shared import compute_lot_size
+from tasks import _account_size
 from trades import handle_trades_sync_request
 
 
@@ -177,12 +180,137 @@ def _handle_candle_request(db, doc):
     print(f"[PUB] {symbol} {timeframe} O={candle['open']} H={candle['high']} L={candle['low']} C={candle['close']} (sur demande)")
 
 
+def _publish_order_result(db, result):
+    db.collection("order_results").document("main").set({**result, "ts": int(time.time())})
+
+
+def _handle_set_order_request(db, doc):
+    """Place un ordre manuel (marché ou différé) depuis l'app — commands/set_order_request.
+    Le lot n'est jamais saisi à la main : calculé automatiquement à partir du
+    risque, de l'entrée et du SL, avec compute_lot_size — la même formule
+    (et le même plancher 0,01 lot) que les tâches automatiques, pour ne
+    jamais avoir deux façons différentes de calculer un lot dans ce projet.
+
+    Respecte DRY_RUN comme tout le reste : en simulation, on notifie ce qui
+    aurait été envoyé sans jamais appeler order_send()."""
+    ref = doc.reference
+    data = doc.to_dict()
+
+    m = ensure_mt5()
+    if m is None:
+        ref.update({"status": "done"})
+        _publish_order_result(db, {"success": False, "error": "MT5 indisponible"})
+        return
+
+    symbol = PRICE_SYMBOL
+    m.symbol_select(symbol, True)
+    tick = m.symbol_info_tick(symbol)
+    if tick is None:
+        ref.update({"status": "done"})
+        _publish_order_result(db, {"success": False, "error": "Prix indisponible"})
+        return
+
+    side = data.get("side")  # "buy" | "sell"
+    order_kind = data.get("orderKind")  # "market" | "pending"
+    sl = data.get("sl")
+    tp = data.get("tp")
+    risk_percent = data.get("risk")
+    is_buy = side == "buy"
+    market_price = tick.ask if is_buy else tick.bid
+    entry = market_price if order_kind == "market" else data.get("entry")
+
+    result = {"side": side, "orderKind": order_kind, "entry": entry, "sl": sl, "tp": tp, "success": False}
+
+    # Garde-fou : jamais plus de MAX_RISK_PERCENT, même si la validation côté
+    # API a été contournée (même principe que tasks.py/scenarios.py).
+    if not isinstance(risk_percent, (int, float)) or risk_percent <= 0 or risk_percent > MAX_RISK_PERCENT:
+        result["error"] = f"Risque invalide (doit être entre 0 et {MAX_RISK_PERCENT}%)"
+        ref.update({"status": "done"})
+        _publish_order_result(db, result)
+        return
+
+    account_size = _account_size(db)
+    risk_amount = (risk_percent / 100) * account_size if account_size else None
+    lot = compute_lot_size(risk_amount, entry, sl, tick.bid)
+    if lot is None:
+        result["error"] = "Lot incalculable (vérifie le risque, le compte et le SL)"
+        ref.update({"status": "done"})
+        _publish_order_result(db, result)
+        return
+    result["lot"] = lot
+
+    if order_kind == "market":
+        action = m.TRADE_ACTION_DEAL
+        order_type = m.ORDER_TYPE_BUY if is_buy else m.ORDER_TYPE_SELL
+    else:
+        # Toujours Limit, jamais Stop — même convention que tasks.py pour les
+        # tâches automatiques. Si l'entrée est du mauvais côté du prix actuel,
+        # order_send() le refusera avec une erreur explicite plutôt que de
+        # placer silencieusement un ordre Stop non demandé.
+        action = m.TRADE_ACTION_PENDING
+        order_type = m.ORDER_TYPE_BUY_LIMIT if is_buy else m.ORDER_TYPE_SELL_LIMIT
+
+    request = {
+        "action": action,
+        "symbol": symbol,
+        "volume": float(lot),
+        "type": order_type,
+        "sl": float(sl),
+        "deviation": 20,
+        "magic": MAGIC,
+        "comment": "set-order",
+        "type_time": m.ORDER_TIME_GTC,
+        "type_filling": m.ORDER_FILLING_RETURN if order_kind == "pending" else m.ORDER_FILLING_IOC,
+    }
+    if order_kind == "pending":
+        request["price"] = float(entry)
+    if isinstance(tp, (int, float)):
+        request["tp"] = float(tp)
+
+    if DRY_RUN:
+        result["success"] = True
+        result["dryRun"] = True
+        notify(
+            "mymt5 — [DRY-RUN] Ordre manuel",
+            f"{side} {order_kind} @ {entry} SL {sl} lot {lot}",
+        )
+        ref.update({"status": "done"})
+        _publish_order_result(db, result)
+        print(f"[SET_ORDER] (dry-run) {side} {order_kind} @ {entry} SL {sl} lot {lot}")
+        return
+
+    # Marqué "done" AVANT l'envoi réel : si le process plantait entre
+    # order_send() et cette écriture, la commande resterait "pending" et
+    # serait reprise par check_all_requests au tour suivant (~10s) — donc un
+    # deuxième ordre réel enverrait le même ordre en double. Même principe
+    # que pour _execute_task dans tasks.py.
+    ref.update({"status": "done"})
+
+    res = m.order_send(request)
+    if res is None or res.retcode != m.TRADE_RETCODE_DONE:
+        error = str(m.last_error()) if res is None else res.comment
+        result["error"] = error
+        notify("mymt5 — échec ordre manuel", error)
+        print(f"[SET_ORDER] échec : {error}")
+    else:
+        result["success"] = True
+        result["ticket"] = res.order
+        notify(
+            "mymt5 — ordre manuel envoyé",
+            f"{side} {order_kind} @ {entry} lot {lot} (ticket {res.order})",
+        )
+        print(f"[SET_ORDER] ordre placé, ticket={res.order}")
+
+    _publish_order_result(db, result)
+
+
 HANDLERS = {
     "status_request": _handle_status_request,
     "price_request": _handle_price_request,
     "candle_request": _handle_candle_request,
     "positions_request": _handle_positions_request,
     "trades_sync_request": handle_trades_sync_request,
+    "set_order_request": _handle_set_order_request,
 }
 
 

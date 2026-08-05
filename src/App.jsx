@@ -7,6 +7,7 @@ import { ProfilePage } from './pages/ProfilePage'
 import { AccountsPage } from './pages/AccountsPage'
 import { TasksPage } from './pages/TasksPage'
 import { TasksListPage } from './pages/TasksListPage'
+import { SetOrderPage } from './pages/SetOrderPage'
 import { JournalPage } from './pages/JournalPage'
 import { Navbar } from './components/Navbar'
 import { SAFE_AREA_SCREEN } from './lib/layout'
@@ -55,6 +56,7 @@ function App() {
         {page === 'accounts' && <AccountsPage />}
         {page === 'tasks' && <TasksPage taskId={editingTaskId} />}
         {page === 'tasksList' && <TasksListPage onEditTask={editTask} />}
+        {page === 'setOrder' && <SetOrderPage />}
         {page === 'journal' && <JournalPage />}
       </main>
     </div>
