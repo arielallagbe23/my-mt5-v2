@@ -88,15 +88,13 @@ def _execute_task(db, ref, task_id, task, target_dt):
     """Exécute une tâche due : récupère la bougie de référence via MT5, évalue
     le scénario, puis notifie (DRY_RUN) ou place réellement l'ordre.
 
-    ATTENTION (limite connue, pas encore corrigée) : le statut de la tâche n'est
-    marqué "done" qu'à la toute fin (ref.update en bas de fonction). Si order_send
-    réussit mais qu'une erreur survient juste après (ex: coupure réseau avant
-    l'écriture Firestore), le status resterait "pending" et la tâche serait
-    retentée — donc potentiellement exécutée deux fois. Risque faible en
-    pratique (fenêtre de quelques lignes de code) mais réel ; à corriger avant
-    d'utiliser cette app avec des montants qui feraient mal en cas de doublon
-    (ex: marquer "done" AVANT d'appeler order_send une fois le résultat connu,
-    ou utiliser une transaction Firestore).
+    Le statut passe à "done" JUSTE AVANT d'appeler order_send() (pas après) :
+    si le process plantait entre l'envoi de l'ordre et l'écriture Firestore,
+    la tâche resterait "pending" et serait retentée au tour suivant — donc
+    potentiellement exécutée une deuxième fois pour de vrai. En marquant
+    "done" d'abord, une éventuelle erreur après order_send() ne fait perdre
+    que le ticket/l'erreur dans le résultat (mineur, visible dans les logs),
+    jamais un doublon d'ordre réel.
     """
     m = ensure_mt5()
     if m is None:
@@ -211,6 +209,9 @@ def _execute_task(db, ref, task_id, task, target_dt):
         "type_filling": m.ORDER_FILLING_RETURN,  # mode de remplissage requis pour un ordre en attente
     }
 
+    # Marqué "done" AVANT l'envoi réel — voir la note dans la docstring.
+    ref.update({"status": "done", "result": result, "updatedAt": now_ms})
+
     res = m.order_send(request)
     if res is None or res.retcode != m.TRADE_RETCODE_DONE:
         error = str(m.last_error()) if res is None else res.comment
@@ -225,4 +226,4 @@ def _execute_task(db, ref, task_id, task, target_dt):
         )
         print(f"[TASK] {task_id} : ordre placé, ticket={res.order}")
 
-    ref.update({"status": "done", "result": result, "updatedAt": now_ms})
+    ref.update({"result": result, "updatedAt": int(time.time() * 1000)})
