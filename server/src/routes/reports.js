@@ -37,4 +37,17 @@ router.post('/:id/archive', requireAuth, async (req, res) => {
   res.status(204).end()
 })
 
+// Suppression définitive depuis l'historique des tâches (le rapport y
+// apparaît une fois archivé — voir GET /api/tasks).
+router.delete('/:id', requireAuth, async (req, res) => {
+  const ref = db.collection('execution_reports').doc(req.params.id)
+  const doc = await ref.get()
+  if (!doc.exists || doc.data().userId !== req.userId) {
+    return res.status(404).json({ error: 'Rapport introuvable' })
+  }
+
+  await ref.delete()
+  res.status(204).end()
+})
+
 export default router

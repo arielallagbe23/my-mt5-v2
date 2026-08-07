@@ -73,10 +73,46 @@ function validateDraftBody(body) {
   return null
 }
 
+// Une tâche non exécutée (condition jamais remplie) est supprimée par la VPS et
+// remplacée par un rapport dans execution_reports (voir _report_and_delete côté
+// VPS). Une fois ce rapport archivé depuis la page d'accueil, on le fait
+// réapparaître ici comme entrée d'historique — sinon "Archiver" le fait juste
+// disparaître sans que l'utilisateur puisse jamais le retrouver.
+function serializeArchivedReport(report) {
+  return {
+    id: report.id,
+    source: 'report',
+    scenario: report.scenario ?? null,
+    scenarioId: null,
+    fibo100: null,
+    fibo0: null,
+    timeframe: report.timeframe ?? null,
+    executionTime: report.executionTime ?? null,
+    priceCondition: null,
+    supportPrice: null,
+    risk: null,
+    status: 'not_executed',
+    result: null,
+    reason: report.reason ?? null,
+    createdAt: report.createdAt ?? null,
+    updatedAt: report.createdAt ?? null,
+  }
+}
+
 router.get('/', requireAuth, async (req, res) => {
-  const snapshot = await db.collection('tasks').where('userId', '==', req.userId).get()
-  const tasks = snapshot.docs.map(serialize).sort((a, b) => (a.executionTime > b.executionTime ? 1 : -1))
-  res.json(tasks)
+  const [tasksSnapshot, reportsSnapshot] = await Promise.all([
+    db.collection('tasks').where('userId', '==', req.userId).get(),
+    db.collection('execution_reports').where('userId', '==', req.userId).get(),
+  ])
+
+  const tasks = tasksSnapshot.docs.map(serialize)
+  const archivedReports = reportsSnapshot.docs
+    .map((doc) => ({ id: doc.id, ...doc.data() }))
+    .filter((r) => r.archived)
+    .map(serializeArchivedReport)
+
+  const merged = [...tasks, ...archivedReports].sort((a, b) => (a.executionTime > b.executionTime ? 1 : -1))
+  res.json(merged)
 })
 
 router.get('/:id', requireAuth, async (req, res) => {

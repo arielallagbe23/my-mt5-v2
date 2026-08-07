@@ -42,6 +42,7 @@ export const api = {
   syncTrades: () => request('/api/trades/sync', { method: 'POST' }),
   reports: () => request('/api/reports'),
   archiveReport: (id) => request(`/api/reports/${id}/archive`, { method: 'POST' }),
+  deleteReport: (id) => request(`/api/reports/${id}`, { method: 'DELETE' }),
   subscribePush: (subscription) => request('/api/push/subscribe', { method: 'POST', body: subscription }),
   unsubscribePush: () => request('/api/push/subscribe', { method: 'DELETE' }),
   listTasks: () => request('/api/tasks'),
@@ -51,4 +52,7 @@ export const api = {
   deleteTask: (id) => request(`/api/tasks/${id}`, { method: 'DELETE' }),
   requestSetOrder: (order) => request('/api/set-order/request', { method: 'POST', body: order }),
   setOrderResult: () => request('/api/set-order/result'),
+  riskSettings: () => request('/api/settings/risk'),
+  updateRiskSettings: (settings) => request('/api/settings/risk', { method: 'PATCH', body: settings }),
+  dailyBrief: () => request('/api/daily-brief'),
 }

@@ -12,6 +12,23 @@ function formatExecutionTime(value) {
   return new Date(value).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' })
 }
 
+// Ordre chronologique des créneaux du jour — voir le tableau des checkpoints
+// dans mt5-vps/daily_brief.py (fomc/boj_watch n'apparaissent que si détectés).
+const CHECKPOINT_LABELS = {
+  morning: 'Matin',
+  london_open: 'Ouverture Londres',
+  us_data: 'Données US',
+  ny_open: 'Ouverture NY',
+  fomc: 'FOMC',
+  boj_watch: 'BoJ',
+}
+const CHECKPOINT_ORDER = Object.keys(CHECKPOINT_LABELS)
+
+const EVENT_IMPACT_STYLES = {
+  high: 'bg-red-500/15 text-red-300',
+  medium: 'bg-amber-500/15 text-amber-300',
+}
+
 // Tant qu'une tâche n'a pas encore été évaluée (brouillon ou en attente),
 // elle est "à venir" — une fois passée en dry_run_done/done, elle a déjà son
 // propre rapport dans la liste des tâches, pas besoin de la garder ici.
@@ -42,6 +59,7 @@ export function HomePage() {
   const [error, setError] = useState('')
   const [reports, setReports] = useState([])
   const [upcomingTasks, setUpcomingTasks] = useState([])
+  const [dailyBrief, setDailyBrief] = useState([])
   const [monitoringTimeframes, setMonitoringTimeframes] = useState({})
   const [activatingTicket, setActivatingTicket] = useState(null)
 
@@ -76,6 +94,7 @@ export function HomePage() {
         ),
       )
       .catch(() => {})
+    api.dailyBrief().then(setDailyBrief).catch(() => {})
   }, [])
 
   async function archiveReport(id) {
@@ -106,6 +125,9 @@ export function HomePage() {
 
   const orders = data?.orders ?? []
   const positions = data?.positions ?? []
+  const briefCheckpoints = [...dailyBrief].sort(
+    (a, b) => CHECKPOINT_ORDER.indexOf(a.checkpoint) - CHECKPOINT_ORDER.indexOf(b.checkpoint),
+  )
 
   return (
     <div className={PAGE}>
@@ -282,6 +304,53 @@ export function HomePage() {
                 TP : <span className="font-semibold text-white">{formatPrice(o.tp)}</span>
               </span>
             </div>
+          </div>
+        ))}
+      </section>
+
+      <section className="flex flex-col gap-2">
+        <p className="text-xs font-bold tracking-[0.14em] text-slate-500 uppercase">Brief macro USDJPY</p>
+        {briefCheckpoints.length === 0 && <p className="text-sm text-slate-400">Aucun point macro pour aujourd'hui.</p>}
+        {briefCheckpoints.map((checkpoint) => (
+          <div key={checkpoint.checkpoint} className="rounded-2xl border border-white/10 bg-white/5 p-3">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-sm font-semibold text-white">
+                {CHECKPOINT_LABELS[checkpoint.checkpoint] ?? checkpoint.checkpoint}
+              </span>
+              {checkpoint.interventionRisk && (
+                <span className="rounded-full bg-red-500/15 px-2 py-0.5 text-xs font-semibold text-red-300">
+                  Risque d'intervention
+                </span>
+              )}
+            </div>
+            <p className="mt-2 text-sm text-white">{checkpoint.note}</p>
+            {checkpoint.overnightMove?.pct != null && (
+              <p className="mt-2 text-xs text-slate-400">
+                Mouvement nuit :{' '}
+                <span className="font-semibold text-white">
+                  {formatPrice(checkpoint.overnightMove.fromPrice)} → {formatPrice(checkpoint.overnightMove.toPrice)} (
+                  {checkpoint.overnightMove.pct >= 0 ? '+' : ''}
+                  {checkpoint.overnightMove.pct}%)
+                </span>
+              </p>
+            )}
+            {checkpoint.events?.length > 0 && (
+              <div className="mt-2 flex flex-col gap-1">
+                {checkpoint.events.map((event, index) => (
+                  <div key={index} className="flex items-center gap-2 text-xs text-slate-400">
+                    <span
+                      className={`rounded-full px-2 py-0.5 font-semibold ${
+                        EVENT_IMPACT_STYLES[event.impact] ?? EVENT_IMPACT_STYLES.medium
+                      }`}
+                    >
+                      {event.currency}
+                    </span>
+                    <span>{event.time}</span>
+                    <span className="text-slate-300">{event.title}</span>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         ))}
       </section>

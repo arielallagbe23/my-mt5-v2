@@ -9,6 +9,7 @@ import { CandleReferenceForm } from '../components/tasks/CandleReferenceForm'
 import { CandleTable } from '../components/tasks/CandleTable'
 import { FiboChart } from '../components/tasks/FiboChart'
 import { TaskLauncher } from '../components/tasks/TaskLauncher'
+import { computeGrowthPercent, computeAutoRisk } from '../lib/riskTiers'
 
 const MIN_LABEL_GAP = 4 // % minimum entre deux libellés pour éviter le chevauchement
 
@@ -35,6 +36,10 @@ export function TasksPage({ taskId } = {}) {
   const [supportPrice, setSupportPrice] = useState('')
   const [risk, setRisk] = useState('')
   const [accountSize, setAccountSize] = useState(null)
+  const [equity, setEquity] = useState(null)
+  const [riskMode, setRiskMode] = useState('manual')
+  const [riskTiers, setRiskTiers] = useState([])
+  const [riskCap, setRiskCap] = useState(null)
   const [taskSaving, setTaskSaving] = useState(false)
   const [taskSaveError, setTaskSaveError] = useState('')
   const [taskSavedStatus, setTaskSavedStatus] = useState(null)
@@ -125,6 +130,16 @@ export function TasksPage({ taskId } = {}) {
       .then((data) => {
         const size = data.accounts?.[String(data.login)]?.account_size
         if (typeof size === 'number') setAccountSize(size)
+        if (typeof data.equity === 'number') setEquity(data.equity)
+      })
+      .catch(() => {})
+
+    api
+      .riskSettings()
+      .then((settings) => {
+        setRiskMode(settings.mode)
+        setRiskTiers(settings.tiers ?? [])
+        setRiskCap(settings.capRisk ?? null)
       })
       .catch(() => {})
   }, [])
@@ -210,6 +225,19 @@ export function TasksPage({ taskId } = {}) {
         high: Math.max(fibo236Prices.price1, fibo236Prices.price2),
       }
     : null
+
+  // En mode auto, le risque n'est jamais choisi à la main : recalculé à
+  // chaque rendu depuis l'équité live et le capital de référence, via les
+  // mêmes paliers configurés dans Paramètres — que ce soit une tâche neuve
+  // ou la reprise d'un brouillon existant (le mode est global, pas par tâche).
+  const growthPercent = computeGrowthPercent(equity, accountSize)
+  const autoRiskPercent = riskMode === 'auto' ? computeAutoRisk(growthPercent, riskTiers, riskCap) : null
+
+  useEffect(() => {
+    if (riskMode === 'auto' && autoRiskPercent != null) {
+      setRisk(String(autoRiskPercent))
+    }
+  }, [riskMode, autoRiskPercent])
 
   const riskPercent = parseFloat(risk)
   const riskAmount =
@@ -373,6 +401,8 @@ export function TasksPage({ taskId } = {}) {
         risk={risk}
         onRiskChange={setRisk}
         riskAmount={riskAmount}
+        riskMode={riskMode}
+        growthPercent={growthPercent}
         onSaveDraft={saveDraft}
         onFinalize={finalizeTask}
         saving={taskSaving}

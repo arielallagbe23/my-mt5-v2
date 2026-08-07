@@ -17,14 +17,15 @@ const STATUS_LABELS = {
   pending: 'En attente',
   dry_run_done: 'Simulée (dry-run)',
   done: 'Terminée',
+  not_executed: 'Non exécutée',
 }
 
-// Une tâche dans cet état a forcément été évaluée : sa condition a été
-// remplie (sinon elle aurait été supprimée avec un rapport dans
-// execution_reports — voir _report_and_delete côté VPS), donc task.result
-// contient toujours entry/sl/tp/lot (et éventuellement ticket ou error en
-// mode réel).
-const EXECUTED_STATUSES = new Set(['dry_run_done', 'done'])
+// dry_run_done/done : la condition a été remplie, task.result contient
+// toujours entry/sl/tp/lot (et éventuellement ticket ou error en mode réel).
+// not_executed : rapport archivé (condition jamais remplie, tâche déjà
+// supprimée côté VPS — voir _report_and_delete) réinjecté dans l'historique
+// par GET /api/tasks ; il n'a pas de task.result, seulement task.reason.
+const EXECUTED_STATUSES = new Set(['dry_run_done', 'done', 'not_executed'])
 
 // Les tâches à venir (brouillon/en attente) restent en haut ; l'historique
 // (déjà évalué) descend en bas — tri stable, donc l'ordre par executionTime
@@ -52,11 +53,11 @@ export function TasksListPage({ onEditTask }) {
       .finally(() => setLoading(false))
   }
 
-  async function handleDelete(id) {
-    setDeletingId(id)
+  async function handleDelete(task) {
+    setDeletingId(task.id)
     try {
-      await api.deleteTask(id)
-      setTasks((current) => current.filter((t) => t.id !== id))
+      await (task.source === 'report' ? api.deleteReport(task.id) : api.deleteTask(task.id))
+      setTasks((current) => current.filter((t) => t.id !== task.id))
     } catch {
       setError('Impossible de supprimer la tâche')
     } finally {
@@ -92,7 +93,12 @@ export function TasksListPage({ onEditTask }) {
               <span className="text-xs text-slate-400">{formatDateTime(task.executionTime)}</span>
             </div>
 
-            {EXECUTED_STATUSES.has(task.status) && task.result ? (
+            {task.status === 'not_executed' ? (
+              <div className="mt-2 rounded-xl border border-white/10 bg-black/20 p-2 text-xs">
+                <p className="font-semibold text-amber-400">Non exécutée</p>
+                <p className="mt-1 text-slate-400">{task.reason}</p>
+              </div>
+            ) : EXECUTED_STATUSES.has(task.status) && task.result ? (
               <div className="mt-2 rounded-xl border border-white/10 bg-black/20 p-2 text-xs">
                 <p className={`font-semibold ${task.result.error ? 'text-red-400' : 'text-blue-400'}`}>
                   {task.result.error
@@ -159,7 +165,7 @@ export function TasksListPage({ onEditTask }) {
               )}
               <button
                 type="button"
-                onClick={() => handleDelete(task.id)}
+                onClick={() => handleDelete(task)}
                 disabled={deletingId === task.id}
                 className="min-h-9 flex-1 rounded-xl bg-red-500/15 text-sm font-semibold text-red-300 disabled:opacity-60"
               >

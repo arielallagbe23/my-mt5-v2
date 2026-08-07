@@ -17,6 +17,8 @@ export function TaskLauncher({
   risk,
   onRiskChange,
   riskAmount,
+  riskMode = 'manual',
+  growthPercent,
   onSaveDraft,
   onFinalize,
   saving,
@@ -72,44 +74,57 @@ export function TaskLauncher({
 
       <label className="flex flex-col gap-1.5 text-xs text-slate-400">
         <div>Risque</div>
-        <div className="flex gap-2">
-          {RISK_PRESETS.map((preset) => (
-            <button
-              key={preset}
-              type="button"
-              onClick={() => {
-                onRiskChange(preset)
-                setCustomRisk(false)
-              }}
-              className={`min-h-9 flex-1 rounded-xl text-sm font-semibold transition-colors ${
-                !customRisk && risk === preset ? 'bg-indigo-600 text-white' : 'bg-indigo-500/15 text-indigo-300'
-              }`}
-            >
-              {preset}%
-            </button>
-          ))}
-          <button
-            type="button"
-            onClick={() => setCustomRisk(true)}
-            className={`min-h-9 flex-1 rounded-xl text-sm font-semibold transition-colors ${
-              customRisk ? 'bg-indigo-600 text-white' : 'bg-indigo-500/15 text-indigo-300'
-            }`}
-          >
-            Autre
-          </button>
-        </div>
-        {customRisk && (
-          <input
-            type="number"
-            inputMode="decimal"
-            min="0"
-            max="2"
-            step="0.1"
-            placeholder="Max 2%"
-            value={risk}
-            onChange={(event) => onRiskChange(event.target.value)}
-            className={COMPACT_INPUT}
-          />
+        {riskMode === 'auto' ? (
+          <div className="rounded-xl border border-indigo-500/30 bg-indigo-500/10 p-2">
+            <p className="text-sm font-semibold text-white">{risk !== '' ? `${risk}%` : '—'} (auto)</p>
+            <p className="mt-0.5 text-xs text-slate-400">
+              {typeof growthPercent === 'number'
+                ? `Calculé depuis la croissance de l'équité (${growthPercent >= 0 ? '+' : ''}${growthPercent.toFixed(2)}%) — voir Paramètres.`
+                : 'Calculé automatiquement — voir Paramètres.'}
+            </p>
+          </div>
+        ) : (
+          <>
+            <div className="flex gap-2">
+              {RISK_PRESETS.map((preset) => (
+                <button
+                  key={preset}
+                  type="button"
+                  onClick={() => {
+                    onRiskChange(preset)
+                    setCustomRisk(false)
+                  }}
+                  className={`min-h-9 flex-1 rounded-xl text-sm font-semibold transition-colors ${
+                    !customRisk && risk === preset ? 'bg-indigo-600 text-white' : 'bg-indigo-500/15 text-indigo-300'
+                  }`}
+                >
+                  {preset}%
+                </button>
+              ))}
+              <button
+                type="button"
+                onClick={() => setCustomRisk(true)}
+                className={`min-h-9 flex-1 rounded-xl text-sm font-semibold transition-colors ${
+                  customRisk ? 'bg-indigo-600 text-white' : 'bg-indigo-500/15 text-indigo-300'
+                }`}
+              >
+                Autre
+              </button>
+            </div>
+            {customRisk && (
+              <input
+                type="number"
+                inputMode="decimal"
+                min="0"
+                max="2"
+                step="0.1"
+                placeholder="Max 2%"
+                value={risk}
+                onChange={(event) => onRiskChange(event.target.value)}
+                className={COMPACT_INPUT}
+              />
+            )}
+          </>
         )}
         {riskAmount !== null && (
           <p className="text-xs text-slate-400">
