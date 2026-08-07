@@ -124,6 +124,21 @@ CHECKPOINT_INSTRUCTIONS = {
     "boj_watch": "Renseigne uniquement une note courte sur ce qui est attendu de la BoJ cette nuit. overnightMove et events peuvent rester null/vide.",
 }
 
+# morning est le seul checkpoint à devoir couvrir les 4 sujets du system prompt
+# (prix, calendrier, déclarations BoJ/Fed/MOF, JGB) — certains nécessitant
+# plusieurs recherches chacun. Un plafond trop bas fait échouer la recherche
+# en cours de route et le modèle rend un brief vide plutôt que d'inventer.
+# Les autres checkpoints ne renseignent qu'un sous-ensemble de champs, donc
+# restent plafonnés bas pour le coût.
+MAX_SEARCHES_BY_CHECKPOINT = {
+    "morning": 8,
+    "london_open": 3,
+    "us_data": 4,
+    "ny_open": 3,
+    "fomc": 3,
+    "boj_watch": 3,
+}
+
 
 # Tarifs Sonnet 5 en $/1M tokens, tarif de lancement valable jusqu'au 31/08/2026
 # (repasse à 3.0/15.0 ensuite — à ajuster ici le moment venu). Recherche web
@@ -159,11 +174,12 @@ def log_usage(checkpoint, response):
 def generate_brief(checkpoint):
     client = Anthropic(api_key=ANTHROPIC_API_KEY)
     instruction = CHECKPOINT_INSTRUCTIONS.get(checkpoint, "Renseigne les champs pertinents pour ce créneau.")
+    max_searches = MAX_SEARCHES_BY_CHECKPOINT.get(checkpoint, 4)
     response = client.messages.create(
         model=MODEL,
         max_tokens=4096,
         system=SYSTEM_PROMPT,
-        tools=[{"type": "web_search_20260209", "name": "web_search", "max_uses": 4}],
+        tools=[{"type": "web_search_20260209", "name": "web_search", "max_uses": max_searches}],
         output_config={"format": {"type": "json_schema", "schema": BRIEF_SCHEMA}, "effort": "medium"},
         messages=[
             {
