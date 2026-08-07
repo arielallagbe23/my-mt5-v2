@@ -26,9 +26,6 @@ MAGIC = int(os.environ.get("MT5_MAGIC", "234000"))
 BACKEND_URL = os.environ.get("BACKEND_URL", "https://mymt5-v2.vercel.app")
 CRON_SECRET = _read("cron_secret.txt") or os.environ.get("CRON_SECRET")
 
-# Clé API Anthropic (daily_brief.py) — jamais commitée, même régime que cron_secret.txt.
-ANTHROPIC_API_KEY = _read("anthropic_key.txt") or os.environ.get("ANTHROPIC_API_KEY")
-
 # Tant que dry_run.txt contient "true" (ou n'existe pas), les tâches sont évaluées
 # et notifiées normalement mais AUCUN ordre réel n'est envoyé à MT5. Repasser à
 # "false" dans ce fichier une fois le comportement vérifié plusieurs fois.

@@ -54,5 +54,4 @@ export const api = {
   setOrderResult: () => request('/api/set-order/result'),
   riskSettings: () => request('/api/settings/risk'),
   updateRiskSettings: (settings) => request('/api/settings/risk', { method: 'PATCH', body: settings }),
-  dailyBrief: () => request('/api/daily-brief'),
 }

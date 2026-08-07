@@ -14,7 +14,6 @@ import pushRouter from './routes/push.js'
 import notifyRouter from './routes/notify.js'
 import setOrderRouter from './routes/setOrder.js'
 import settingsRouter from './routes/settings.js'
-import dailyBriefRouter from './routes/dailyBrief.js'
 import { isAllowedOrigin } from './lib/origin.js'
 
 if (!process.env.JWT_SECRET) {
@@ -47,7 +46,6 @@ app.use('/api/push', pushRouter)
 app.use('/api/notify', notifyRouter)
 app.use('/api/set-order', setOrderRouter)
 app.use('/api/settings', settingsRouter)
-app.use('/api/daily-brief', dailyBriefRouter)
 
 app.get('/api/health', (req, res) => res.json({ ok: true }))
 
