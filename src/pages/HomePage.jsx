@@ -79,6 +79,10 @@ export function HomePage() {
         setData(result)
       })
       .finally(() => setLoading(false))
+    // Le brief macro évolue au fil de la journée (nouveaux checkpoints) —
+    // on le rafraîchit avec le reste, pas seulement au montage, sinon un
+    // onglet resté ouvert affiche un checkpoint périmé.
+    api.dailyBrief().then(setDailyBrief).catch(() => {})
   }
 
   useEffect(() => {
@@ -94,7 +98,6 @@ export function HomePage() {
         ),
       )
       .catch(() => {})
-    api.dailyBrief().then(setDailyBrief).catch(() => {})
   }, [])
 
   async function archiveReport(id) {
