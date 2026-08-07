@@ -125,9 +125,9 @@ export function HomePage() {
 
   const orders = data?.orders ?? []
   const positions = data?.positions ?? []
-  const briefCheckpoints = [...dailyBrief].sort(
+  const latestBrief = [...dailyBrief].sort(
     (a, b) => CHECKPOINT_ORDER.indexOf(a.checkpoint) - CHECKPOINT_ORDER.indexOf(b.checkpoint),
-  )
+  ).at(-1)
 
   return (
     <div className={PAGE}>
@@ -310,33 +310,33 @@ export function HomePage() {
 
       <section className="flex flex-col gap-2">
         <p className="text-xs font-bold tracking-[0.14em] text-slate-500 uppercase">Brief macro USDJPY</p>
-        {briefCheckpoints.length === 0 && <p className="text-sm text-slate-400">Aucun point macro pour aujourd'hui.</p>}
-        {briefCheckpoints.map((checkpoint) => (
-          <div key={checkpoint.checkpoint} className="rounded-2xl border border-white/10 bg-white/5 p-3">
+        {!latestBrief && <p className="text-sm text-slate-400">Aucun point macro pour aujourd'hui.</p>}
+        {latestBrief && (
+          <div className="rounded-2xl border border-white/10 bg-white/5 p-3">
             <div className="flex items-center justify-between gap-2">
               <span className="text-sm font-semibold text-white">
-                {CHECKPOINT_LABELS[checkpoint.checkpoint] ?? checkpoint.checkpoint}
+                {CHECKPOINT_LABELS[latestBrief.checkpoint] ?? latestBrief.checkpoint}
               </span>
-              {checkpoint.interventionRisk && (
+              {latestBrief.interventionRisk && (
                 <span className="rounded-full bg-red-500/15 px-2 py-0.5 text-xs font-semibold text-red-300">
                   Risque d'intervention
                 </span>
               )}
             </div>
-            <p className="mt-2 text-sm text-white">{checkpoint.note}</p>
-            {checkpoint.overnightMove?.pct != null && (
+            <p className="mt-2 text-sm text-white">{latestBrief.note}</p>
+            {latestBrief.overnightMove?.pct != null && (
               <p className="mt-2 text-xs text-slate-400">
                 Mouvement nuit :{' '}
                 <span className="font-semibold text-white">
-                  {formatPrice(checkpoint.overnightMove.fromPrice)} → {formatPrice(checkpoint.overnightMove.toPrice)} (
-                  {checkpoint.overnightMove.pct >= 0 ? '+' : ''}
-                  {checkpoint.overnightMove.pct}%)
+                  {formatPrice(latestBrief.overnightMove.fromPrice)} → {formatPrice(latestBrief.overnightMove.toPrice)} (
+                  {latestBrief.overnightMove.pct >= 0 ? '+' : ''}
+                  {latestBrief.overnightMove.pct}%)
                 </span>
               </p>
             )}
-            {checkpoint.events?.length > 0 && (
+            {latestBrief.events?.length > 0 && (
               <div className="mt-2 flex flex-col gap-1">
-                {checkpoint.events.map((event, index) => (
+                {latestBrief.events.map((event, index) => (
                   <div key={index} className="flex items-center gap-2 text-xs text-slate-400">
                     <span
                       className={`rounded-full px-2 py-0.5 font-semibold ${
@@ -352,7 +352,7 @@ export function HomePage() {
               </div>
             )}
           </div>
-        ))}
+        )}
       </section>
     </div>
   )

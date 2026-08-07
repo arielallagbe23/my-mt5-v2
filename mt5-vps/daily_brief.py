@@ -66,7 +66,11 @@ BRIEF_SCHEMA = {
         "interventionRisk": {"type": "boolean"},
         "note": {
             "type": "string",
-            "description": "Résumé factuel en 2-3 phrases maximum, sans jargon inutile, sans conseil.",
+            "description": (
+                "Explique les décisions/déclarations récentes (BoJ, Fed, MOF) et leur contexte, "
+                "et récapitule les événements pertinents de la session. Reste factuel — jamais de "
+                "conseil d'action (achat/vente/taille de position)."
+            ),
         },
     },
     "required": ["date", "checkpoint", "overnightMove", "events", "interventionRisk", "note"],
@@ -117,11 +121,11 @@ def morning_detected_event(db, keywords):
 # system prompt), le schema lui ne change pas d'un checkpoint à l'autre.
 CHECKPOINT_INSTRUCTIONS = {
     "morning": "Brief complet : renseigne tous les champs (overnightMove, le calendrier events du jour, interventionRisk, note).",
-    "london_open": "Renseigne uniquement overnightMove et une note courte sur l'ouverture de Londres. events peut rester vide.",
-    "us_data": "Renseigne uniquement les events économiques USD/JPY restants de la journée (impact medium/high) et une note courte sur ce qui arrive à 14h30. overnightMove peut être null.",
-    "ny_open": "Renseigne uniquement une note courte sur la réaction du marché aux données US du jour. overnightMove et events peuvent rester null/vide.",
-    "fomc": "Renseigne uniquement une note courte sur ce qui est attendu de la décision FOMC ce soir. overnightMove et events peuvent rester null/vide.",
-    "boj_watch": "Renseigne uniquement une note courte sur ce qui est attendu de la BoJ cette nuit. overnightMove et events peuvent rester null/vide.",
+    "london_open": "Renseigne overnightMove et une note qui explique la réaction du marché à l'ouverture de Londres. events peut rester vide.",
+    "us_data": "Renseigne les events économiques USD/JPY restants de la journée (impact medium/high) et une note qui explique ce qui arrive à 14h30 et pourquoi c'est important. overnightMove peut être null.",
+    "ny_open": "Renseigne une note qui explique la réaction du marché aux données US du jour. overnightMove et events peuvent rester null/vide.",
+    "fomc": "Renseigne une note qui explique ce qui est attendu de la décision FOMC ce soir et pourquoi. overnightMove et events peuvent rester null/vide.",
+    "boj_watch": "Renseigne une note qui explique ce qui est attendu de la BoJ cette nuit et pourquoi. overnightMove et events peuvent rester null/vide.",
 }
 
 # morning est le seul checkpoint à devoir couvrir les 4 sujets du system prompt
