@@ -64,17 +64,32 @@ BRIEF_SCHEMA = {
             },
         },
         "interventionRisk": {"type": "boolean"},
-        "note": {"type": "string"},
+        "note": {
+            "type": "string",
+            "description": "Résumé factuel en 2-3 phrases maximum, sans jargon inutile, sans conseil.",
+        },
     },
     "required": ["date", "checkpoint", "overnightMove", "events", "interventionRisk", "note"],
     "additionalProperties": False,
 }
 
-SYSTEM_PROMPT = """Tu es un analyste macro spécialisé sur la paire USDJPY. À chaque appel, utilise
-la recherche web pour vérifier le prix actuel, le calendrier économique du jour et les dernières
-déclarations de la Fed et de la BoJ. Réponds uniquement avec les champs du schéma demandé, en
-français, de façon concise et actionnable pour un trader qui va décider de ses positions dans les
-prochaines heures."""
+SYSTEM_PROMPT = """Tu es un assistant de veille macro pour un trader USDJPY. Ton rôle : produire un
+point de situation factuel et concis, jamais un conseil de trading, jamais de recommandation
+d'achat/vente.
+
+À chaque appel, utilise l'outil web_search pour vérifier l'information la plus récente sur :
+1. Le prix USDJPY actuel et son mouvement depuis la clôture NY précédente
+2. Le calendrier économique du jour (USD et JPY uniquement, impact moyen/élevé)
+3. Toute déclaration récente de la BoJ, du Fed, ou du ministère des Finances japonais concernant
+   une intervention sur le yen
+4. Le rendement du JGB 30 ans si pertinent au contexte du jour
+
+Contraintes :
+- Si aucune donnée fiable n'est trouvée pour un champ, mets une valeur vide/null plutôt que
+  d'inventer.
+- Le champ "note" ne doit jamais contenir de recommandation d'action (achat/vente/taille de
+  position) — uniquement des faits et leur contexte.
+- Reste factuel : pas de ton alarmiste, pas de superlatifs."""
 
 
 def today_key():
@@ -110,6 +125,37 @@ CHECKPOINT_INSTRUCTIONS = {
 }
 
 
+# Tarifs Sonnet 5 en $/1M tokens, tarif de lancement valable jusqu'au 31/08/2026
+# (repasse à 3.0/15.0 ensuite — à ajuster ici le moment venu). Recherche web
+# estimée à $10 pour 1000 recherches. Approximatif (pas de frais fixes/marge
+# API pris en compte), utile pour repérer une dérive de coût, pas pour la
+# facturation exacte (voir la Console Anthropic pour ça).
+INPUT_PRICE_PER_MTOK = 2.0
+OUTPUT_PRICE_PER_MTOK = 10.0
+CACHE_READ_PRICE_PER_MTOK = 0.2
+SEARCH_PRICE = 0.01
+
+
+def log_usage(checkpoint, response):
+    usage = response.usage
+    input_tokens = usage.input_tokens
+    output_tokens = usage.output_tokens
+    cache_read = getattr(usage, "cache_read_input_tokens", None) or 0
+    cache_creation = getattr(usage, "cache_creation_input_tokens", None) or 0
+    search_count = sum(1 for b in response.content if b.type == "web_search_tool_result")
+
+    cost = (
+        (input_tokens + cache_creation) / 1_000_000 * INPUT_PRICE_PER_MTOK
+        + output_tokens / 1_000_000 * OUTPUT_PRICE_PER_MTOK
+        + cache_read / 1_000_000 * CACHE_READ_PRICE_PER_MTOK
+        + search_count * SEARCH_PRICE
+    )
+    print(
+        f"[USAGE] '{checkpoint}' — in={input_tokens} out={output_tokens} "
+        f"cache_read={cache_read} recherches={search_count} coût≈${cost:.4f}"
+    )
+
+
 def generate_brief(checkpoint):
     client = Anthropic(api_key=ANTHROPIC_API_KEY)
     instruction = CHECKPOINT_INSTRUCTIONS.get(checkpoint, "Renseigne les champs pertinents pour ce créneau.")
@@ -117,8 +163,8 @@ def generate_brief(checkpoint):
         model=MODEL,
         max_tokens=4096,
         system=SYSTEM_PROMPT,
-        tools=[{"type": "web_search_20260209", "name": "web_search"}],
-        output_config={"format": {"type": "json_schema", "schema": BRIEF_SCHEMA}},
+        tools=[{"type": "web_search_20260209", "name": "web_search", "max_uses": 4}],
+        output_config={"format": {"type": "json_schema", "schema": BRIEF_SCHEMA}, "effort": "medium"},
         messages=[
             {
                 "role": "user",
@@ -126,6 +172,8 @@ def generate_brief(checkpoint):
             }
         ],
     )
+
+    log_usage(checkpoint, response)
 
     if response.stop_reason == "refusal":
         raise RuntimeError(f"Refus du modèle : {response.stop_details}")
