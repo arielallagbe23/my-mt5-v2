@@ -35,7 +35,7 @@ export function TaskLauncher({
   }, [risk])
 
   return (
-    <div className="flex flex-col gap-3 rounded-2xl border border-white/10 bg-white/5 p-3">
+    <div className="flex flex-col gap-5 rounded-2xl border border-white/10 bg-white/5 p-4">
       <p className="text-xs font-bold tracking-[0.14em] text-slate-500 uppercase">Démarrer une tâche</p>
 
       <label className="flex flex-col gap-1.5 text-xs text-slate-400">
@@ -138,7 +138,7 @@ export function TaskLauncher({
           type="button"
           onClick={onSaveDraft}
           disabled={saving}
-          className="min-h-10 flex-1 rounded-xl border border-white/10 bg-white/5 text-sm font-semibold text-slate-300 disabled:opacity-60"
+          className="min-h-14 flex-1 rounded-xl border border-white/10 bg-white/5 text-base font-semibold text-slate-300 disabled:opacity-60"
         >
           {saving ? '...' : 'Enregistrer comme brouillon'}
         </button>
@@ -146,7 +146,7 @@ export function TaskLauncher({
           type="button"
           onClick={onFinalize}
           disabled={saving}
-          className="min-h-10 flex-1 rounded-xl bg-indigo-600 text-sm font-semibold text-white disabled:opacity-60"
+          className="min-h-14 flex-1 rounded-xl bg-indigo-600 text-base font-semibold text-white disabled:opacity-60"
         >
           {saving ? '...' : 'Confirmer la tâche'}
         </button>

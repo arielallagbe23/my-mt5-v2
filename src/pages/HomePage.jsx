@@ -1,7 +1,14 @@
 import { useEffect, useState } from 'react'
 import { api } from '../lib/api'
-import { PAGE } from '../lib/layout'
+import { PAGE, PAGE_TITLE } from '../lib/layout'
 import { requestAndPoll, isFreshTs } from '../lib/onDemand'
+
+function greeting() {
+  const hour = new Date().getHours()
+  if (hour < 12) return 'Bonjour'
+  if (hour < 18) return 'Bon après-midi'
+  return 'Bonsoir'
+}
 
 function formatPrice(value) {
   return typeof value === 'number' ? value.toFixed(3) : '—'
@@ -106,15 +113,24 @@ export function HomePage() {
 
   const orders = data?.orders ?? []
   const positions = data?.positions ?? []
+  const activityCount = upcomingTasks.length + positions.length + orders.length + reports.length
 
   return (
     <div className={PAGE}>
-      <div className="flex items-center justify-end gap-2">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h1 className={PAGE_TITLE}>{greeting()}</h1>
+          <p className="mt-1 text-sm text-slate-400">
+            {activityCount === 0
+              ? 'Tout est calme — rien en cours pour le moment.'
+              : `${activityCount} élément${activityCount > 1 ? 's' : ''} à suivre aujourd'hui.`}
+          </p>
+        </div>
         <button
           type="button"
           onClick={load}
           disabled={loading}
-          className="min-h-9 rounded-full bg-indigo-500/15 px-4 text-sm font-semibold text-indigo-300 disabled:opacity-60"
+          className="min-h-9 shrink-0 rounded-full bg-indigo-500/15 px-4 text-sm font-semibold text-indigo-300 disabled:opacity-60"
         >
           {loading ? 'Actualisation...' : 'Actualiser'}
         </button>
@@ -123,7 +139,7 @@ export function HomePage() {
       {error && <p className="text-sm text-red-400">{error}</p>}
 
       {reports.length > 0 && (
-        <section className="flex flex-col gap-2">
+        <section className="mt-5 flex flex-col gap-2 rounded-2xl border border-white/10 bg-white/5 p-4">
           <p className="text-xs font-bold tracking-[0.14em] text-slate-500 uppercase">
             Tâches non exécutées ({reports.length})
           </p>
@@ -149,7 +165,7 @@ export function HomePage() {
         </section>
       )}
 
-      <section className="flex flex-col gap-2">
+      <section className="mt-5 flex flex-col gap-2 rounded-2xl border border-white/10 bg-white/5 p-4">
         <p className="text-xs font-bold tracking-[0.14em] text-slate-500 uppercase">
           Tâches à venir {upcomingTasks.length > 0 && `(${upcomingTasks.length})`}
         </p>
@@ -185,7 +201,7 @@ export function HomePage() {
         ))}
       </section>
 
-      <section className="flex flex-col gap-2">
+      <section className="mt-5 flex flex-col gap-2 rounded-2xl border border-white/10 bg-white/5 p-4">
         <p className="text-xs font-bold tracking-[0.14em] text-slate-500 uppercase">Positions ouvertes</p>
         {loading && !data && <p className="text-sm text-slate-400">Chargement...</p>}
         {!loading && positions.length === 0 && <p className="text-sm text-slate-400">Aucune position ouverte.</p>}
@@ -255,7 +271,7 @@ export function HomePage() {
         })}
       </section>
 
-      <section className="flex flex-col gap-2">
+      <section className="mt-5 flex flex-col gap-2 rounded-2xl border border-white/10 bg-white/5 p-4">
         <p className="text-xs font-bold tracking-[0.14em] text-slate-500 uppercase">Ordres différés</p>
         {loading && !data && <p className="text-sm text-slate-400">Chargement...</p>}
         {!loading && orders.length === 0 && <p className="text-sm text-slate-400">Aucun ordre en attente.</p>}
