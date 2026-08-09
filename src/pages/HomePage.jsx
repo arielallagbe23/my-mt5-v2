@@ -51,6 +51,12 @@ function ImpactDots({ impact }) {
   )
 }
 
+const RISK_LEVEL_STYLES = {
+  élevé: 'bg-red-500/15 text-red-300',
+  modéré: 'bg-amber-500/15 text-amber-300',
+  faible: 'bg-green-500/15 text-green-300',
+}
+
 // Tant qu'une tâche n'a pas encore été évaluée (brouillon ou en attente),
 // elle est "à venir" — une fois passée en dry_run_done/done, elle a déjà son
 // propre rapport dans la liste des tâches, pas besoin de la garder ici.
@@ -149,6 +155,7 @@ export function HomePage() {
   const positions = data?.positions ?? []
   const fedBoj = marketRecap['01_taux_fed_boj']
   const calendarEco = marketRecap['02_calendrier_eco']
+  const interventionRisk = marketRecap['03_risque_intervention']
   const activityCount = upcomingTasks.length + positions.length + orders.length + reports.length
 
   return (
@@ -411,6 +418,52 @@ export function HomePage() {
                 <p className="text-sm text-slate-400">Aucun événement à impact élevé/moyen cette semaine.</p>
               )}
               <p className="mt-1 text-xs text-slate-500">Mis à jour : {formatUpdatedAt(calendarEco.updated_at)}</p>
+            </>
+          )}
+        </div>
+
+        <div className="mt-3 flex flex-col gap-2 border-t border-white/10 pt-3">
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-sm font-semibold text-white">Risque d'intervention BoJ/MoF</p>
+            {interventionRisk && (
+              <span
+                className={`rounded-full px-2 py-0.5 text-xs font-semibold capitalize ${
+                  RISK_LEVEL_STYLES[interventionRisk.niveau_risque] ?? RISK_LEVEL_STYLES.faible
+                }`}
+              >
+                {interventionRisk.niveau_risque}
+              </span>
+            )}
+          </div>
+          {!interventionRisk && <p className="text-sm text-slate-400">Aucune donnée pour le moment.</p>}
+          {interventionRisk && (
+            <>
+              <div className="grid grid-cols-2 gap-2">
+                <div className="rounded-xl border border-white/10 bg-white/5 p-2.5">
+                  <p className="text-xs text-slate-400">Prix actuel</p>
+                  <p className="text-sm font-semibold text-white">{formatPrice(interventionRisk.prix_actuel)}</p>
+                  <p className="text-xs text-slate-500">Seuil de vigilance : {formatPrice(interventionRisk.seuil_vigilance)}</p>
+                </div>
+                <div className="rounded-xl border border-white/10 bg-white/5 p-2.5">
+                  <p className="text-xs text-slate-400">Variation 5 jours</p>
+                  <p className="text-sm font-semibold text-white">
+                    {interventionRisk.variation_5j_pct >= 0 ? '+' : ''}
+                    {interventionRisk.variation_5j_pct}%
+                  </p>
+                  <p className="text-xs text-slate-500">{interventionRisk.mouvement_rapide ? 'Jugé rapide' : 'Rythme normal'}</p>
+                </div>
+              </div>
+              {interventionRisk.declarations_recentes?.length > 0 && (
+                <div className="mt-1 flex flex-col gap-1.5">
+                  <p className="text-xs text-slate-400">Déclarations récentes</p>
+                  {interventionRisk.declarations_recentes.map((headline, index) => (
+                    <p key={index} className="text-justify text-xs text-slate-300">
+                      {headline}
+                    </p>
+                  ))}
+                </div>
+              )}
+              <p className="mt-1 text-xs text-slate-500">Mis à jour : {formatUpdatedAt(interventionRisk.updated_at)}</p>
             </>
           )}
         </div>
