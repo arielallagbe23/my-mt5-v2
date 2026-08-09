@@ -408,13 +408,6 @@ export function HomePage() {
       <section className="mt-5 flex flex-col gap-2 rounded-2xl border border-white/10 bg-white/5 p-4">
         <p className="text-xs font-bold tracking-[0.14em] text-slate-500 uppercase">Market recap</p>
 
-        {bilanQuotidien && (
-          <div className="rounded-xl border border-indigo-500/30 bg-indigo-500/10 p-3">
-            <p className="text-justify text-sm text-white">{bilanQuotidien.synthese}</p>
-            <p className="mt-2 text-xs text-slate-500">Mis à jour : {formatUpdatedAt(bilanQuotidien.updated_at)}</p>
-          </div>
-        )}
-
         <div className="flex flex-col gap-2">
           <p className="text-sm font-semibold text-white">Différentiel de taux Fed/BoJ</p>
           {!fedBoj && <p className="text-sm text-slate-400">Aucune donnée pour le moment.</p>}
@@ -747,6 +740,13 @@ export function HomePage() {
             <p className="mt-1 text-xs text-slate-500">Mis à jour : {formatUpdatedAt(correlation10y.updated_at)}</p>
           )}
         </div>
+
+        {bilanQuotidien && (
+          <div className="mt-3 rounded-xl border border-indigo-500/30 bg-indigo-500/10 p-3">
+            <p className="text-justify text-sm text-white">{bilanQuotidien.synthese}</p>
+            <p className="mt-2 text-xs text-slate-500">Mis à jour : {formatUpdatedAt(bilanQuotidien.updated_at)}</p>
+          </div>
+        )}
       </section>
     </div>
   )
