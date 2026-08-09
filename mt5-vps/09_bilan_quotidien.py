@@ -43,7 +43,11 @@ Produis une synthèse claire et explicative : qu'est-ce qui se passe, pourquoi c
 important, comment les différents signaux s'articulent entre eux. Reste factuel — jamais
 de conseil d'action (achat/vente/taille de position), uniquement des faits et leur
 contexte. Écris en français, dans un style direct et lisible, comme un résumé qu'on lit
-en 30 secondes le matin."""
+en 30 secondes le matin.
+
+Texte brut uniquement — pas de Markdown (pas d'astérisques pour le gras, pas de dièses
+pour les titres, pas de listes à puces). Ce texte est affiché tel quel, sans mise en
+forme."""
 
 
 def _serialize(value):

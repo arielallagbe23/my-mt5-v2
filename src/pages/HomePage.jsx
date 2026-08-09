@@ -742,8 +742,9 @@ export function HomePage() {
         </div>
 
         {bilanQuotidien && (
-          <div className="mt-3 rounded-xl border border-indigo-500/30 bg-indigo-500/10 p-3">
-            <p className="text-justify text-sm text-white">{bilanQuotidien.synthese}</p>
+          <div className="mt-3 rounded-xl">
+            <p>Bilan</p>
+            <p className="text-justify text-sm leading-[1.2] text-white">{bilanQuotidien.synthese}</p>
             <p className="mt-2 text-xs text-slate-500">Mis à jour : {formatUpdatedAt(bilanQuotidien.updated_at)}</p>
           </div>
         )}
