@@ -94,6 +94,14 @@ const SETUP_STYLES = {
   aucun: 'bg-slate-500/15 text-slate-300',
 }
 
+const CORRELATION_STYLES = {
+  'forte positive': 'bg-blue-500/15 text-blue-300',
+  positive: 'bg-blue-500/15 text-blue-300',
+  faible: 'bg-slate-500/15 text-slate-300',
+  négative: 'bg-red-500/15 text-red-300',
+  'forte négative': 'bg-red-500/15 text-red-300',
+}
+
 // Tant qu'une tâche n'a pas encore été évaluée (brouillon ou en attente),
 // elle est "à venir" — une fois passée en dry_run_done/done, elle a déjà son
 // propre rapport dans la liste des tâches, pas besoin de la garder ici.
@@ -204,6 +212,9 @@ export function HomePage() {
   const confirmationH4 = marketRecap['06_confirmation_h4']
   const setupH1 = marketRecap['07_setup_h1']
   const activeSessions = getActiveSessions(now)
+  const correlation10y = marketRecap['08_correlation_10y']
+  const netVolume = positions.reduce((sum, p) => sum + (p.type === 'Sell' ? -p.volume : p.volume), 0)
+  const totalFloatingPnl = positions.reduce((sum, p) => sum + (typeof p.profit === 'number' ? p.profit : 0), 0)
   const activityCount = upcomingTasks.length + positions.length + orders.length + reports.length
 
   return (
@@ -687,6 +698,46 @@ export function HomePage() {
           <p className="mt-1 text-xs text-slate-500">
             Heure UTC : {now.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', timeZone: 'UTC' })}
           </p>
+        </div>
+
+        <div className="mt-3 flex flex-col gap-2 border-t border-white/10 pt-3">
+          <p className="text-sm font-semibold text-white">Exposition &amp; corrélation</p>
+          <div className="grid grid-cols-2 gap-2">
+            <div className="rounded-xl border border-white/10 bg-white/5 p-2.5">
+              <p className="text-xs text-slate-400">Positions ouvertes</p>
+              <p className="text-sm font-semibold text-white">{positions.length}</p>
+            </div>
+            <div className="rounded-xl border border-white/10 bg-white/5 p-2.5">
+              <p className="text-xs text-slate-400">Volume net</p>
+              <p className="text-sm font-semibold text-white">
+                {netVolume > 0 ? '+' : ''}
+                {netVolume.toFixed(2)} lot{Math.abs(netVolume) > 1 ? 's' : ''}
+              </p>
+            </div>
+            <div className="rounded-xl border border-white/10 bg-white/5 p-2.5">
+              <p className="text-xs text-slate-400">P&amp;L flottant</p>
+              <p className={`text-sm font-semibold ${totalFloatingPnl >= 0 ? 'text-blue-400' : 'text-red-400'}`}>
+                {totalFloatingPnl.toFixed(2)}
+              </p>
+            </div>
+            <div className="rounded-xl border border-white/10 bg-white/5 p-2.5">
+              <p className="text-xs text-slate-400">Corrélation 10 ans US</p>
+              {correlation10y ? (
+                <span
+                  className={`mt-0.5 inline-block rounded-full px-2 py-0.5 text-xs font-semibold capitalize ${
+                    CORRELATION_STYLES[correlation10y.lecture] ?? CORRELATION_STYLES.faible
+                  }`}
+                >
+                  {correlation10y.correlation_usdjpy_10y} ({correlation10y.lecture})
+                </span>
+              ) : (
+                <p className="text-sm text-slate-400">—</p>
+              )}
+            </div>
+          </div>
+          {correlation10y && (
+            <p className="mt-1 text-xs text-slate-500">Mis à jour : {formatUpdatedAt(correlation10y.updated_at)}</p>
+          )}
         </div>
       </section>
     </div>
