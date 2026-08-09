@@ -24,6 +24,33 @@ function formatUpdatedAt(value) {
   return new Date(value).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' })
 }
 
+function formatEventDate(value) {
+  if (!value) return '—'
+  return new Date(value).toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
+}
+
+function isToday(value) {
+  if (!value) return false
+  return new Date(value).toDateString() === new Date().toDateString()
+}
+
+// Indicateur à 3 points façon Forex Factory : le nombre de points remplis
+// encode le niveau d'impact (Low=1, Medium=2, High=3), d'un coup d'œil.
+const IMPACT_LEVELS = { Low: 1, Medium: 2, High: 3 }
+const IMPACT_DOT_COLOR = { High: 'bg-red-400', Medium: 'bg-amber-400', Low: 'bg-slate-400' }
+
+function ImpactDots({ impact }) {
+  const filled = IMPACT_LEVELS[impact] ?? 0
+  const color = IMPACT_DOT_COLOR[impact] ?? 'bg-slate-500'
+  return (
+    <span className="flex shrink-0 items-center gap-0.5" title={impact}>
+      {[1, 2, 3].map((i) => (
+        <span key={i} className={`h-1.5 w-1.5 rounded-full ${i <= filled ? color : 'bg-white/10'}`} />
+      ))}
+    </span>
+  )
+}
+
 // Tant qu'une tâche n'a pas encore été évaluée (brouillon ou en attente),
 // elle est "à venir" — une fois passée en dry_run_done/done, elle a déjà son
 // propre rapport dans la liste des tâches, pas besoin de la garder ici.
@@ -355,23 +382,33 @@ export function HomePage() {
           {!calendarEco && <p className="text-sm text-slate-400">Aucune donnée pour le moment.</p>}
           {calendarEco && (
             <>
-              {calendarEco.evenements_du_jour?.length > 0 ? (
+              {calendarEco.evenements_de_la_semaine?.length > 0 ? (
                 <div className="flex flex-col gap-1.5">
-                  {calendarEco.evenements_du_jour.map((evt, index) => (
-                    <div key={index} className="flex items-center gap-2 text-xs text-slate-400">
-                      <span
-                        className={`rounded-full px-2 py-0.5 font-semibold ${
-                          evt.impact === 'High' ? 'bg-red-500/15 text-red-300' : 'bg-amber-500/15 text-amber-300'
+                  {calendarEco.evenements_de_la_semaine.map((evt, index) => {
+                    const today = isToday(evt.date)
+                    return (
+                      <div
+                        key={index}
+                        className={`flex items-center gap-2 rounded-lg px-2 py-1 text-xs ${
+                          today ? 'bg-indigo-500/10' : ''
                         }`}
                       >
-                        {evt.devise}
-                      </span>
-                      <span className="text-slate-300">{evt.evenement}</span>
-                    </div>
-                  ))}
+                        <span
+                          className={`rounded-full px-2 py-0.5 font-semibold ${
+                            evt.impact === 'High' ? 'bg-red-500/15 text-red-300' : 'bg-amber-500/15 text-amber-300'
+                          }`}
+                        >
+                          {evt.devise}
+                        </span>
+                        <ImpactDots impact={evt.impact} />
+                        <span className="text-slate-500">{formatEventDate(evt.date)}</span>
+                        <span className={today ? 'font-semibold text-white' : 'text-slate-300'}>{evt.evenement}</span>
+                      </div>
+                    )
+                  })}
                 </div>
               ) : (
-                <p className="text-sm text-slate-400">Aucun événement à impact élevé/moyen aujourd'hui.</p>
+                <p className="text-sm text-slate-400">Aucun événement à impact élevé/moyen cette semaine.</p>
               )}
               <p className="mt-1 text-xs text-slate-500">Mis à jour : {formatUpdatedAt(calendarEco.updated_at)}</p>
             </>
