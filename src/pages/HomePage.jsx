@@ -63,6 +63,12 @@ const SENTIMENT_STYLES = {
   neutre: 'bg-slate-500/15 text-slate-300',
 }
 
+const TREND_STYLES = {
+  haussière: 'bg-blue-500/15 text-blue-300',
+  baissière: 'bg-red-500/15 text-red-300',
+  range: 'bg-slate-500/15 text-slate-300',
+}
+
 // Tant qu'une tâche n'a pas encore été évaluée (brouillon ou en attente),
 // elle est "à venir" — une fois passée en dry_run_done/done, elle a déjà son
 // propre rapport dans la liste des tâches, pas besoin de la garder ici.
@@ -163,6 +169,7 @@ export function HomePage() {
   const calendarEco = marketRecap['02_calendrier_eco']
   const interventionRisk = marketRecap['03_risque_intervention']
   const riskSentiment = marketRecap['04_sentiment_risk_on_off']
+  const structureD1 = marketRecap['05_structure_d1']
   const activityCount = upcomingTasks.length + positions.length + orders.length + reports.length
 
   return (
@@ -505,6 +512,47 @@ export function HomePage() {
                 </div>
               </div>
               <p className="mt-1 text-xs text-slate-500">Mis à jour : {formatUpdatedAt(riskSentiment.updated_at)}</p>
+            </>
+          )}
+        </div>
+
+        <div className="mt-3 flex flex-col gap-2 border-t border-white/10 pt-3">
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-sm font-semibold text-white">Structure D1</p>
+            {structureD1 && (
+              <span
+                className={`rounded-full px-2 py-0.5 text-xs font-semibold capitalize ${
+                  TREND_STYLES[structureD1.tendance] ?? TREND_STYLES.range
+                }`}
+              >
+                {structureD1.tendance}
+              </span>
+            )}
+          </div>
+          {!structureD1 && <p className="text-sm text-slate-400">Aucune donnée pour le moment.</p>}
+          {structureD1 && (
+            <>
+              <div className="grid grid-cols-2 gap-2">
+                <div className="rounded-xl border border-white/10 bg-white/5 p-2.5">
+                  <p className="text-xs text-slate-400">Support (30j)</p>
+                  <p className="text-sm font-semibold text-white">{formatPrice(structureD1.support)}</p>
+                </div>
+                <div className="rounded-xl border border-white/10 bg-white/5 p-2.5">
+                  <p className="text-xs text-slate-400">Résistance (30j)</p>
+                  <p className="text-sm font-semibold text-white">{formatPrice(structureD1.resistance)}</p>
+                </div>
+                <div className="rounded-xl border border-white/10 bg-white/5 p-2.5">
+                  <p className="text-xs text-slate-400">MM20 / MM50</p>
+                  <p className="text-sm font-semibold text-white">
+                    {formatPrice(structureD1.sma20)} / {formatPrice(structureD1.sma50)}
+                  </p>
+                </div>
+                <div className="rounded-xl border border-white/10 bg-white/5 p-2.5">
+                  <p className="text-xs text-slate-400">Dernière bougie</p>
+                  <p className="text-sm font-semibold text-white capitalize">{structureD1.biais_derniere_bougie}</p>
+                </div>
+              </div>
+              <p className="mt-1 text-xs text-slate-500">Mis à jour : {formatUpdatedAt(structureD1.updated_at)}</p>
             </>
           )}
         </div>
