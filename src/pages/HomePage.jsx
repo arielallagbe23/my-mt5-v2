@@ -75,6 +75,12 @@ const CONFIRMATION_STYLES = {
   indéterminée: 'bg-slate-500/15 text-slate-300',
 }
 
+const SETUP_STYLES = {
+  achat: 'bg-blue-500/15 text-blue-300',
+  vente: 'bg-red-500/15 text-red-300',
+  aucun: 'bg-slate-500/15 text-slate-300',
+}
+
 // Tant qu'une tâche n'a pas encore été évaluée (brouillon ou en attente),
 // elle est "à venir" — une fois passée en dry_run_done/done, elle a déjà son
 // propre rapport dans la liste des tâches, pas besoin de la garder ici.
@@ -177,6 +183,7 @@ export function HomePage() {
   const riskSentiment = marketRecap['04_sentiment_risk_on_off']
   const structureD1 = marketRecap['05_structure_d1']
   const confirmationH4 = marketRecap['06_confirmation_h4']
+  const setupH1 = marketRecap['07_setup_h1']
   const activityCount = upcomingTasks.length + positions.length + orders.length + reports.length
 
   return (
@@ -591,6 +598,45 @@ export function HomePage() {
                 </div>
               </div>
               <p className="mt-1 text-xs text-slate-500">Mis à jour : {formatUpdatedAt(confirmationH4.updated_at)}</p>
+            </>
+          )}
+        </div>
+
+        <div className="mt-3 flex flex-col gap-2 border-t border-white/10 pt-3">
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-sm font-semibold text-white">Setup d'entrée H1</p>
+            {setupH1 && (
+              <span
+                className={`rounded-full px-2 py-0.5 text-xs font-semibold capitalize ${
+                  SETUP_STYLES[setupH1.setup] ?? SETUP_STYLES.aucun
+                }`}
+              >
+                {setupH1.setup}
+              </span>
+            )}
+          </div>
+          {!setupH1 && <p className="text-sm text-slate-400">Aucune donnée pour le moment.</p>}
+          {setupH1 && (
+            <>
+              <div className="grid grid-cols-2 gap-2">
+                <div className="rounded-xl border border-white/10 bg-white/5 p-2.5">
+                  <p className="text-xs text-slate-400">Tendance H1</p>
+                  <p className="text-sm font-semibold text-white capitalize">{setupH1.tendance_h1}</p>
+                </div>
+                <div className="rounded-xl border border-white/10 bg-white/5 p-2.5">
+                  <p className="text-xs text-slate-400">RSI H1</p>
+                  <p className="text-sm font-semibold text-white">{setupH1.rsi_h1}</p>
+                </div>
+                <div className="rounded-xl border border-white/10 bg-white/5 p-2.5">
+                  <p className="text-xs text-slate-400">MM20 H1</p>
+                  <p className="text-sm font-semibold text-white">{formatPrice(setupH1.mm20_h1)}</p>
+                </div>
+                <div className="rounded-xl border border-white/10 bg-white/5 p-2.5">
+                  <p className="text-xs text-slate-400">Pullback MM20</p>
+                  <p className="text-sm font-semibold text-white">{setupH1.pullback_mm20 ? 'Oui' : 'Non'}</p>
+                </div>
+              </div>
+              <p className="mt-1 text-xs text-slate-500">Mis à jour : {formatUpdatedAt(setupH1.updated_at)}</p>
             </>
           )}
         </div>
