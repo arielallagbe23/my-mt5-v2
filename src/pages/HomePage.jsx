@@ -57,6 +57,12 @@ const RISK_LEVEL_STYLES = {
   faible: 'bg-green-500/15 text-green-300',
 }
 
+const SENTIMENT_STYLES = {
+  'risk-off': 'bg-red-500/15 text-red-300',
+  'risk-on': 'bg-green-500/15 text-green-300',
+  neutre: 'bg-slate-500/15 text-slate-300',
+}
+
 // Tant qu'une tâche n'a pas encore été évaluée (brouillon ou en attente),
 // elle est "à venir" — une fois passée en dry_run_done/done, elle a déjà son
 // propre rapport dans la liste des tâches, pas besoin de la garder ici.
@@ -156,6 +162,7 @@ export function HomePage() {
   const fedBoj = marketRecap['01_taux_fed_boj']
   const calendarEco = marketRecap['02_calendrier_eco']
   const interventionRisk = marketRecap['03_risque_intervention']
+  const riskSentiment = marketRecap['04_sentiment_risk_on_off']
   const activityCount = upcomingTasks.length + positions.length + orders.length + reports.length
 
   return (
@@ -464,6 +471,40 @@ export function HomePage() {
                 </div>
               )}
               <p className="mt-1 text-xs text-slate-500">Mis à jour : {formatUpdatedAt(interventionRisk.updated_at)}</p>
+            </>
+          )}
+        </div>
+
+        <div className="mt-3 flex flex-col gap-2 border-t border-white/10 pt-3">
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-sm font-semibold text-white">Sentiment risk-on/risk-off</p>
+            {riskSentiment && (
+              <span
+                className={`rounded-full px-2 py-0.5 text-xs font-semibold capitalize ${
+                  SENTIMENT_STYLES[riskSentiment.sentiment] ?? SENTIMENT_STYLES.neutre
+                }`}
+              >
+                {riskSentiment.sentiment}
+              </span>
+            )}
+          </div>
+          {!riskSentiment && <p className="text-sm text-slate-400">Aucune donnée pour le moment.</p>}
+          {riskSentiment && (
+            <>
+              <div className="grid grid-cols-2 gap-2">
+                <div className="rounded-xl border border-white/10 bg-white/5 p-2.5">
+                  <p className="text-xs text-slate-400">VIX</p>
+                  <p className="text-sm font-semibold text-white">{riskSentiment.vix}</p>
+                </div>
+                <div className="rounded-xl border border-white/10 bg-white/5 p-2.5">
+                  <p className="text-xs text-slate-400">S&amp;P 500 (5j)</p>
+                  <p className="text-sm font-semibold text-white">
+                    {riskSentiment.sp500_variation_5j_pct >= 0 ? '+' : ''}
+                    {riskSentiment.sp500_variation_5j_pct}%
+                  </p>
+                </div>
+              </div>
+              <p className="mt-1 text-xs text-slate-500">Mis à jour : {formatUpdatedAt(riskSentiment.updated_at)}</p>
             </>
           )}
         </div>
