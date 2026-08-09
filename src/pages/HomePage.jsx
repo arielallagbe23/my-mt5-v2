@@ -69,6 +69,12 @@ const TREND_STYLES = {
   range: 'bg-slate-500/15 text-slate-300',
 }
 
+const CONFIRMATION_STYLES = {
+  confirmé: 'bg-green-500/15 text-green-300',
+  divergent: 'bg-amber-500/15 text-amber-300',
+  indéterminée: 'bg-slate-500/15 text-slate-300',
+}
+
 // Tant qu'une tâche n'a pas encore été évaluée (brouillon ou en attente),
 // elle est "à venir" — une fois passée en dry_run_done/done, elle a déjà son
 // propre rapport dans la liste des tâches, pas besoin de la garder ici.
@@ -170,6 +176,7 @@ export function HomePage() {
   const interventionRisk = marketRecap['03_risque_intervention']
   const riskSentiment = marketRecap['04_sentiment_risk_on_off']
   const structureD1 = marketRecap['05_structure_d1']
+  const confirmationH4 = marketRecap['06_confirmation_h4']
   const activityCount = upcomingTasks.length + positions.length + orders.length + reports.length
 
   return (
@@ -553,6 +560,37 @@ export function HomePage() {
                 </div>
               </div>
               <p className="mt-1 text-xs text-slate-500">Mis à jour : {formatUpdatedAt(structureD1.updated_at)}</p>
+            </>
+          )}
+        </div>
+
+        <div className="mt-3 flex flex-col gap-2 border-t border-white/10 pt-3">
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-sm font-semibold text-white">H4 vs D1</p>
+            {confirmationH4 && (
+              <span
+                className={`rounded-full px-2 py-0.5 text-xs font-semibold capitalize ${
+                  CONFIRMATION_STYLES[confirmationH4.confirmation] ?? CONFIRMATION_STYLES.indéterminée
+                }`}
+              >
+                {confirmationH4.confirmation}
+              </span>
+            )}
+          </div>
+          {!confirmationH4 && <p className="text-sm text-slate-400">Aucune donnée pour le moment.</p>}
+          {confirmationH4 && (
+            <>
+              <div className="grid grid-cols-2 gap-2">
+                <div className="rounded-xl border border-white/10 bg-white/5 p-2.5">
+                  <p className="text-xs text-slate-400">Tendance D1</p>
+                  <p className="text-sm font-semibold text-white capitalize">{confirmationH4.tendance_d1}</p>
+                </div>
+                <div className="rounded-xl border border-white/10 bg-white/5 p-2.5">
+                  <p className="text-xs text-slate-400">Tendance H4</p>
+                  <p className="text-sm font-semibold text-white capitalize">{confirmationH4.tendance_h4}</p>
+                </div>
+              </div>
+              <p className="mt-1 text-xs text-slate-500">Mis à jour : {formatUpdatedAt(confirmationH4.updated_at)}</p>
             </>
           )}
         </div>
