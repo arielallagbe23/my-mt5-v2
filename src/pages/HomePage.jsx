@@ -213,6 +213,7 @@ export function HomePage() {
   const setupH1 = marketRecap['07_setup_h1']
   const activeSessions = getActiveSessions(now)
   const correlation10y = marketRecap['08_correlation_10y']
+  const bilanQuotidien = marketRecap['09_bilan_quotidien']
   const netVolume = positions.reduce((sum, p) => sum + (p.type === 'Sell' ? -p.volume : p.volume), 0)
   const totalFloatingPnl = positions.reduce((sum, p) => sum + (typeof p.profit === 'number' ? p.profit : 0), 0)
   const activityCount = upcomingTasks.length + positions.length + orders.length + reports.length
@@ -406,6 +407,13 @@ export function HomePage() {
 
       <section className="mt-5 flex flex-col gap-2 rounded-2xl border border-white/10 bg-white/5 p-4">
         <p className="text-xs font-bold tracking-[0.14em] text-slate-500 uppercase">Market recap</p>
+
+        {bilanQuotidien && (
+          <div className="rounded-xl border border-indigo-500/30 bg-indigo-500/10 p-3">
+            <p className="text-justify text-sm text-white">{bilanQuotidien.synthese}</p>
+            <p className="mt-2 text-xs text-slate-500">Mis à jour : {formatUpdatedAt(bilanQuotidien.updated_at)}</p>
+          </div>
+        )}
 
         <div className="flex flex-col gap-2">
           <p className="text-sm font-semibold text-white">Différentiel de taux Fed/BoJ</p>
