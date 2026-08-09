@@ -19,6 +19,19 @@ function formatExecutionTime(value) {
   return new Date(value).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' })
 }
 
+// Créneaux standard des sessions FX en heure UTC — pur calcul horaire, aucune
+// donnée à collecter côté VPS.
+const SESSION_WINDOWS = [
+  { name: 'Tokyo', start: 0, end: 9 },
+  { name: 'Londres', start: 8, end: 17 },
+  { name: 'New York', start: 13, end: 22 },
+]
+
+function getActiveSessions(date) {
+  const hour = date.getUTCHours()
+  return SESSION_WINDOWS.filter((s) => hour >= s.start && hour < s.end).map((s) => s.name)
+}
+
 function formatUpdatedAt(value) {
   if (!value) return '—'
   return new Date(value).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' })
@@ -114,6 +127,12 @@ export function HomePage() {
   const [marketRecap, setMarketRecap] = useState({})
   const [monitoringTimeframes, setMonitoringTimeframes] = useState({})
   const [activatingTicket, setActivatingTicket] = useState(null)
+  const [now, setNow] = useState(() => new Date())
+
+  useEffect(() => {
+    const id = setInterval(() => setNow(new Date()), 60_000)
+    return () => clearInterval(id)
+  }, [])
 
   function load() {
     setError('')
@@ -184,6 +203,7 @@ export function HomePage() {
   const structureD1 = marketRecap['05_structure_d1']
   const confirmationH4 = marketRecap['06_confirmation_h4']
   const setupH1 = marketRecap['07_setup_h1']
+  const activeSessions = getActiveSessions(now)
   const activityCount = upcomingTasks.length + positions.length + orders.length + reports.length
 
   return (
@@ -639,6 +659,34 @@ export function HomePage() {
               <p className="mt-1 text-xs text-slate-500">Mis à jour : {formatUpdatedAt(setupH1.updated_at)}</p>
             </>
           )}
+        </div>
+
+        <div className="mt-3 flex flex-col gap-2 border-t border-white/10 pt-3">
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-sm font-semibold text-white">Session de liquidité active</p>
+            {activeSessions.length > 1 && (
+              <span className="rounded-full bg-blue-500/15 px-2 py-0.5 text-xs font-semibold text-blue-300">
+                Chevauchement
+              </span>
+            )}
+          </div>
+          {activeSessions.length === 0 ? (
+            <p className="text-sm text-slate-400">Aucune session majeure active.</p>
+          ) : (
+            <div className="flex gap-2">
+              {activeSessions.map((session) => (
+                <span
+                  key={session}
+                  className="rounded-full bg-indigo-500/15 px-3 py-1 text-sm font-semibold text-indigo-300"
+                >
+                  {session}
+                </span>
+              ))}
+            </div>
+          )}
+          <p className="mt-1 text-xs text-slate-500">
+            Heure UTC : {now.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', timeZone: 'UTC' })}
+          </p>
         </div>
       </section>
     </div>
