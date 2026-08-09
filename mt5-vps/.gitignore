@@ -1,5 +1,7 @@
 service-account.json
 vps_id.txt
 cron_secret.txt
+fred_api_key.txt
+serpapi_key.txt
 __pycache__/
 *.pyc

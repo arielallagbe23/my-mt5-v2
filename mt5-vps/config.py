@@ -26,6 +26,10 @@ MAGIC = int(os.environ.get("MT5_MAGIC", "234000"))
 BACKEND_URL = os.environ.get("BACKEND_URL", "https://mymt5-v2.vercel.app")
 CRON_SECRET = _read("cron_secret.txt") or os.environ.get("CRON_SECRET")
 
+# Clés API pour 01_taux_fed_boj.py — jamais commitées, même régime que cron_secret.txt.
+FRED_API_KEY = _read("fred_api_key.txt") or os.environ.get("FRED_API_KEY")
+SERPAPI_KEY = _read("serpapi_key.txt") or os.environ.get("SERPAPI_KEY")
+
 # Tant que dry_run.txt contient "true" (ou n'existe pas), les tâches sont évaluées
 # et notifiées normalement mais AUCUN ordre réel n'est envoyé à MT5. Repasser à
 # "false" dans ce fichier une fois le comportement vérifié plusieurs fois.
