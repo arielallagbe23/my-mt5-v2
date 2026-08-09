@@ -38,17 +38,25 @@ def get_fed_funds_rate():
     return {"valeur": float(obs["value"]), "date": obs["date"]}
 
 
+def _search_news(query, hl=None, gl=None):
+    params = {"q": query, "tbm": "nws", "tbs": "qdr:d2", "api_key": SERPAPI_KEY}
+    if hl:
+        params["hl"] = hl
+    if gl:
+        params["gl"] = gl
+    r = requests.get("https://serpapi.com/search.json", params=params)
+    r.raise_for_status()
+    return r.json().get("news_results", [])[:5]
+
+
 def get_recent_fed_boj_headlines():
     # hl/gl biaisent la recherche vers des sources francophones (pas de vraie
-    # traduction — la couverture Fed/BoJ y est plus rare qu'en anglais, donc
-    # certains résultats peuvent rester en anglais si rien de mieux n'existe).
-    r = requests.get("https://serpapi.com/search.json", params={
-        "q": "Fed BoJ taux directeur déclaration politique monétaire",
-        "tbm": "nws", "tbs": "qdr:d2", "api_key": SERPAPI_KEY,
-        "hl": "fr", "gl": "fr",
-    })
-    r.raise_for_status()
-    news = r.json().get("news_results", [])[:5]
+    # traduction). La couverture Fed/BoJ y est plus rare qu'en anglais et peut
+    # ne rien renvoyer certains jours — on retombe alors sur la recherche
+    # anglaise plutôt que de laisser la liste vide.
+    news = _search_news("Fed BoJ taux directeur déclaration politique monétaire", hl="fr", gl="fr")
+    if not news:
+        news = _search_news("Fed BoJ interest rate statement policy")
     return [n["title"] for n in news]
 
 
