@@ -39,9 +39,13 @@ def get_fed_funds_rate():
 
 
 def get_recent_fed_boj_headlines():
+    # hl/gl biaisent la recherche vers des sources francophones (pas de vraie
+    # traduction — la couverture Fed/BoJ y est plus rare qu'en anglais, donc
+    # certains résultats peuvent rester en anglais si rien de mieux n'existe).
     r = requests.get("https://serpapi.com/search.json", params={
-        "q": "Fed BoJ interest rate statement policy",
+        "q": "Fed BoJ taux directeur déclaration politique monétaire",
         "tbm": "nws", "tbs": "qdr:d2", "api_key": SERPAPI_KEY,
+        "hl": "fr", "gl": "fr",
     })
     r.raise_for_status()
     news = r.json().get("news_results", [])[:5]

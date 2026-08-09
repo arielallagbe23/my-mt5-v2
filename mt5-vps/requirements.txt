@@ -2,3 +2,4 @@ MetaTrader5
 google-cloud-firestore
 tzdata
 requests
+python-dateutil

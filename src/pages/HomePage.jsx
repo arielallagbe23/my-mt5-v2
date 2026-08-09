@@ -19,6 +19,11 @@ function formatExecutionTime(value) {
   return new Date(value).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' })
 }
 
+function formatUpdatedAt(value) {
+  if (!value) return '—'
+  return new Date(value).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' })
+}
+
 // Tant qu'une tâche n'a pas encore été évaluée (brouillon ou en attente),
 // elle est "à venir" — une fois passée en dry_run_done/done, elle a déjà son
 // propre rapport dans la liste des tâches, pas besoin de la garder ici.
@@ -49,6 +54,7 @@ export function HomePage() {
   const [error, setError] = useState('')
   const [reports, setReports] = useState([])
   const [upcomingTasks, setUpcomingTasks] = useState([])
+  const [marketRecap, setMarketRecap] = useState({})
   const [monitoringTimeframes, setMonitoringTimeframes] = useState({})
   const [activatingTicket, setActivatingTicket] = useState(null)
 
@@ -68,6 +74,7 @@ export function HomePage() {
         setData(result)
       })
       .finally(() => setLoading(false))
+    api.marketRecap().then(setMarketRecap).catch(() => {})
   }
 
   useEffect(() => {
@@ -113,6 +120,8 @@ export function HomePage() {
 
   const orders = data?.orders ?? []
   const positions = data?.positions ?? []
+  const fedBoj = marketRecap['01_taux_fed_boj']
+  const calendarEco = marketRecap['02_calendrier_eco']
   const activityCount = upcomingTasks.length + positions.length + orders.length + reports.length
 
   return (
@@ -300,6 +309,74 @@ export function HomePage() {
             </div>
           </div>
         ))}
+      </section>
+
+      <section className="mt-5 flex flex-col gap-2 rounded-2xl border border-white/10 bg-white/5 p-4">
+        <p className="text-xs font-bold tracking-[0.14em] text-slate-500 uppercase">Market recap</p>
+
+        <div className="flex flex-col gap-2">
+          <p className="text-sm font-semibold text-white">Différentiel de taux Fed/BoJ</p>
+          {!fedBoj && <p className="text-sm text-slate-400">Aucune donnée pour le moment.</p>}
+          {fedBoj && (
+            <>
+              <div className="grid grid-cols-2 gap-2">
+                <div className="rounded-xl border border-white/10 bg-white/5 p-2.5">
+                  <p className="text-xs text-slate-400">Taux Fed</p>
+                  <p className="text-sm font-semibold text-white">
+                    {fedBoj.fed_funds_rate?.valeur != null ? `${fedBoj.fed_funds_rate.valeur}%` : '—'}
+                  </p>
+                  <p className="text-xs text-slate-500">{fedBoj.fed_funds_rate?.date ?? '—'}</p>
+                </div>
+                <div className="rounded-xl border border-white/10 bg-white/5 p-2.5">
+                  <p className="text-xs text-slate-400">Rendement 10 ans US</p>
+                  <p className="text-sm font-semibold text-white">
+                    {fedBoj.us_10y_yield?.valeur != null ? `${fedBoj.us_10y_yield.valeur}%` : '—'}
+                  </p>
+                  <p className="text-xs text-slate-500">{fedBoj.us_10y_yield?.date ?? '—'}</p>
+                </div>
+              </div>
+              {fedBoj.recent_headlines?.length > 0 && (
+                <div className="mt-1 flex flex-col gap-1.5">
+                  <p className="text-xs text-slate-400">Actus Fed/BoJ</p>
+                  {fedBoj.recent_headlines.map((headline, index) => (
+                    <p key={index} className="text-justify text-xs text-slate-300">
+                      {headline}
+                    </p>
+                  ))}
+                </div>
+              )}
+              <p className="mt-1 text-xs text-slate-500">Mis à jour : {formatUpdatedAt(fedBoj.updated_at)}</p>
+            </>
+          )}
+        </div>
+
+        <div className="mt-3 flex flex-col gap-2 border-t border-white/10 pt-3">
+          <p className="text-sm font-semibold text-white">Calendrier économique</p>
+          {!calendarEco && <p className="text-sm text-slate-400">Aucune donnée pour le moment.</p>}
+          {calendarEco && (
+            <>
+              {calendarEco.evenements_du_jour?.length > 0 ? (
+                <div className="flex flex-col gap-1.5">
+                  {calendarEco.evenements_du_jour.map((evt, index) => (
+                    <div key={index} className="flex items-center gap-2 text-xs text-slate-400">
+                      <span
+                        className={`rounded-full px-2 py-0.5 font-semibold ${
+                          evt.impact === 'High' ? 'bg-red-500/15 text-red-300' : 'bg-amber-500/15 text-amber-300'
+                        }`}
+                      >
+                        {evt.devise}
+                      </span>
+                      <span className="text-slate-300">{evt.evenement}</span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-slate-400">Aucun événement à impact élevé/moyen aujourd'hui.</p>
+              )}
+              <p className="mt-1 text-xs text-slate-500">Mis à jour : {formatUpdatedAt(calendarEco.updated_at)}</p>
+            </>
+          )}
+        </div>
       </section>
     </div>
   )
