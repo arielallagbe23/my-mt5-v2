@@ -6,20 +6,18 @@ et H4 sur USDJPY, pour avoir le temps de regarder la situation et
 
 Calcule l'heure de clôture ATTENDUE de la bougie en cours (heure d'ouverture
 + durée du timeframe) plutôt que de deviner une heure fixe — la grille
-réelle dépend du fuseau horaire du serveur du broker. Pensé pour tourner
-toutes les 5 minutes : la fenêtre d'alerte fait 10 minutes de large, donc au
-moins un passage tombe dedans à chaque fois.
+réelle dépend du fuseau horaire du serveur du broker. Appelé à chaque tour
+de la boucle principale (mt5_status.py, toutes les POLL_INTERVAL secondes) :
+la fenêtre d'alerte fait 10 minutes de large, donc largement de quoi
+retomber dedans avant qu'elle ne se referme, et le dédoublonnage Firestore
+(last_candle_open) garantit une seule notif par bougie.
 """
 
 from datetime import datetime, timezone
 
-from google.cloud import firestore
-
-from config import PRICE_SYMBOL, SA_PATH
+from config import PRICE_SYMBOL
 from mt5_client import ensure_mt5
 from notify import notify
-
-db = firestore.Client.from_service_account_json(SA_PATH)
 
 WARNING_MINUTES_BEFORE_CLOSE = 10
 
@@ -29,7 +27,18 @@ TIMEFRAMES = {
 }
 
 
-def check_timeframe(m, symbol, label, duration_seconds):
+def check_pre_close_alerts(db):
+    """Point d'entrée appelé depuis la boucle de mt5_status.py — même pattern
+    que check_due_tasks(db) dans tasks.py. Sans effet si MT5 est
+    temporairement indisponible (retenté au tour de boucle suivant)."""
+    m = ensure_mt5()
+    if m is None:
+        return
+    for label, duration_seconds in TIMEFRAMES.items():
+        check_timeframe(db, m, PRICE_SYMBOL, label, duration_seconds)
+
+
+def check_timeframe(db, m, symbol, label, duration_seconds):
     m.symbol_select(symbol, True)
     rates = m.copy_rates_from_pos(symbol, getattr(m, f"TIMEFRAME_{label}"), 0, 1)
     if rates is None or len(rates) == 0:
@@ -65,9 +74,9 @@ def check_timeframe(m, symbol, label, duration_seconds):
 
 
 if __name__ == "__main__":
-    m = ensure_mt5()
-    if m is None:
-        raise SystemExit("[ERREUR] Connexion MT5 indisponible.")
+    from google.cloud import firestore
 
-    for label, duration_seconds in TIMEFRAMES.items():
-        check_timeframe(m, PRICE_SYMBOL, label, duration_seconds)
+    from config import SA_PATH
+
+    _db = firestore.Client.from_service_account_json(SA_PATH)
+    check_pre_close_alerts(_db)
