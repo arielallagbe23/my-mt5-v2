@@ -7,5 +7,8 @@ bout. Aucun effet de bord, à supprimer une fois le test validé.
 
 from notify import notify
 
-notify("Test alerte", "Si tu vois ça, la tâche planifiée fonctionne.")
-print("[OK] Notification de test envoyée.")
+ok = notify("Test alerte", "Si tu vois ça, la tâche planifiée fonctionne.")
+if ok:
+    print("[OK] Notification de test envoyée.")
+else:
+    print("[ECHEC] Notification NON envoyée (voir message [NOTIFY] ci-dessus).")
