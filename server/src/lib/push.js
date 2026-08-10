@@ -23,6 +23,11 @@ export async function sendPushToAll({ title, body }) {
       } catch (err) {
         if (err.statusCode === 404 || err.statusCode === 410) {
           await doc.ref.delete()
+        } else {
+          console.error(
+            `[push] échec envoi vers ${doc.id} (statusCode=${err.statusCode}):`,
+            err.body || err.message || err,
+          )
         }
       }
     }),
