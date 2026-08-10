@@ -7,6 +7,13 @@ webpush.setVapidDetails(
   process.env.VAPID_PRIVATE_KEY,
 )
 
+if (process.env.VAPID_PUBLIC_KEY !== process.env.VITE_VAPID_PUBLIC_KEY) {
+  console.error(
+    '[push] VAPID_PUBLIC_KEY (serveur) et VITE_VAPID_PUBLIC_KEY (client) diffèrent — ' +
+      'les abonnements créés côté client ne pourront jamais être validés par le serveur.',
+  )
+}
+
 /**
  * Envoie une notification push à tous les appareils abonnés.
  * Si un abonnement n'est plus valide (410/404 — l'utilisateur a désinstallé
@@ -14,6 +21,7 @@ webpush.setVapidDetails(
  */
 export async function sendPushToAll({ title, body }) {
   const snapshot = await db.collection('pushSubscriptions').get()
+  console.log(`[push] ${snapshot.size} abonnement(s) trouvé(s) dans Firestore`)
   const payload = JSON.stringify({ title, body })
 
   await Promise.all(
