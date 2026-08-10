@@ -25,10 +25,29 @@ export function ProfilePage() {
   const [pushLoading, setPushLoading] = useState(false)
   const [pushError, setPushError] = useState('')
 
+  const [alertSettings, setAlertSettings] = useState({ h1: true, h4: true })
+  const [alertError, setAlertError] = useState('')
+
   useEffect(() => {
     if (!isPushSupported()) return
     getPushSubscription().then((sub) => setPushEnabled(Boolean(sub)))
   }, [])
+
+  useEffect(() => {
+    api.alertSettings().then(setAlertSettings).catch(() => {})
+  }, [])
+
+  async function toggleAlertTimeframe(key) {
+    const next = { ...alertSettings, [key]: !alertSettings[key] }
+    setAlertSettings(next) // optimiste : on remonte tout de suite, on annule si ça échoue
+    setAlertError('')
+    try {
+      await api.updateAlertSettings(next)
+    } catch (err) {
+      setAlertSettings(alertSettings)
+      setAlertError(err.message)
+    }
+  }
 
   async function togglePush() {
     setPushError('')
@@ -126,6 +145,31 @@ export function ProfilePage() {
           </button>
         </div>
       )}
+
+      <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3">
+        <p className="text-sm font-semibold text-white">Alertes de clôture</p>
+        <p className="mt-1 text-sm text-slate-400">
+          Notification ~10 min avant la clôture d'une bougie USDJPY, sur les timeframes activés.
+        </p>
+        {alertError && <p className="mt-2 text-sm text-red-400">{alertError}</p>}
+        <div className="mt-3 flex gap-2">
+          {[
+            ['h1', 'H1'],
+            ['h4', 'H4'],
+          ].map(([key, label]) => (
+            <button
+              key={key}
+              type="button"
+              onClick={() => toggleAlertTimeframe(key)}
+              className={`min-h-10 rounded-full px-5 text-sm font-semibold ${
+                alertSettings[key] ? 'bg-indigo-600 text-white' : 'bg-white/10 text-slate-300'
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
 
       <form onSubmit={handleSave} className="flex flex-col gap-3">
         <label className="flex flex-col gap-1.5 text-sm text-slate-400">

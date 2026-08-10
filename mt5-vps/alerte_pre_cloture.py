@@ -27,6 +27,14 @@ TIMEFRAMES = {
 }
 
 
+def _enabled_timeframes(db):
+    """Lit settings/alerts (réglé depuis la page Profil de l'app) — les deux
+    timeframes sont actives par défaut si le doc n'existe pas encore."""
+    doc = db.collection("settings").document("alerts").get()
+    data = doc.to_dict() if doc.exists else {}
+    return {"H1": data.get("h1", True), "H4": data.get("h4", True)}
+
+
 def check_pre_close_alerts(db):
     """Point d'entrée appelé depuis la boucle de mt5_status.py — même pattern
     que check_due_tasks(db) dans tasks.py. Sans effet si MT5 est
@@ -34,7 +42,10 @@ def check_pre_close_alerts(db):
     m = ensure_mt5()
     if m is None:
         return
+    enabled = _enabled_timeframes(db)
     for label, duration_seconds in TIMEFRAMES.items():
+        if not enabled.get(label, True):
+            continue
         check_timeframe(db, m, PRICE_SYMBOL, label, duration_seconds)
 
 
