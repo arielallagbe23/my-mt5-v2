@@ -81,7 +81,16 @@ def check_timeframe(db, m, symbol, label, duration_seconds):
         })
         print(f"[OK][{label}] Alerte envoyée, clôture dans {minutes_left} min")
     else:
-        print(f"[SKIP][{label}] fenêtre={in_window} déjà_alerté={already_alerted}")
+        # DIAGNOSTIC temporaire : heure de clôture calculée (déduite de l'heure
+        # serveur MT5, potentiellement décalée par rapport au fuseau du
+        # broker) vs heure réelle maintenant, pour vérifier un éventuel
+        # décalage de fuseau horaire caché dans candle["time"].
+        close_str = datetime.fromtimestamp(close_time, tz=timezone.utc).strftime("%H:%M")
+        now_str = datetime.fromtimestamp(now, tz=timezone.utc).strftime("%H:%M")
+        print(
+            f"[SKIP][{label}] fenêtre={in_window} déjà_alerté={already_alerted} "
+            f"clôture_calculée={close_str} maintenant={now_str} reste={seconds_to_close // 60}min"
+        )
 
 
 if __name__ == "__main__":
