@@ -44,6 +44,10 @@ def _report_and_delete(db, ref, task_id, task, reason, now_ms):
         "archived": False,
         "createdAt": now_ms,
     })
+    notify(
+        "mymt5 — position non ouverte",
+        f"{task.get('scenario')} {task.get('timeframe')} : condition non remplie ({reason})",
+    )
     ref.delete()
 
 
