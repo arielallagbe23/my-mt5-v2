@@ -9,31 +9,52 @@ Pré-requis : fred_api_key.txt et serpapi_key.txt dans ce dossier VPS (jamais
 commités, même régime que cron_secret.txt) — voir config.py.
 """
 
+import time
+
 import requests
 from datetime import datetime, timezone
 from google.cloud import firestore
 
 from config import FRED_API_KEY, SERPAPI_KEY, SA_PATH
+from notify import notify
 
 db = firestore.Client.from_service_account_json(SA_PATH)
 
+RETRIES = 3
+BACKOFF_SECONDS = 5
+
+
+def _get_with_retry(url, params):
+    """Un blip réseau ou un timeout ponctuel d'une seconde ne doit pas faire
+    planter tout le script (et donc laisser la donnée du jour manquante) —
+    on retente quelques fois avant d'abandonner pour de vrai."""
+    last_error = None
+    for attempt in range(1, RETRIES + 1):
+        try:
+            r = requests.get(url, params=params, timeout=10)
+            r.raise_for_status()
+            return r
+        except requests.exceptions.RequestException as e:
+            last_error = e
+            if attempt < RETRIES:
+                time.sleep(BACKOFF_SECONDS * attempt)
+    raise last_error
+
 
 def get_us_10y_yield():
-    r = requests.get("https://api.stlouisfed.org/fred/series/observations", params={
+    r = _get_with_retry("https://api.stlouisfed.org/fred/series/observations", {
         "series_id": "DGS10", "api_key": FRED_API_KEY,
         "file_type": "json", "sort_order": "desc", "limit": 1,
     })
-    r.raise_for_status()
     obs = r.json()["observations"][0]
     return {"valeur": float(obs["value"]), "date": obs["date"]}
 
 
 def get_fed_funds_rate():
-    r = requests.get("https://api.stlouisfed.org/fred/series/observations", params={
+    r = _get_with_retry("https://api.stlouisfed.org/fred/series/observations", {
         "series_id": "DFF", "api_key": FRED_API_KEY,
         "file_type": "json", "sort_order": "desc", "limit": 1,
     })
-    r.raise_for_status()
     obs = r.json()["observations"][0]
     return {"valeur": float(obs["value"]), "date": obs["date"]}
 
@@ -44,8 +65,7 @@ def _search_news(query, hl=None, gl=None):
         params["hl"] = hl
     if gl:
         params["gl"] = gl
-    r = requests.get("https://serpapi.com/search.json", params=params)
-    r.raise_for_status()
+    r = _get_with_retry("https://serpapi.com/search.json", params)
     return r.json().get("news_results", [])[:5]
 
 
@@ -61,13 +81,19 @@ def get_recent_fed_boj_headlines():
 
 
 if __name__ == "__main__":
-    data = {
-        "us_10y_yield": get_us_10y_yield(),
-        "fed_funds_rate": get_fed_funds_rate(),
-        "recent_headlines": get_recent_fed_boj_headlines(),
-        "updated_at": datetime.now(timezone.utc),
-    }
-
-    db.collection("daily_questions").document("01_taux_fed_boj").set(data)
-    print("Écrit dans Firestore avec succès :")
-    print(data)
+    try:
+        data = {
+            "us_10y_yield": get_us_10y_yield(),
+            "fed_funds_rate": get_fed_funds_rate(),
+            "recent_headlines": get_recent_fed_boj_headlines(),
+            "updated_at": datetime.now(timezone.utc),
+        }
+        db.collection("daily_questions").document("01_taux_fed_boj").set(data)
+        print("Écrit dans Firestore avec succès :")
+        print(data)
+    except Exception as e:
+        notify(
+            "mymt5 — échec 01_taux_fed_boj",
+            f"Différentiel de taux Fed/BoJ non mis à jour : {e}",
+        )
+        raise
