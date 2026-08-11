@@ -21,4 +21,28 @@ router.get('/', requireAuth, async (req, res) => {
   res.json(result)
 })
 
+// Relance manuellement les 9 scripts VPS qui alimentent le Market Recap —
+// pour le cas où la tâche planifiée du matin n'est pas passée. Le VPS
+// (on_demand.py, handler market_recap_request) marque "done" une fois les 9
+// scripts terminés (généralement moins d'une minute), pas à la réception.
+router.post('/request', requireAuth, async (req, res) => {
+  await db.collection('commands').doc('market_recap_request').set({
+    status: 'pending',
+    ts: Date.now(),
+  })
+  res.status(202).json({ requested: true })
+})
+
+router.get('/request/status', requireAuth, async (req, res) => {
+  const doc = await db.collection('commands').doc('market_recap_request').get()
+  if (!doc.exists) return res.json({ status: null, failed: [], ts: null })
+
+  const data = doc.data()
+  res.json({
+    status: data.status ?? null,
+    failed: data.failed ?? [],
+    ts: data.completed_at ?? null,
+  })
+})
+
 export default router

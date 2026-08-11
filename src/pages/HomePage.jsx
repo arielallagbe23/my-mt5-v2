@@ -133,6 +133,8 @@ export function HomePage() {
   const [reports, setReports] = useState([])
   const [upcomingTasks, setUpcomingTasks] = useState([])
   const [marketRecap, setMarketRecap] = useState({})
+  const [recapRefreshing, setRecapRefreshing] = useState(false)
+  const [recapRefreshError, setRecapRefreshError] = useState('')
   const [monitoringTimeframes, setMonitoringTimeframes] = useState({})
   const [activatingTicket, setActivatingTicket] = useState(null)
   const [now, setNow] = useState(() => new Date())
@@ -183,6 +185,29 @@ export function HomePage() {
     } catch {
       api.reports().then(setReports).catch(() => {})
     }
+  }
+
+  async function refreshMarketRecap() {
+    setRecapRefreshing(true)
+    setRecapRefreshError('')
+    // Les 9 scripts VPS peuvent prendre jusqu'à ~2 min au total (retries
+    // inclus) — fenêtre de poll plus large que les autres requêtes on-demand.
+    const result = await requestAndPoll({
+      request: () => api.requestMarketRecapRefresh(),
+      fetch: () => api.marketRecapRefreshStatus(),
+      isFresh: isFreshTs,
+      attempts: 40,
+      delayMs: 3000,
+    })
+    if (result) {
+      if (result.failed?.length > 0) {
+        setRecapRefreshError(`${result.failed.length}/9 sections n'ont pas pu être actualisées.`)
+      }
+      api.marketRecap().then(setMarketRecap).catch(() => {})
+    } else {
+      setRecapRefreshError('VPS indisponible — actualisation impossible')
+    }
+    setRecapRefreshing(false)
   }
 
   function setMonitoringTimeframe(ticket, timeframe) {
@@ -406,7 +431,18 @@ export function HomePage() {
       </section>
 
       <section className="mt-5 flex flex-col gap-2 rounded-2xl border border-white/10 bg-white/5 p-4">
-        <p className="text-xs font-bold tracking-[0.14em] text-slate-500 uppercase">Market recap</p>
+        <div className="flex items-center justify-between gap-3">
+          <p className="text-xs font-bold tracking-[0.14em] text-slate-500 uppercase">Market recap</p>
+          <button
+            type="button"
+            onClick={refreshMarketRecap}
+            disabled={recapRefreshing}
+            className="min-h-8 shrink-0 rounded-full bg-white/10 px-3 text-xs font-semibold text-slate-300 disabled:opacity-60"
+          >
+            {recapRefreshing ? 'Actualisation...' : 'Actualiser'}
+          </button>
+        </div>
+        {recapRefreshError && <p className="text-xs text-red-400">{recapRefreshError}</p>}
 
         <div className="flex flex-col gap-2">
           <p className="text-sm font-semibold text-white">Différentiel de taux Fed/BoJ</p>

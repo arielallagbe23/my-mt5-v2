@@ -57,4 +57,6 @@ export const api = {
   alertSettings: () => request('/api/settings/alerts'),
   updateAlertSettings: (settings) => request('/api/settings/alerts', { method: 'PATCH', body: settings }),
   marketRecap: () => request('/api/market-recap'),
+  requestMarketRecapRefresh: () => request('/api/market-recap/request', { method: 'POST' }),
+  marketRecapRefreshStatus: () => request('/api/market-recap/request/status'),
 }

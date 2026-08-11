@@ -9,6 +9,8 @@ attente (0 la plupart du temps), pas 5 lectures systématiques. Chaque
 document trouvé est ensuite distribué au bon handler via son id.
 """
 
+import subprocess
+import sys
 import time
 from datetime import datetime, timedelta, timezone
 
@@ -20,6 +22,18 @@ from notify import notify
 from scenario_shared import compute_lot_size
 from tasks import _account_size
 from trades import handle_trades_sync_request
+
+MARKET_RECAP_SCRIPTS = [
+    "01_taux_fed_boj.py",
+    "02_calendrier_eco.py",
+    "03_risque_intervention.py",
+    "04_sentiment_risk_on_off.py",
+    "05_structure_d1.py",
+    "06_confirmation_h4.py",
+    "07_setup_h1.py",
+    "08_correlation_10y.py",
+    "09_bilan_quotidien.py",
+]
 
 
 def _handle_status_request(db, doc):
@@ -304,6 +318,33 @@ def _handle_set_order_request(db, doc):
     _publish_order_result(db, result)
 
 
+def _handle_market_recap_request(db, doc):
+    """Relance à la main les 9 scripts qui alimentent le Market Recap
+    (commands/market_recap_request) — pour le cas où la tâche planifiée du
+    matin a échoué. Chaque script tourne en process séparé (comme depuis le
+    Planificateur de tâches), donc un script qui plante n'empêche pas les
+    autres de s'exécuter. Bloque la boucle principale le temps du
+    rafraîchissement (généralement moins d'une minute) : acceptable pour une
+    action manuelle ponctuelle, contrairement aux vérifications automatiques
+    qui tournent toutes les 10s."""
+    ref = doc.reference
+    failed = []
+    for script in MARKET_RECAP_SCRIPTS:
+        result = subprocess.run(
+            [sys.executable, script], capture_output=True, text=True, timeout=120,
+        )
+        if result.returncode != 0:
+            failed.append(script)
+            print(f"[MARKET_RECAP] {script} a échoué : {result.stderr[-500:]}")
+        else:
+            print(f"[MARKET_RECAP] {script} OK")
+
+    ref.update({"status": "done", "failed": failed, "completed_at": int(time.time())})
+    if failed:
+        notify("mymt5 — rafraîchissement partiel", f"{len(failed)}/9 scripts ont échoué : {', '.join(failed)}")
+    print(f"[MARKET_RECAP] terminé, {len(failed)} échec(s) sur {len(MARKET_RECAP_SCRIPTS)}")
+
+
 HANDLERS = {
     "status_request": _handle_status_request,
     "price_request": _handle_price_request,
@@ -311,6 +352,7 @@ HANDLERS = {
     "positions_request": _handle_positions_request,
     "trades_sync_request": handle_trades_sync_request,
     "set_order_request": _handle_set_order_request,
+    "market_recap_request": _handle_market_recap_request,
 }
 
 
