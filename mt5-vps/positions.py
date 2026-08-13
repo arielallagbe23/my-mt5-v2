@@ -202,6 +202,21 @@ def _candle_peak(pos, previous_bar):
     return float(previous_bar["high"]) if is_buy else float(previous_bar["low"])
 
 
+def _signed_progress(pos, price):
+    """Progression signée entrée -> TP à un prix donné : positive vers le
+    TP, négative vers la perte. Contrairement à un calcul en abs(), un prix
+    en perte ne peut jamais ressortir comme une progression positive — un
+    aller-retour à +75% puis clôture à -10% dans la même bougie ne doit pas
+    être lu comme "75% de progression"."""
+    entry = pos.price_open
+    tp = pos.tp
+    total_distance = abs(tp - entry)
+    if not total_distance:
+        return None
+    direction = 1 if pos.type == 0 else -1  # POSITION_TYPE_BUY == 0
+    return direction * (price - entry) / total_distance * 100
+
+
 PROGRESS_CHECK_INTERVAL_SECONDS = 15 * 60  # 15 minutes
 _last_progress_check = None
 
@@ -298,14 +313,20 @@ _sl_applied = {}
 
 def check_trailing_stop(db):
     """Déplace le SL par paliers (BE à 50%, 25% à 75%, 50% à 95%), en se
-    basant sur le PIC atteint par la bougie qui vient de se terminer — le
-    high pour un achat, le low pour une vente — pas le prix live en continu.
+    basant sur la CLÔTURE de la bougie qui vient de se terminer — pas son
+    pic (high/low), et pas le prix live en continu. Le pic seul est
+    trompeur : une bougie H4 peut toucher +75% en intra-bougie puis clôturer
+    à -10%, et un ancien calcul basé sur le pic aurait quand même déplacé le
+    SL comme si +75% avait tenu. Avec la clôture et une progression signée
+    (pas de valeur absolue), une clôture en perte ne déclenche jamais aucun
+    palier — la position est simplement laissée telle quelle, à réévaluer à
+    la bougie suivante.
 
     Ne travaille qu'UNE FOIS par nouvelle bougie H1/H4 (pas à chaque tour de
     boucle, ~10s) : on détecte qu'une nouvelle bougie vient d'apparaître,
     on attend un petit délai de sécurité (2s) après son ouverture pour être
-    sûr que la précédente est bien finalisée côté MT5, puis on lit son
-    pic. Comme le contrôle n'a lieu qu'une fois par bougie, un palier
+    sûr que la précédente est bien finalisée côté MT5, puis on lit sa
+    clôture. Comme le contrôle n'a lieu qu'une fois par bougie, un palier
     franchi est automatiquement appliqué "à la bougie suivante" par
     construction — plus besoin du mécanisme séparé "en attente" qu'il y
     avait avant.
@@ -348,13 +369,11 @@ def check_trailing_stop(db):
                 continue
 
             entry = pos.price_open
-            peak = _candle_peak(pos, previous_bar)
-
-            total_distance = abs(tp - entry)
-            if not total_distance:
+            close = float(previous_bar["close"])
+            progress = _signed_progress(pos, close)
+            if progress is None:
                 continue
 
-            progress = abs(peak - entry) / total_distance * 100
             applied = _sl_applied.get(ticket, -1)
 
             target_pct = None
@@ -375,7 +394,7 @@ def check_trailing_stop(db):
                 # pour ne pas renotifier à la prochaine bougie.
                 notify(
                     f"mymt5 — [DRY-RUN] SL aurait été déplacé ({label})",
-                    f"{pos.symbol} {side} (ticket {ticket}) : nouveau SL {new_sl:.3f} (pic bougie {peak:.3f})",
+                    f"{pos.symbol} {side} (ticket {ticket}) : nouveau SL {new_sl:.3f} (clôture bougie {close:.3f})",
                 )
                 print(f"[TRAILING] (dry-run) ticket {ticket} : SL aurait été déplacé à {label} ({new_sl:.3f})")
                 _sl_applied[ticket] = target_pct
@@ -397,7 +416,7 @@ def check_trailing_stop(db):
             _sl_applied[ticket] = target_pct
             notify(
                 f"mymt5 — SL déplacé ({label})",
-                f"{pos.symbol} {side} (ticket {ticket}) : nouveau SL {new_sl:.3f} (pic bougie {peak:.3f})",
+                f"{pos.symbol} {side} (ticket {ticket}) : nouveau SL {new_sl:.3f} (clôture bougie {close:.3f})",
             )
             print(f"[TRAILING] ticket {ticket} : SL déplacé à {label} ({new_sl:.3f})")
 
@@ -409,3 +428,58 @@ def check_trailing_stop(db):
         for ticket in list(_sl_applied):
             if ticket not in current_tickets:
                 del _sl_applied[ticket]
+
+
+HOURLY_UPDATE_INTERVAL_SECONDS = 60 * 60
+_last_hourly_update = None
+
+STAGE_LABELS = {-1: "aucun palier atteint", 0: "BE", 25: "25%", 50: "50%"}
+
+
+def check_hourly_update(db):
+    """Envoie un point toutes les heures pour chaque position suivie (H1/H4) :
+    niveau actuel (progression signée, basée sur la clôture de la dernière
+    bougie de son propre timeframe) et palier de SL en place. Une simple
+    minuterie, indépendante des bougies elles-mêmes — contrairement à
+    check_trailing_stop qui n'agit qu'à la clôture d'une bougie, ce point est
+    purement informatif et ne modifie jamais le SL."""
+    global _last_hourly_update
+    now_utc = datetime.now(timezone.utc)
+    if (
+        _last_hourly_update is not None
+        and (now_utc - _last_hourly_update).total_seconds() < HOURLY_UPDATE_INTERVAL_SECONDS
+    ):
+        return
+    _last_hourly_update = now_utc
+
+    m = ensure_mt5()
+    if m is None:
+        return
+
+    positions = m.positions_get(symbol=PRICE_SYMBOL) or ()
+    for pos in positions:
+        ticket = pos.ticket
+        if not pos.tp:
+            continue
+
+        timeframe = _resolve_timeframe(db, ticket, pos.comment)
+        if timeframe not in ELIGIBLE_TIMEFRAMES:
+            continue
+
+        previous_bar, _ = _candles_current_and_previous(m, pos.symbol, timeframe)
+        if previous_bar is None:
+            continue
+
+        close = float(previous_bar["close"])
+        progress = _signed_progress(pos, close)
+        if progress is None:
+            continue
+
+        side = POSITION_TYPE_NAMES.get(pos.type, str(pos.type))
+        stage_label = STAGE_LABELS.get(_sl_applied.get(ticket, -1), "aucun palier atteint")
+
+        notify(
+            f"mymt5 — point horaire (ticket {ticket})",
+            f"{pos.symbol} {side} : {progress:.0f}% du chemin vers le TP (clôture {close:.3f}), SL au palier {stage_label}",
+        )
+        print(f"[HOURLY] ticket {ticket} : {progress:.0f}%, palier {stage_label}")

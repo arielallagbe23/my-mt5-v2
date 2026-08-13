@@ -6,8 +6,9 @@ mt5_status.py — Point d'entrée du VPS. Toutes les POLL_INTERVAL secondes :
   - alerte ~10 min avant chaque clôture de bougie H1/H4 sur USDJPY
     (alerte_pre_cloture.py) ;
   - surveille les ordres différés et positions ouvertes : notifie un
-    déclenchement d'ordre, la progression vers le TP, et déplace le SL par
-    paliers (BE, 25%, 50%) — respecte DRY_RUN comme le reste (positions.py) ;
+    déclenchement d'ordre, la progression vers le TP, déplace le SL par
+    paliers (BE, 25%, 50%) — respecte DRY_RUN comme le reste — et envoie un
+    point horaire du niveau atteint par chaque position suivie (positions.py) ;
   - alimente l'historique des trades fermés (trades.py).
 
 Tout tourne côté VPS, en connexions sortantes uniquement (Firestore + appels
@@ -40,7 +41,13 @@ import time
 from alerte_pre_cloture import check_pre_close_alerts
 from config import POLL_INTERVAL, SA_PATH, VPS_ID
 from on_demand import check_all_requests
-from positions import check_order_fills, check_tp_progress, check_trailing_stop, check_untracked_positions
+from positions import (
+    check_hourly_update,
+    check_order_fills,
+    check_tp_progress,
+    check_trailing_stop,
+    check_untracked_positions,
+)
 from tasks import check_due_tasks
 from trades import check_closed_positions
 
@@ -63,6 +70,7 @@ def run():
             check_untracked_positions(db)
             check_tp_progress(db)
             check_trailing_stop(db)
+            check_hourly_update(db)
             check_closed_positions(db)
         except Exception as e:
             print(f"[LOOP] erreur : {e}")
