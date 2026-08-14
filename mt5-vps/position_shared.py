@@ -1,8 +1,8 @@
 """
 position_shared.py — Primitives partagées par les modules de surveillance
 des positions (order_fills.py, untracked_positions.py, tp_progress.py,
-trailing_stop.py, hourly_update.py) : résolution du timeframe éligible
-d'une position, lecture des bougies H1/H4, et calculs de progression
+trailing_stop.py) : résolution du timeframe éligible d'une position,
+lecture des bougies H1/H4, et calculs de progression
 entrée -> TP. Ce module n'agit jamais tout seul — il n'est appelé depuis
 mt5_status.py que via les modules qui, eux, l'utilisent.
 """

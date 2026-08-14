@@ -36,8 +36,7 @@ SAFETY_DELAY_SECONDS = 2  # attendre un peu après l'ouverture d'une nouvelle bo
 _last_processed_candle_time = {}
 
 # ticket -> target_pct déjà appliqué (le plus avancé) : évite de repasser
-# deux fois le même palier ou de reculer le SL. Lu directement par
-# hourly_update.py pour rapporter le palier en place.
+# deux fois le même palier ou de reculer le SL.
 _sl_applied = {}
 
 

@@ -6,11 +6,9 @@ mt5_status.py — Point d'entrée du VPS. Toutes les POLL_INTERVAL secondes :
   - alerte ~10 min avant chaque clôture de bougie H1/H4 sur USDJPY
     (alerte_pre_cloture.py) ;
   - surveille les ordres différés et positions ouvertes : notifie un
-    déclenchement d'ordre, la progression vers le TP, déplace le SL par
-    paliers (BE, 25%, 50%) — respecte DRY_RUN comme le reste — et envoie un
-    point horaire du niveau atteint par chaque position suivie
-    (order_fills.py, untracked_positions.py, tp_progress.py,
-    trailing_stop.py, hourly_update.py) ;
+    déclenchement d'ordre, la progression vers le TP, et déplace le SL par
+    paliers (BE, 25%, 50%) — respecte DRY_RUN comme le reste (order_fills.py,
+    untracked_positions.py, tp_progress.py, trailing_stop.py) ;
   - alimente l'historique des trades fermés (trades.py).
 
 Tout tourne côté VPS, en connexions sortantes uniquement (Firestore + appels
@@ -26,12 +24,11 @@ par fichier :
   scenarios.py              — logique de trading pure (taille de position, conditions d'entrée)
   tasks.py                  — scan + exécution des tâches dues (utilise mt5_client + scenarios)
   alerte_pre_cloture.py     — alerte ~10 min avant clôture H1/H4 sur USDJPY
-  position_shared.py        — primitives partagées par les 5 modules ci-dessous (timeframe, bougies, progression)
+  position_shared.py        — primitives partagées par les 4 modules ci-dessous (timeframe, bougies, progression)
   order_fills.py            — détecte un ordre différé qui se transforme en position
   untracked_positions.py    — détecte une position ouverte hors mymt5
   tp_progress.py            — notifie la progression vers le TP (seuils 50/75/95/100%, basé sur le pic)
   trailing_stop.py          — déplace le SL par paliers (basé sur la clôture, pas le pic)
-  hourly_update.py          — point horaire du niveau + palier de SL par position suivie
   trades.py                 — historique des trades fermés (import + alimentation automatique)
 
 Pré-requis (sur le VPS) :
@@ -48,7 +45,6 @@ import time
 
 from alerte_pre_cloture import check_pre_close_alerts
 from config import POLL_INTERVAL, SA_PATH, VPS_ID
-from hourly_update import check_hourly_update
 from on_demand import check_all_requests
 from order_fills import check_order_fills
 from tasks import check_due_tasks
@@ -76,7 +72,6 @@ def run():
             check_untracked_positions(db)
             check_tp_progress(db)
             check_trailing_stop(db)
-            check_hourly_update(db)
             check_closed_positions(db)
         except Exception as e:
             print(f"[LOOP] erreur : {e}")
