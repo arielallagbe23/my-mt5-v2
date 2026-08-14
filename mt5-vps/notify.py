@@ -2,7 +2,8 @@
 notify.py — Envoie une notification push via l'API Vercel (POST /api/notify).
 C'est la seule façon d'en envoyer : la clé VAPID privée n'existe que côté
 serveur. Partagé par tous les modules qui ont besoin de notifier (tasks.py,
-positions.py).
+order_fills.py, untracked_positions.py, tp_progress.py, trailing_stop.py,
+hourly_update.py).
 """
 
 import json

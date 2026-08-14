@@ -8,23 +8,31 @@ mt5_status.py — Point d'entrée du VPS. Toutes les POLL_INTERVAL secondes :
   - surveille les ordres différés et positions ouvertes : notifie un
     déclenchement d'ordre, la progression vers le TP, déplace le SL par
     paliers (BE, 25%, 50%) — respecte DRY_RUN comme le reste — et envoie un
-    point horaire du niveau atteint par chaque position suivie (positions.py) ;
+    point horaire du niveau atteint par chaque position suivie
+    (order_fills.py, untracked_positions.py, tp_progress.py,
+    trailing_stop.py, hourly_update.py) ;
   - alimente l'historique des trades fermés (trades.py).
 
 Tout tourne côté VPS, en connexions sortantes uniquement (Firestore + appels
 à l'API Vercel pour les notifications) — aucun port n'est jamais ouvert ici,
 le frontend ne se connecte jamais directement au VPS.
 
-Découpage du code (tout dans ce même dossier mt5-vps/) :
-  config.py      — constantes et paramètres (fichiers locaux / variables d'env)
-  mt5_client.py  — connexion MT5 avec reconnexion automatique
-  notify.py      — envoi de notifications push via l'API Vercel
-  on_demand.py   — réponses aux demandes ponctuelles (équité, prix, bougie, positions)
-  scenarios.py   — logique de trading pure (taille de position, conditions d'entrée)
-  tasks.py       — scan + exécution des tâches dues (utilise mt5_client + scenarios)
-  alerte_pre_cloture.py — alerte ~10 min avant clôture H1/H4 sur USDJPY
-  positions.py   — surveillance des déclenchements d'ordres et progression vers le TP
-  trades.py      — historique des trades fermés (import + alimentation automatique)
+Découpage du code (tout dans ce même dossier mt5-vps/), une responsabilité
+par fichier :
+  config.py                — constantes et paramètres (fichiers locaux / variables d'env)
+  mt5_client.py             — connexion MT5 avec reconnexion automatique
+  notify.py                 — envoi de notifications push via l'API Vercel
+  on_demand.py              — réponses aux demandes ponctuelles (équité, prix, bougie, positions)
+  scenarios.py              — logique de trading pure (taille de position, conditions d'entrée)
+  tasks.py                  — scan + exécution des tâches dues (utilise mt5_client + scenarios)
+  alerte_pre_cloture.py     — alerte ~10 min avant clôture H1/H4 sur USDJPY
+  position_shared.py        — primitives partagées par les 5 modules ci-dessous (timeframe, bougies, progression)
+  order_fills.py            — détecte un ordre différé qui se transforme en position
+  untracked_positions.py    — détecte une position ouverte hors mymt5
+  tp_progress.py            — notifie la progression vers le TP (seuils 50/75/95/100%, basé sur le pic)
+  trailing_stop.py          — déplace le SL par paliers (basé sur la clôture, pas le pic)
+  hourly_update.py          — point horaire du niveau + palier de SL par position suivie
+  trades.py                 — historique des trades fermés (import + alimentation automatique)
 
 Pré-requis (sur le VPS) :
   pip install -r requirements.txt
@@ -40,16 +48,14 @@ import time
 
 from alerte_pre_cloture import check_pre_close_alerts
 from config import POLL_INTERVAL, SA_PATH, VPS_ID
+from hourly_update import check_hourly_update
 from on_demand import check_all_requests
-from positions import (
-    check_hourly_update,
-    check_order_fills,
-    check_tp_progress,
-    check_trailing_stop,
-    check_untracked_positions,
-)
+from order_fills import check_order_fills
 from tasks import check_due_tasks
+from tp_progress import check_tp_progress
 from trades import check_closed_positions
+from trailing_stop import check_trailing_stop
+from untracked_positions import check_untracked_positions
 
 
 def run():

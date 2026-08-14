@@ -99,8 +99,9 @@ def handle_trades_sync_request(db, doc):
 
 
 # Ensemble en mémoire des tickets de positions ouvertes au tour précédent —
-# état dédié à ce fichier (indépendant de celui de positions.py), pour ne
-# pas dépendre de l'ordre d'exécution des fonctions dans la boucle.
+# état dédié à ce fichier (indépendant de ceux d'order_fills.py,
+# untracked_positions.py, tp_progress.py, trailing_stop.py), pour ne pas
+# dépendre de l'ordre d'exécution des fonctions dans la boucle.
 _last_open_position_ids = None
 
 
