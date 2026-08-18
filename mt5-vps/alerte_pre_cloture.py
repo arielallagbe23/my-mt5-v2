@@ -98,15 +98,7 @@ def check_timeframe(db, m, symbol, label, duration_seconds, broker_offset):
         })
         print(f"[OK][{label}] Alerte envoyée, clôture dans {minutes_left} min")
     else:
-        # DIAGNOSTIC temporaire : à retirer une fois le comportement confirmé
-        # en conditions réelles.
-        close_str = datetime.fromtimestamp(close_time_utc, tz=timezone.utc).strftime("%H:%M")
-        now_str = datetime.fromtimestamp(now_utc, tz=timezone.utc).strftime("%H:%M")
-        print(
-            f"[SKIP][{label}] fenêtre={in_window} déjà_alerté={already_alerted} "
-            f"clôture_UTC={close_str} maintenant_UTC={now_str} reste={seconds_to_close // 60}min "
-            f"décalage_broker={broker_offset / 3600:.1f}h"
-        )
+        print(f"[SKIP][{label}] fenêtre={in_window} déjà_alerté={already_alerted}")
 
 
 if __name__ == "__main__":
