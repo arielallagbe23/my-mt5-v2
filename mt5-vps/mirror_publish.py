@@ -4,6 +4,14 @@ sur le compte principal (toutes, quelle que soit leur origine — tâche ou
 manuelle) dans Firestore, pour que mirror_follower.py (compte suppléant,
 process séparé connecté à un deuxième terminal MT5) puisse les reproduire.
 
+Publie aussi le login live à chaque tour (vps_status/{VPS_ID}.login) — ce
+champ n'était sinon rafraîchi que sur demande ponctuelle de l'app
+(status_request), et pouvait donc rester périmé un moment après un
+changement de terminal/compte. mirror_follower.py en dépend pour retrouver
+account_size du compte principal (voir tasks.py._account_size pour le même
+problème côté tâches, réglé différemment là-bas via le login live de sa
+propre connexion MT5 — le suppléant, lui, n'a que Firestore).
+
 Seule responsabilité de ce module : publier l'état tel quel, à chaque tour
 de boucle. Aucune décision, aucun calcul de risque — ça, c'est le rôle du
 suppléant lui-même, sur SES propres paramètres.
@@ -11,7 +19,7 @@ suppléant lui-même, sur SES propres paramètres.
 
 import time
 
-from config import PRICE_SYMBOL
+from config import PRICE_SYMBOL, VPS_ID
 from mt5_client import ensure_mt5
 
 # Dernier ensemble de tickets publiés — pour supprimer de Firestore ceux qui
@@ -23,6 +31,12 @@ def publish_master_positions(db):
     m = ensure_mt5()
     if m is None:
         return
+
+    ai = m.account_info()
+    if ai is not None:
+        db.collection("vps_status").document(VPS_ID).set(
+            {"login": ai.login, "online": True, "ts": int(time.time())}, merge=True
+        )
 
     positions = m.positions_get(symbol=PRICE_SYMBOL) or ()
     current_tickets = set()
