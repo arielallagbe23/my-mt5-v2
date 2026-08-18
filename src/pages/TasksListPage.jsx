@@ -60,6 +60,7 @@ export function TasksListPage({ onEditTask }) {
   const [loading, setLoading] = useState(true)
   const [deletingId, setDeletingId] = useState(null)
   const [historyPage, setHistoryPage] = useState(0)
+  const [expandedId, setExpandedId] = useState(null)
 
   useEffect(() => {
     loadTasks()
@@ -159,50 +160,45 @@ export function TasksListPage({ onEditTask }) {
         <div className="mt-5 flex flex-col gap-2">
           <p className="text-xs font-bold tracking-[0.14em] text-slate-500 uppercase">Historique</p>
 
-          <div className="overflow-x-auto rounded-2xl border border-white/10 bg-white/5">
-            <table className="w-full text-left text-xs">
-              <thead>
-                <tr className="border-b border-white/10 text-slate-500">
-                  <th className="px-3 py-2 font-semibold">Date</th>
-                  <th className="px-3 py-2 font-semibold">Type</th>
-                  <th className="px-3 py-2 font-semibold">Statut</th>
-                  <th className="px-3 py-2 font-semibold">Détail</th>
-                  <th className="px-3 py-2 font-semibold"></th>
-                </tr>
-              </thead>
-              <tbody>
-                {historyPageItems.map((task) => (
-                  <tr key={task.id} className="border-b border-white/5 align-top last:border-0">
-                    <td className="px-3 py-2 whitespace-nowrap text-slate-400">
-                      {formatDateTime(task.executionTime)}
+          <ul className="overflow-hidden rounded-2xl border border-white/10 bg-white/5">
+            {historyPageItems.map((task, index) => {
+              const isOpen = expandedId === task.id
+              return (
+                <li key={task.id} className={index > 0 ? 'border-t border-white/5' : ''}>
+                  <button
+                    type="button"
+                    onClick={() => setExpandedId(isOpen ? null : task.id)}
+                    className="flex min-h-11 w-full items-center justify-between gap-2 px-3 py-2 text-left text-xs"
+                  >
+                    <span className="text-slate-400">{formatDateTime(task.executionTime)}</span>
+                    <span className={`rounded-full px-2 py-0.5 font-semibold ${scenarioBadgeClass(task.scenario)}`}>
+                      {scenarioLabel(task.scenario)}
+                    </span>
+                  </button>
+                  {isOpen && (
+                    <div className="border-t border-white/5 px-3 py-2.5 text-xs">
+                      <p className="text-slate-500">
+                        Statut :{' '}
+                        <span className="font-semibold text-white">{STATUS_LABELS[task.status] ?? task.status}</span>
+                      </p>
                       {task.updatedAt && (
-                        <p className="text-slate-600">{formatExecutedAt(task.updatedAt)}</p>
+                        <p className="mt-0.5 text-slate-600">Évaluée le {formatExecutedAt(task.updatedAt)}</p>
                       )}
-                    </td>
-                    <td className="px-3 py-2 whitespace-nowrap">
-                      <span className={`rounded-full px-2 py-0.5 font-semibold ${scenarioBadgeClass(task.scenario)}`}>
-                        {scenarioLabel(task.scenario)}
-                      </span>
-                    </td>
-                    <td className="px-3 py-2 whitespace-nowrap text-slate-400">
-                      {STATUS_LABELS[task.status] ?? task.status}
-                    </td>
-                    <td className="px-3 py-2 text-slate-400">{historyDetail(task)}</td>
-                    <td className="px-3 py-2 whitespace-nowrap">
+                      <p className="mt-1.5 text-slate-400">{historyDetail(task)}</p>
                       <button
                         type="button"
                         onClick={() => handleDelete(task)}
                         disabled={deletingId === task.id}
-                        className="font-semibold text-red-300 disabled:opacity-60"
+                        className="mt-2 font-semibold text-red-300 disabled:opacity-60"
                       >
-                        {deletingId === task.id ? '...' : 'Supprimer'}
+                        {deletingId === task.id ? 'Suppression...' : 'Supprimer'}
                       </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                    </div>
+                  )}
+                </li>
+              )
+            })}
+          </ul>
 
           {pageCount > 1 && (
             <div className="flex items-center justify-between text-xs text-slate-400">
