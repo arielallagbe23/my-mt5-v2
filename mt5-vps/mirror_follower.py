@@ -60,6 +60,14 @@ MAGIC = 234100  # différent du MAGIC du compte principal (234000)
 # survivre à un redémarrage de ce process.
 _mirrored_tickets = {}
 
+# Tickets déjà ouverts côté compte principal au tout premier tour après
+# (re)démarrage — jamais miroités, même s'ils n'étaient pas encore dans
+# _mirrored_tickets : pas de mirroring rétroactif d'une position qui a déjà
+# bougé avant que le suivi ne commence. None tant que ce premier tour n'a
+# pas eu lieu ; recalculé à chaque redémarrage (par design — un redémarrage
+# redéfinit "déjà ouvert" au moment présent).
+_pre_existing_tickets = None
+
 
 def _account_size(db, vps_id):
     """Même logique que _account_size dans tasks.py, mais paramétrée par
@@ -204,14 +212,24 @@ def sync_mirror(db):
         data = doc.to_dict()
         master_positions[str(data["ticket"])] = data
 
+    global _pre_existing_tickets
+    if _pre_existing_tickets is None:
+        _pre_existing_tickets = set(master_positions) - set(_mirrored_tickets)
+        if _pre_existing_tickets:
+            print(
+                f"[MIRROR] {len(_pre_existing_tickets)} position(s) déjà ouverte(s) au démarrage, "
+                f"ignorée(s) (pas de mirroring rétroactif) : {', '.join(sorted(_pre_existing_tickets))}"
+            )
+
     follower_positions = {p.ticket: p for p in (m.positions_get(symbol=PRICE_SYMBOL) or ())}
 
     master_account_size = _account_size(db, MASTER_VPS_ID)
     follower_account_size = _account_size(db, FOLLOWER_ID)
 
-    # 1. Ouvrir les positions du compte principal pas encore miroitées.
+    # 1. Ouvrir les positions du compte principal pas encore miroitées (ni
+    # déjà ouvertes avant le démarrage de ce process — voir _pre_existing_tickets).
     for master_ticket, master_pos in master_positions.items():
-        if master_ticket in _mirrored_tickets:
+        if master_ticket in _mirrored_tickets or master_ticket in _pre_existing_tickets:
             continue
         lot = compute_follower_lot(master_pos["volume"], master_account_size, follower_account_size)
         if lot is None:
