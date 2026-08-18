@@ -9,7 +9,9 @@ mt5_status.py — Point d'entrée du VPS. Toutes les POLL_INTERVAL secondes :
     déclenchement d'ordre, la progression vers le TP, et déplace le SL par
     paliers (BE, 25%, 50%) — respecte DRY_RUN comme le reste (order_fills.py,
     untracked_positions.py, tp_progress.py, trailing_stop.py) ;
-  - alimente l'historique des trades fermés (trades.py).
+  - alimente l'historique des trades fermés (trades.py) ;
+  - publie l'état des positions ouvertes pour le compte suppléant
+    (mirror_publish.py — voir mirror_follower.py, process séparé).
 
 Tout tourne côté VPS, en connexions sortantes uniquement (Firestore + appels
 à l'API Vercel pour les notifications) — aucun port n'est jamais ouvert ici,
@@ -30,6 +32,7 @@ par fichier :
   tp_progress.py            — notifie la progression vers le TP (seuils 50/75/95/100%, basé sur le pic)
   trailing_stop.py          — déplace le SL par paliers (basé sur la clôture, pas le pic)
   trades.py                 — historique des trades fermés (import + alimentation automatique)
+  mirror_publish.py         — publie les positions pour le compte suppléant (voir mirror_follower.py)
 
 Pré-requis (sur le VPS) :
   pip install -r requirements.txt
@@ -45,6 +48,7 @@ import time
 
 from alerte_pre_cloture import check_pre_close_alerts
 from config import POLL_INTERVAL, SA_PATH, VPS_ID
+from mirror_publish import publish_master_positions
 from on_demand import check_all_requests
 from order_fills import check_order_fills
 from tasks import check_due_tasks
@@ -73,6 +77,7 @@ def run():
             check_tp_progress(db)
             check_trailing_stop(db)
             check_closed_positions(db)
+            publish_master_positions(db)
         except Exception as e:
             print(f"[LOOP] erreur : {e}")
         time.sleep(POLL_INTERVAL)

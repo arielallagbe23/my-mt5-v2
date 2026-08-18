@@ -4,5 +4,9 @@ cron_secret.txt
 fred_api_key.txt
 serpapi_key.txt
 anthropic_key.txt
+follower_id.txt
+follower_terminal_path.txt
+follower_dry_run.txt
+master_vps_id.txt
 __pycache__/
 *.pyc
