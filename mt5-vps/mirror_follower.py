@@ -1,12 +1,17 @@
 #!/usr/bin/env python3
 """
 mirror_follower.py — Process SÉPARÉ pour un compte suppléant : reproduit en
-quasi temps réel les positions USDJPY publiées par mirror_publish.py (compte
-principal), avec un lot recalculé au prorata de l'account_size de CE
-compte-ci (voir compute_follower_lot) — jamais un recalcul indépendant du
-risque, un simple prorata sur la taille de compte, relu à chaque tour (pas
-mis en cache) pour s'adapter automatiquement si un palier change (challenge
-validé, scaling plan...).
+quasi temps réel les positions ET les ordres différés USDJPY publiés par
+mirror_publish.py (compte principal), avec un lot recalculé au prorata de
+l'account_size de CE compte-ci (voir compute_follower_lot) — jamais un
+recalcul indépendant du risque, un simple prorata sur la taille de compte,
+relu à chaque tour (pas mis en cache) pour s'adapter automatiquement si un
+palier change (challenge validé, scaling plan...).
+
+Un ordre différé est répliqué dès sa pose (pas seulement une fois
+déclenché) : en mode Hedging, l'ordre garde le même ticket en devenant une
+position, donc le même suivi (_mirrored_tickets) gère les deux étapes sans
+distinction ni double mirroring.
 
 Aucune décision de trading ici : ce compte ne fait qu'imiter le compte
 principal (ouverture, ajustement SL/TP, clôture), jamais évaluer de
@@ -173,6 +178,57 @@ def _update_mirror_sltp(m, follower_ticket, master_pos):
         print(f"[MIRROR] SL/TP du miroir {follower_ticket} aligné sur la source")
 
 
+def _open_pending_mirror(m, master_ticket, master_order, lot):
+    """Pose le même ordre différé (type, prix, SL/TP) côté suppléant, lot
+    proraté. En mode Hedging, le ticket de cet ordre deviendra le ticket de
+    la position une fois déclenché — donc _mirrored_tickets sert aux deux
+    sans distinction, pas besoin d'un suivi séparé pour la transition."""
+    symbol = master_order["symbol"]
+
+    if DRY_RUN:
+        print(
+            f"[MIRROR] (dry-run) poserait un ordre différé {symbol} type={master_order['order_type']} "
+            f"lot={lot} @ {master_order['entry']} (source {master_ticket})"
+        )
+        _mirrored_tickets[str(master_ticket)] = -1  # placeholder — pas de vrai ticket en dry-run
+        return
+
+    res = m.order_send({
+        "action": m.TRADE_ACTION_PENDING,
+        "symbol": symbol,
+        "volume": lot,
+        "type": master_order["order_type"],
+        "price": master_order["entry"],
+        "sl": master_order["sl"],
+        "tp": master_order["tp"],
+        "deviation": 20,
+        "magic": MAGIC,
+        "comment": f"mirror-{master_ticket}"[:28],
+        "type_time": m.ORDER_TIME_GTC,
+        "type_filling": m.ORDER_FILLING_RETURN,  # même convention que tasks.py pour les ordres différés
+    })
+
+    if res is None or res.retcode != m.TRADE_RETCODE_DONE:
+        error = str(m.last_error()) if res is None else res.comment
+        print(f"[MIRROR] échec pose ordre différé de {master_ticket} : {error}")
+        return
+
+    _mirrored_tickets[str(master_ticket)] = res.order
+    print(
+        f"[MIRROR] ordre différé posé : {symbol} type={master_order['order_type']} lot={lot} "
+        f"@ {master_order['entry']} ticket={res.order} (source {master_ticket})"
+    )
+
+
+def _cancel_mirror_order(m, follower_ticket):
+    res = m.order_send({"action": m.TRADE_ACTION_REMOVE, "order": follower_ticket})
+    if res is None or res.retcode != m.TRADE_RETCODE_DONE:
+        error = str(m.last_error()) if res is None else res.comment
+        print(f"[MIRROR] échec annulation ordre différé {follower_ticket} : {error}")
+    else:
+        print(f"[MIRROR] ordre différé {follower_ticket} annulé")
+
+
 def _close_mirror(m, follower_pos):
     is_buy = follower_pos.type == 0
     tick = m.symbol_info_tick(follower_pos.symbol)
@@ -207,26 +263,26 @@ def sync_mirror(db):
 
     _publish_own_status(db, m)
 
-    master_positions = {}
-    for doc in db.collection("mirror_positions").stream():
-        data = doc.to_dict()
-        master_positions[str(data["ticket"])] = data
+    master_positions = {str(d.to_dict()["ticket"]): d.to_dict() for d in db.collection("mirror_positions").stream()}
+    master_orders = {str(d.to_dict()["ticket"]): d.to_dict() for d in db.collection("mirror_orders").stream()}
 
     global _pre_existing_tickets
     if _pre_existing_tickets is None:
-        _pre_existing_tickets = set(master_positions) - set(_mirrored_tickets)
+        seen = set(master_positions) | set(master_orders)
+        _pre_existing_tickets = seen - set(_mirrored_tickets)
         if _pre_existing_tickets:
             print(
-                f"[MIRROR] {len(_pre_existing_tickets)} position(s) déjà ouverte(s) au démarrage, "
-                f"ignorée(s) (pas de mirroring rétroactif) : {', '.join(sorted(_pre_existing_tickets))}"
+                f"[MIRROR] {len(_pre_existing_tickets)} position/ordre déjà ouvert(e) au démarrage, "
+                f"ignoré(e)(s) (pas de mirroring rétroactif) : {', '.join(sorted(_pre_existing_tickets))}"
             )
 
     follower_positions = {p.ticket: p for p in (m.positions_get(symbol=PRICE_SYMBOL) or ())}
+    follower_orders = {o.ticket: o for o in (m.orders_get(symbol=PRICE_SYMBOL) or ())}
 
     master_account_size = _account_size(db, MASTER_VPS_ID)
     follower_account_size = _account_size(db, FOLLOWER_ID)
 
-    # 1. Ouvrir les positions du compte principal pas encore miroitées (ni
+    # 1a. Ouvrir les positions du compte principal pas encore miroitées (ni
     # déjà ouvertes avant le démarrage de ce process — voir _pre_existing_tickets).
     for master_ticket, master_pos in master_positions.items():
         if master_ticket in _mirrored_tickets or master_ticket in _pre_existing_tickets:
@@ -237,29 +293,50 @@ def sync_mirror(db):
             continue
         _open_mirror(m, master_ticket, master_pos, lot)
 
-    # 2. Aligner le SL/TP des positions déjà miroitées, seulement si ça a changé.
+    # 1b. Poser les ordres différés du compte principal pas encore miroités.
+    for master_ticket, master_order in master_orders.items():
+        if master_ticket in _mirrored_tickets or master_ticket in _pre_existing_tickets:
+            continue
+        lot = compute_follower_lot(master_order["volume"], master_account_size, follower_account_size)
+        if lot is None:
+            print(f"[MIRROR] account_size manquant (principal ou suppléant), ordre différé {master_ticket} ignoré pour l'instant")
+            continue
+        _open_pending_mirror(m, master_ticket, master_order, lot)
+
+    # 2. Aligner le SL/TP des positions déjà miroitées, seulement si ça a
+    # changé. Les ordres différés ne sont pas modifiés en place ici (juste
+    # posés/annulés) — un changement de prix sur un ordre différé côté
+    # compte principal n'est pas propagé, seulement son SL/TP une fois
+    # devenu une position.
     for master_ticket, follower_ticket in list(_mirrored_tickets.items()):
         if follower_ticket == -1:
             continue  # placeholder dry-run
         master_pos = master_positions.get(master_ticket)
         if master_pos is None:
-            continue  # traité au point 3 (fermeture)
+            continue  # pas (encore) une position — ordre différé, ou disparue (point 3)
         follower_pos = follower_positions.get(follower_ticket)
         if follower_pos is None:
             continue  # déjà fermé côté suppléant (SL/TP touché, ou manuellement)
         if follower_pos.sl != master_pos["sl"] or follower_pos.tp != master_pos["tp"]:
             _update_mirror_sltp(m, follower_ticket, master_pos)
 
-    # 3. Fermer les miroirs dont la position source a disparu.
+    # 3. Fermer les miroirs (positions) ou annuler les miroirs (ordres
+    # différés) dont la source a disparu. En mode Hedging, un ordre différé
+    # déclenché garde le même ticket en devenant une position — donc "encore
+    # ouvert" veut dire présent dans master_positions OU master_orders,
+    # jamais les deux à vide en même temps sauf disparition réelle.
     for master_ticket in list(_mirrored_tickets):
-        if master_ticket in master_positions:
+        if master_ticket in master_positions or master_ticket in master_orders:
             continue
+
         follower_ticket = _mirrored_tickets[master_ticket]
         if follower_ticket != -1:
             follower_pos = follower_positions.get(follower_ticket)
             if follower_pos is not None:
                 _close_mirror(m, follower_pos)
-        print(f"[MIRROR] position source {master_ticket} fermée, miroir retiré du suivi")
+            elif follower_ticket in follower_orders:
+                _cancel_mirror_order(m, follower_ticket)
+        print(f"[MIRROR] position/ordre source {master_ticket} disparu(e), miroir retiré du suivi")
         del _mirrored_tickets[master_ticket]
 
     _save_state(db)

@@ -10,8 +10,8 @@ mt5_status.py — Point d'entrée du VPS. Toutes les POLL_INTERVAL secondes :
     paliers (BE, 25%, 50%) — respecte DRY_RUN comme le reste (order_fills.py,
     untracked_positions.py, tp_progress.py, trailing_stop.py) ;
   - alimente l'historique des trades fermés (trades.py) ;
-  - publie l'état des positions ouvertes pour le compte suppléant
-    (mirror_publish.py — voir mirror_follower.py, process séparé).
+  - publie l'état des positions ouvertes et des ordres différés pour le
+    compte suppléant (mirror_publish.py — voir mirror_follower.py, process séparé).
 
 Tout tourne côté VPS, en connexions sortantes uniquement (Firestore + appels
 à l'API Vercel pour les notifications) — aucun port n'est jamais ouvert ici,
@@ -49,7 +49,7 @@ import traceback
 
 from alerte_pre_cloture import check_pre_close_alerts
 from config import MASTER_TERMINAL_PATH, POLL_INTERVAL, SA_PATH, VPS_ID
-from mirror_publish import publish_master_positions
+from mirror_publish import publish_master_orders, publish_master_positions
 from mt5_client import set_default_path
 from on_demand import check_all_requests
 from order_fills import check_order_fills
@@ -85,6 +85,7 @@ def run():
             check_trailing_stop(db)
             check_closed_positions(db)
             publish_master_positions(db)
+            publish_master_orders(db)
         except Exception:
             print("[LOOP] erreur :")
             traceback.print_exc()

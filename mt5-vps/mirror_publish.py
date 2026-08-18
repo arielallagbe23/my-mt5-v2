@@ -1,8 +1,10 @@
 """
-mirror_publish.py — Publie en continu l'état des positions USDJPY ouvertes
-sur le compte principal (toutes, quelle que soit leur origine — tâche ou
-manuelle) dans Firestore, pour que mirror_follower.py (compte suppléant,
-process séparé connecté à un deuxième terminal MT5) puisse les reproduire.
+mirror_publish.py — Publie en continu l'état des positions ouvertes ET des
+ordres différés (pas encore déclenchés) USDJPY sur le compte principal
+(tous, quelle que soit leur origine — tâche ou manuelle) dans Firestore,
+pour que mirror_follower.py (compte suppléant, process séparé connecté à
+un deuxième terminal MT5) puisse les reproduire dès leur pose, pas
+seulement une fois déclenchés.
 
 Publie aussi le login live à chaque tour (vps_status/{VPS_ID}.login) — ce
 champ n'était sinon rafraîchi que sur demande ponctuelle de l'app
@@ -23,8 +25,9 @@ from config import PRICE_SYMBOL, VPS_ID
 from mt5_client import ensure_mt5
 
 # Dernier ensemble de tickets publiés — pour supprimer de Firestore ceux qui
-# ont fermé depuis (le suppléant s'en sert pour détecter une clôture).
-_last_published_tickets = None
+# ont fermé/disparu depuis (le suppléant s'en sert pour détecter ça).
+_last_published_position_tickets = None
+_last_published_order_tickets = None
 
 
 def publish_master_positions(db):
@@ -56,10 +59,47 @@ def publish_master_positions(db):
             "updated_at": int(time.time()),
         })
 
-    global _last_published_tickets
-    if _last_published_tickets is not None:
-        closed_tickets = _last_published_tickets - current_tickets
+    global _last_published_position_tickets
+    if _last_published_position_tickets is not None:
+        closed_tickets = _last_published_position_tickets - current_tickets
         for ticket in closed_tickets:
             db.collection("mirror_positions").document(str(ticket)).delete()
 
-    _last_published_tickets = current_tickets
+    _last_published_position_tickets = current_tickets
+
+
+def publish_master_orders(db):
+    """Ordres différés (Buy/Sell Limit posés par tasks.py ou à la main) pas
+    encore déclenchés — collection séparée de mirror_positions, même si en
+    mode Hedging le ticket d'ordre devient le ticket de position une fois
+    déclenché (mirror_follower.py s'appuie là-dessus pour ne jamais
+    miroiter deux fois la même chose)."""
+    m = ensure_mt5()
+    if m is None:
+        return
+
+    orders = m.orders_get(symbol=PRICE_SYMBOL) or ()
+    current_tickets = set()
+
+    for order in orders:
+        ticket = order.ticket
+        current_tickets.add(ticket)
+        db.collection("mirror_orders").document(str(ticket)).set({
+            "ticket": ticket,
+            "symbol": order.symbol,
+            "order_type": order.type,  # constante MT5 brute (BUY_LIMIT, SELL_LIMIT...), transmise telle quelle
+            "entry": order.price_open,
+            "sl": order.sl,
+            "tp": order.tp,
+            "volume": order.volume_current,
+            "comment": order.comment,
+            "updated_at": int(time.time()),
+        })
+
+    global _last_published_order_tickets
+    if _last_published_order_tickets is not None:
+        closed_tickets = _last_published_order_tickets - current_tickets
+        for ticket in closed_tickets:
+            db.collection("mirror_orders").document(str(ticket)).delete()
+
+    _last_published_order_tickets = current_tickets
