@@ -27,11 +27,31 @@ const STATUS_LABELS = {
 // par GET /api/tasks ; il n'a pas de task.result, seulement task.reason.
 const EXECUTED_STATUSES = new Set(['dry_run_done', 'done', 'not_executed'])
 
-// Les tâches à venir (brouillon/en attente) restent en haut ; l'historique
-// (déjà évalué) descend en bas — tri stable, donc l'ordre par executionTime
-// déjà renvoyé par l'API est conservé à l'intérieur de chaque groupe.
-function sortTasks(tasks) {
-  return [...tasks].sort((a, b) => Number(EXECUTED_STATUSES.has(a.status)) - Number(EXECUTED_STATUSES.has(b.status)))
+const HISTORY_PAGE_SIZE = 10
+
+function scenarioLabel(scenario) {
+  return scenario === 'sell' ? 'Vendre' : scenario === 'buy' ? 'Acheter' : 'Brouillon'
+}
+
+function scenarioBadgeClass(scenario) {
+  return scenario === 'sell'
+    ? 'bg-red-500/15 text-red-300'
+    : scenario === 'buy'
+      ? 'bg-blue-500/15 text-blue-300'
+      : 'bg-white/10 text-slate-300'
+}
+
+// Résumé sur une ligne pour la colonne "Détail" du tableau d'historique —
+// la version carte (encore utilisée pour les tâches en attente) affiche ça
+// en grille, mais un tableau a besoin de texte compact par ligne.
+function historyDetail(task) {
+  if (task.status === 'not_executed') return task.reason ?? '—'
+  if (task.result?.error) return task.result.error
+  if (task.result) {
+    const ticket = task.result.ticket ? ` (ticket ${task.result.ticket})` : ''
+    return `Entrée ${task.result.entry} · Lot ${task.result.lot} · SL ${task.result.sl} · TP ${task.result.tp}${ticket}`
+  }
+  return '—'
 }
 
 export function TasksListPage({ onEditTask }) {
@@ -39,6 +59,7 @@ export function TasksListPage({ onEditTask }) {
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(true)
   const [deletingId, setDeletingId] = useState(null)
+  const [historyPage, setHistoryPage] = useState(0)
 
   useEffect(() => {
     loadTasks()
@@ -48,7 +69,7 @@ export function TasksListPage({ onEditTask }) {
     setLoading(true)
     api
       .listTasks()
-      .then((data) => setTasks(sortTasks(data)))
+      .then(setTasks)
       .catch(() => setError('Impossible de charger les tâches'))
       .finally(() => setLoading(false))
   }
@@ -65,6 +86,13 @@ export function TasksListPage({ onEditTask }) {
     }
   }
 
+  const pendingTasks = tasks?.filter((t) => !EXECUTED_STATUSES.has(t.status)) ?? []
+  const historyTasks = tasks?.filter((t) => EXECUTED_STATUSES.has(t.status)) ?? []
+
+  const pageCount = Math.max(1, Math.ceil(historyTasks.length / HISTORY_PAGE_SIZE))
+  const safePage = Math.min(historyPage, pageCount - 1)
+  const historyPageItems = historyTasks.slice(safePage * HISTORY_PAGE_SIZE, (safePage + 1) * HISTORY_PAGE_SIZE)
+
   return (
     <div className={PAGE}>
       <h1 className={PAGE_TITLE}>Liste des tâches</h1>
@@ -75,64 +103,17 @@ export function TasksListPage({ onEditTask }) {
         <p className="text-sm text-slate-400">Aucune tâche enregistrée pour le moment.</p>
       )}
 
-      <ul className="flex flex-col gap-2">
-        {tasks?.map((task) => (
-          <li key={task.id} className="rounded-2xl border border-white/10 bg-white/5 p-3">
-            <div className="flex items-center justify-between gap-2">
-              <span
-                className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
-                  task.scenario === 'sell'
-                    ? 'bg-red-500/15 text-red-300'
-                    : task.scenario === 'buy'
-                      ? 'bg-blue-500/15 text-blue-300'
-                      : 'bg-white/10 text-slate-300'
-                }`}
-              >
-                {task.scenario === 'sell' ? 'Vendre' : task.scenario === 'buy' ? 'Acheter' : 'Brouillon'}
-              </span>
-              <span className="text-xs text-slate-400">{formatDateTime(task.executionTime)}</span>
-            </div>
+      {!loading && !error && pendingTasks.length > 0 && (
+        <ul className="flex flex-col gap-2">
+          {pendingTasks.map((task) => (
+            <li key={task.id} className="rounded-2xl border border-white/10 bg-white/5 p-3">
+              <div className="flex items-center justify-between gap-2">
+                <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${scenarioBadgeClass(task.scenario)}`}>
+                  {scenarioLabel(task.scenario)}
+                </span>
+                <span className="text-xs text-slate-400">{formatDateTime(task.executionTime)}</span>
+              </div>
 
-            {task.status === 'not_executed' ? (
-              <div className="mt-2 rounded-xl border border-white/10 bg-black/20 p-2 text-xs">
-                <p className="font-semibold text-amber-400">Non exécutée</p>
-                <p className="mt-1 text-slate-400">{task.reason}</p>
-              </div>
-            ) : EXECUTED_STATUSES.has(task.status) && task.result ? (
-              <div className="mt-2 rounded-xl border border-white/10 bg-black/20 p-2 text-xs">
-                <p className={`font-semibold ${task.result.error ? 'text-red-400' : 'text-blue-400'}`}>
-                  {task.result.error
-                    ? "Échec de l'ordre"
-                    : task.status === 'dry_run_done'
-                      ? 'Condition respectée (simulation)'
-                      : 'Condition respectée — ordre pris'}
-                </p>
-                <p className="mt-0.5 text-slate-500">à {formatExecutedAt(task.updatedAt)}</p>
-                {task.result.error ? (
-                  <p className="mt-1 text-slate-400">{task.result.error}</p>
-                ) : (
-                  <div className="mt-1.5 grid grid-cols-2 gap-x-4 gap-y-1 text-slate-400">
-                    <span>
-                      Entrée : <span className="font-semibold text-white">{task.result.entry}</span>
-                    </span>
-                    <span>
-                      Lot : <span className="font-semibold text-white">{task.result.lot}</span>
-                    </span>
-                    <span>
-                      SL : <span className="font-semibold text-white">{task.result.sl}</span>
-                    </span>
-                    <span>
-                      TP : <span className="font-semibold text-white">{task.result.tp}</span>
-                    </span>
-                    {task.result.ticket && (
-                      <span className="col-span-2">
-                        Ticket MT5 : <span className="font-semibold text-white">{task.result.ticket}</span>
-                      </span>
-                    )}
-                  </div>
-                )}
-              </div>
-            ) : (
               <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-slate-400">
                 <span>
                   Timeframe : <span className="font-semibold text-white">{task.timeframe ?? '—'}</span>
@@ -147,14 +128,12 @@ export function TasksListPage({ onEditTask }) {
                   Support : <span className="font-semibold text-white">{task.supportPrice ?? '—'}</span>
                 </span>
               </div>
-            )}
 
-            <p className="mt-2 text-xs text-slate-500">
-              Statut : <span className="font-semibold text-white">{STATUS_LABELS[task.status] ?? task.status}</span>
-            </p>
+              <p className="mt-2 text-xs text-slate-500">
+                Statut : <span className="font-semibold text-white">{STATUS_LABELS[task.status] ?? task.status}</span>
+              </p>
 
-            <div className="mt-3 flex gap-2">
-              {(task.status === 'draft' || task.status === 'pending') && (
+              <div className="mt-3 flex gap-2">
                 <button
                   type="button"
                   onClick={() => onEditTask?.(task.id)}
@@ -162,19 +141,94 @@ export function TasksListPage({ onEditTask }) {
                 >
                   {task.status === 'draft' ? 'Continuer' : 'Modifier'}
                 </button>
-              )}
+                <button
+                  type="button"
+                  onClick={() => handleDelete(task)}
+                  disabled={deletingId === task.id}
+                  className="min-h-9 flex-1 rounded-xl bg-red-500/15 text-sm font-semibold text-red-300 disabled:opacity-60"
+                >
+                  {deletingId === task.id ? 'Suppression...' : 'Supprimer'}
+                </button>
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {!loading && !error && historyTasks.length > 0 && (
+        <div className="mt-5 flex flex-col gap-2">
+          <p className="text-xs font-bold tracking-[0.14em] text-slate-500 uppercase">Historique</p>
+
+          <div className="overflow-x-auto rounded-2xl border border-white/10 bg-white/5">
+            <table className="w-full text-left text-xs">
+              <thead>
+                <tr className="border-b border-white/10 text-slate-500">
+                  <th className="px-3 py-2 font-semibold">Date</th>
+                  <th className="px-3 py-2 font-semibold">Type</th>
+                  <th className="px-3 py-2 font-semibold">Statut</th>
+                  <th className="px-3 py-2 font-semibold">Détail</th>
+                  <th className="px-3 py-2 font-semibold"></th>
+                </tr>
+              </thead>
+              <tbody>
+                {historyPageItems.map((task) => (
+                  <tr key={task.id} className="border-b border-white/5 align-top last:border-0">
+                    <td className="px-3 py-2 whitespace-nowrap text-slate-400">
+                      {formatDateTime(task.executionTime)}
+                      {task.updatedAt && (
+                        <p className="text-slate-600">{formatExecutedAt(task.updatedAt)}</p>
+                      )}
+                    </td>
+                    <td className="px-3 py-2 whitespace-nowrap">
+                      <span className={`rounded-full px-2 py-0.5 font-semibold ${scenarioBadgeClass(task.scenario)}`}>
+                        {scenarioLabel(task.scenario)}
+                      </span>
+                    </td>
+                    <td className="px-3 py-2 whitespace-nowrap text-slate-400">
+                      {STATUS_LABELS[task.status] ?? task.status}
+                    </td>
+                    <td className="px-3 py-2 text-slate-400">{historyDetail(task)}</td>
+                    <td className="px-3 py-2 whitespace-nowrap">
+                      <button
+                        type="button"
+                        onClick={() => handleDelete(task)}
+                        disabled={deletingId === task.id}
+                        className="font-semibold text-red-300 disabled:opacity-60"
+                      >
+                        {deletingId === task.id ? '...' : 'Supprimer'}
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {pageCount > 1 && (
+            <div className="flex items-center justify-between text-xs text-slate-400">
               <button
                 type="button"
-                onClick={() => handleDelete(task)}
-                disabled={deletingId === task.id}
-                className="min-h-9 flex-1 rounded-xl bg-red-500/15 text-sm font-semibold text-red-300 disabled:opacity-60"
+                onClick={() => setHistoryPage((p) => Math.max(0, p - 1))}
+                disabled={safePage === 0}
+                className="min-h-8 rounded-full bg-white/10 px-3 font-semibold disabled:opacity-40"
               >
-                {deletingId === task.id ? 'Suppression...' : 'Supprimer'}
+                Précédent
+              </button>
+              <span>
+                Page {safePage + 1} / {pageCount}
+              </span>
+              <button
+                type="button"
+                onClick={() => setHistoryPage((p) => Math.min(pageCount - 1, p + 1))}
+                disabled={safePage >= pageCount - 1}
+                className="min-h-8 rounded-full bg-white/10 px-3 font-semibold disabled:opacity-40"
+              >
+                Suivant
               </button>
             </div>
-          </li>
-        ))}
-      </ul>
+          )}
+        </div>
+      )}
     </div>
   )
 }
