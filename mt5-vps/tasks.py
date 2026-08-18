@@ -16,15 +16,21 @@ from notify import notify
 from scenarios import evaluate_task
 
 
-def _account_size(db):
+def _account_size(db, login):
     """Lit le capital de référence fixe (PAS l'équité live) depuis
     vps_status/{VPS_ID}.accounts.{login}.account_size — un champ maintenu
-    manuellement dans Firestore, jamais écrit par ce script."""
+    manuellement dans Firestore, jamais écrit par ce script.
+
+    `login` doit venir de la connexion MT5 LIVE (m.account_info().login),
+    jamais du champ vps_status/{VPS_ID}.login mis en cache — ce dernier
+    n'est réécrit que sur demande ponctuelle de l'app (status_request) et
+    peut rester périmé un moment après un changement de compte/terminal,
+    ce qui a déjà fait planter le calcul du lot (login introuvable dans
+    accounts -> account_size manquant -> lot None)."""
     doc = db.collection("vps_status").document(VPS_ID).get()
     if not doc.exists:
         return None
     data = doc.to_dict()
-    login = data.get("login")
     entry = (data.get("accounts") or {}).get(str(login)) or {}
     return entry.get("account_size")
 
@@ -163,7 +169,7 @@ def _execute_task(db, ref, task_id, task, target_dt):
     }
 
     # --- 2. Évaluation : est-ce que la condition du scénario est remplie ? ---
-    account_size = _account_size(db)
+    account_size = _account_size(db, m.account_info().login)
     result = evaluate_task(task, candle, account_size)
     now_ms = int(time.time() * 1000)
 

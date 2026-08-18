@@ -243,7 +243,7 @@ def _handle_set_order_request(db, doc):
         _publish_order_result(db, result)
         return
 
-    account_size = _account_size(db)
+    account_size = _account_size(db, m.account_info().login)
     risk_amount = (risk_percent / 100) * account_size if account_size else None
     lot = compute_lot_size(risk_amount, entry, sl, tick.bid)
     if lot is None:
