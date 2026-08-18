@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 """
-run_all.py — Lance mt5_status.py (compte principal) et mirror_follower.py
-(compte suppléant) comme deux sous-process, dans UNE SEULE fenêtre, avec
-leur sortie préfixée ([MASTER]/[FOLLOWER]) pour les distinguer — pratique
-pour ne pas avoir à garder deux fenêtres PowerShell séparées ouvertes.
+run_all.py — Lance tous les scripts à boucle infinie du VPS (mt5_status.py,
+mirror_follower.py, alerte_me_by_level.py) comme sous-process, dans UNE
+SEULE fenêtre, avec leur sortie préfixée ([MASTER]/[FOLLOWER]/[LEVEL]) pour
+les distinguer — pratique pour ne pas avoir à garder plusieurs fenêtres
+PowerShell séparées ouvertes.
 
-Ctrl+C ici arrête proprement les deux sous-process (terminate, puis kill
+Ctrl+C ici arrête proprement tous les sous-process (terminate, puis kill
 après 10s si l'un d'eux ne répond pas).
 """
 
@@ -16,6 +17,7 @@ import threading
 PROCESSES = [
     ("MASTER", ["mt5_status.py"]),
     ("FOLLOWER", ["mirror_follower.py"]),
+    ("LEVEL", ["alerte_me_by_level.py"]),
 ]
 
 
