@@ -171,16 +171,15 @@ export function TasksListPage({ onEditTask }) {
                     className="flex min-h-11 w-full items-center justify-between gap-2 px-3 py-2 text-left text-xs"
                   >
                     <span className="text-slate-400">{formatDateTime(task.executionTime)}</span>
+                    <span className="flex-1 truncate text-right text-slate-500">
+                      {STATUS_LABELS[task.status] ?? task.status}
+                    </span>
                     <span className={`rounded-full px-2 py-0.5 font-semibold ${scenarioBadgeClass(task.scenario)}`}>
                       {scenarioLabel(task.scenario)}
                     </span>
                   </button>
                   {isOpen && (
                     <div className="border-t border-white/5 px-3 py-2.5 text-xs">
-                      <p className="text-slate-500">
-                        Statut :{' '}
-                        <span className="font-semibold text-white">{STATUS_LABELS[task.status] ?? task.status}</span>
-                      </p>
                       {task.updatedAt && (
                         <p className="mt-0.5 text-slate-600">Évaluée le {formatExecutedAt(task.updatedAt)}</p>
                       )}
