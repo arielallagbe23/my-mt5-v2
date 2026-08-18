@@ -45,6 +45,7 @@ Pré-requis (sur le VPS) :
 
 import os
 import time
+import traceback
 
 from alerte_pre_cloture import check_pre_close_alerts
 from config import POLL_INTERVAL, SA_PATH, VPS_ID
@@ -78,8 +79,9 @@ def run():
             check_trailing_stop(db)
             check_closed_positions(db)
             publish_master_positions(db)
-        except Exception as e:
-            print(f"[LOOP] erreur : {e}")
+        except Exception:
+            print("[LOOP] erreur :")
+            traceback.print_exc()
         time.sleep(POLL_INTERVAL)
 
 

@@ -13,6 +13,7 @@ logique fiable basée sur DEAL_REASON, pas de duplication du calcul).
 """
 
 import time
+import traceback
 from datetime import datetime, timezone
 
 from config import PRICE_SYMBOL
@@ -84,26 +85,36 @@ def _check_closed_positions(m, positions):
     _last_open_tickets = current_tickets
 
 
+def _run_once():
+    m = ensure_mt5()
+    if m is None:
+        return
+
+    now = datetime.now(timezone.utc).strftime("%H:%M:%S")
+    positions = m.positions_get(symbol=PRICE_SYMBOL) or ()
+
+    close = get_m15_close(m, PRICE_SYMBOL)
+    if close is None:
+        print(f"[{now}] bougie M15 introuvable")
+    else:
+        for pos in positions:
+            label, pct = _position_progress(pos, close)
+            if label is None:
+                continue
+            notify(
+                f"mymt5 — on est à {pct:.2f}% du {label}",
+                f"{pos.symbol} (ticket {pos.ticket}) : close {close}, entrée {pos.price_open}",
+            )
+            print(f"[{now}] ticket {pos.ticket} : {pct:.2f}% du {label} (close {close})")
+
+    _check_closed_positions(m, positions)
+
+
 if __name__ == "__main__":
     while True:
-        m = ensure_mt5()
-        if m is not None:
-            now = datetime.now(timezone.utc).strftime("%H:%M:%S")
-            positions = m.positions_get(symbol=PRICE_SYMBOL) or ()
-
-            close = get_m15_close(m, PRICE_SYMBOL)
-            if close is None:
-                print(f"[{now}] bougie M15 introuvable")
-            else:
-                for pos in positions:
-                    label, pct = _position_progress(pos, close)
-                    if label is None:
-                        continue
-                    notify(
-                        f"mymt5 — on est à {pct:.2f}% du {label}",
-                        f"{pos.symbol} (ticket {pos.ticket}) : close {close}, entrée {pos.price_open}",
-                    )
-                    print(f"[{now}] ticket {pos.ticket} : {pct:.2f}% du {label} (close {close})")
-
-            _check_closed_positions(m, positions)
+        try:
+            _run_once()
+        except Exception:
+            print("[LOOP] erreur :")
+            traceback.print_exc()
         time.sleep(CHECK_INTERVAL_SECONDS)

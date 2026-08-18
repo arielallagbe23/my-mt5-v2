@@ -30,6 +30,7 @@ Pré-requis Firestore (comme pour le compte principal) :
 
 import os
 import time
+import traceback
 
 from mt5_client import ensure_mt5
 
@@ -264,6 +265,7 @@ if __name__ == "__main__":
     while True:
         try:
             sync_mirror(db)
-        except Exception as e:
-            print(f"[LOOP] erreur : {e}")
+        except Exception:
+            print("[LOOP] erreur :")
+            traceback.print_exc()
         time.sleep(POLL_INTERVAL)
