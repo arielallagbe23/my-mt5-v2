@@ -1,41 +1,46 @@
 #!/usr/bin/env python3
 """
-alerte_me_by_level.py — Toutes les 15 minutes, situe chaque position USDJPY
-ouverte par rapport à son entrée (PE), son TP et son SL, au close de la
-dernière bougie M15 clôturée : progression exacte vers le TP (si le close
-est du côté profit) ou vers le SL (si du côté perte), notifiée à chaque
-vérification — pas de seuils fixes, le pourcentage exact à chaque fois.
+alerte_me_by_level.py — Situe chaque position USDJPY suivie (H1/H4, même
+timeframe que trailing_stop.py) par rapport à son entrée (PE), son TP et
+son SL, au close de la bougie H1/H4 qui vient de se terminer : progression
+exacte vers le TP (si le close est du côté profit) ou vers le SL (si du
+côté perte). Ne notifie qu'UNE FOIS par nouvelle bougie H1/H4 de la
+position — même rythme que le trailing stop, pour éviter le flot de
+notifications qu'un minuteur fixe (15 min, jusqu'à 4 notifs/heure/position)
+donnait. Conséquence assumée : les positions sans timeframe H1/H4 résolu
+(jamais suivies, ni par une tâche ni activées à la main) ne sont plus
+concernées par cette notif — exactement le même périmètre que le trailing
+stop, par cohérence.
 
-Détecte aussi, au même rythme, une position qui vient de disparaître
-(fermée : SL, TP, manuelle...) et notifie son résultat net en $ ainsi que
-la raison de clôture — réutilise _deals_to_trade de trades.py (même
-logique fiable basée sur DEAL_REASON, pas de duplication du calcul).
+Détecte aussi, à chaque tour de boucle (~10s, pas lié aux bougies — sinon
+une clôture met jusqu'à 4h à être remarquée), une position qui vient de
+disparaître (fermée : SL, TP, manuelle...) et notifie son résultat net en
+$ ainsi que la raison de clôture — réutilise _deals_to_trade de trades.py
+(même logique fiable basée sur DEAL_REASON, pas de duplication du calcul).
+Ce suivi-là reste sur TOUTES les positions, pas seulement H1/H4.
 """
 
+import os
 import time
 import traceback
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
-from config import MASTER_TERMINAL_PATH, PRICE_SYMBOL
+from config import MASTER_TERMINAL_PATH, PRICE_SYMBOL, SA_PATH
 from mt5_client import ensure_mt5, set_default_path
 from notify import notify
+from position_shared import ELIGIBLE_TIMEFRAMES, candles_current_and_previous, resolve_timeframe
 from trades import _deals_to_trade
 
-CHECK_INTERVAL_SECONDS = 15 * 60
+POLL_INTERVAL = 10
+SAFETY_DELAY_SECONDS = 2  # même précaution que trailing_stop.py après l'ouverture d'une nouvelle bougie
 
 # État en mémoire, propre à ce script (indépendant de _last_open_position_ids
 # dans trades.py, qui tourne dans un autre process/boucle).
 _last_open_tickets = None
 
-
-def get_m15_close(m, symbol):
-    """Close de la dernière bougie M15 clôturée (position 1 = celle qui
-    vient de se terminer, pas la bougie en cours de formation)."""
-    m.symbol_select(symbol, True)
-    rates = m.copy_rates_from_pos(symbol, m.TIMEFRAME_M15, 1, 1)
-    if rates is None or len(rates) == 0:
-        return None
-    return float(rates[0]["close"])
+# timeframe -> candle_time de la dernière bougie déjà traitée pour la
+# notif de progression — même mécanisme que trailing_stop.py.
+_last_processed_candle_time = {}
 
 
 def _position_progress(pos, close):
@@ -52,6 +57,42 @@ def _position_progress(pos, close):
     if diff < 0 and pos.sl:
         return "SL", abs(diff) / abs(pos.sl - entry) * 100
     return None, 0
+
+
+def _check_progress(db, m, positions):
+    """Notifie la progression TP/SL, une seule fois par nouvelle bougie
+    H1/H4 — même détection qu'en trailing_stop.py (nouvelle bougie + délai
+    de sécurité de 2s), appliquée séparément à chaque timeframe."""
+    now_utc = datetime.now(timezone.utc)
+
+    for timeframe in ELIGIBLE_TIMEFRAMES:
+        previous_bar, current_bar = candles_current_and_previous(m, PRICE_SYMBOL, timeframe)
+        if previous_bar is None:
+            continue
+
+        current_time = int(current_bar["time"])
+        if _last_processed_candle_time.get(timeframe) == current_time:
+            continue  # déjà traité pour cette bougie
+
+        candle_open = datetime.fromtimestamp(current_time, tz=timezone.utc)
+        if now_utc < candle_open + timedelta(seconds=SAFETY_DELAY_SECONDS):
+            continue  # trop tôt, on retente au tour suivant
+
+        _last_processed_candle_time[timeframe] = current_time
+        close = float(previous_bar["close"])
+        now_str = now_utc.strftime("%H:%M:%S")
+
+        for pos in positions:
+            if resolve_timeframe(db, pos.ticket, pos.comment) != timeframe:
+                continue
+            label, pct = _position_progress(pos, close)
+            if label is None:
+                continue
+            notify(
+                f"mymt5 — on est à {pct:.2f}% du {label}",
+                f"{pos.symbol} (ticket {pos.ticket}) : close {close}, entrée {pos.price_open}",
+            )
+            print(f"[{now_str}] ticket {pos.ticket} : {pct:.2f}% du {label} (close {close})")
 
 
 def _check_closed_positions(m, positions):
@@ -85,41 +126,33 @@ def _check_closed_positions(m, positions):
     _last_open_tickets = current_tickets
 
 
-def _run_once():
+def _run_once(db):
     m = ensure_mt5()
     if m is None:
         return
 
-    now = datetime.now(timezone.utc).strftime("%H:%M:%S")
     positions = m.positions_get(symbol=PRICE_SYMBOL) or ()
-
-    close = get_m15_close(m, PRICE_SYMBOL)
-    if close is None:
-        print(f"[{now}] bougie M15 introuvable")
-    else:
-        for pos in positions:
-            label, pct = _position_progress(pos, close)
-            if label is None:
-                continue
-            notify(
-                f"mymt5 — on est à {pct:.2f}% du {label}",
-                f"{pos.symbol} (ticket {pos.ticket}) : close {close}, entrée {pos.price_open}",
-            )
-            print(f"[{now}] ticket {pos.ticket} : {pct:.2f}% du {label} (close {close})")
-
+    _check_progress(db, m, positions)
     _check_closed_positions(m, positions)
 
 
 if __name__ == "__main__":
+    from google.cloud import firestore
+
     # Indispensable dès qu'un deuxième terminal MT5 tourne sur la machine
     # (compte suppléant) — sans ça, la connexion peut se faire au hasard sur
     # le mauvais terminal (voir mt5_client.py).
     set_default_path(MASTER_TERMINAL_PATH)
 
+    if not os.path.exists(SA_PATH):
+        raise SystemExit(f"[ERREUR] {SA_PATH} introuvable.")
+
+    db = firestore.Client.from_service_account_json(SA_PATH)
+
     while True:
         try:
-            _run_once()
+            _run_once(db)
         except Exception:
             print("[LOOP] erreur :")
             traceback.print_exc()
-        time.sleep(CHECK_INTERVAL_SECONDS)
+        time.sleep(POLL_INTERVAL)
