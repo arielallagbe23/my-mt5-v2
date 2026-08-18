@@ -16,8 +16,8 @@ import time
 import traceback
 from datetime import datetime, timezone
 
-from config import PRICE_SYMBOL
-from mt5_client import ensure_mt5
+from config import MASTER_TERMINAL_PATH, PRICE_SYMBOL
+from mt5_client import ensure_mt5, set_default_path
 from notify import notify
 from trades import _deals_to_trade
 
@@ -111,6 +111,11 @@ def _run_once():
 
 
 if __name__ == "__main__":
+    # Indispensable dès qu'un deuxième terminal MT5 tourne sur la machine
+    # (compte suppléant) — sans ça, la connexion peut se faire au hasard sur
+    # le mauvais terminal (voir mt5_client.py).
+    set_default_path(MASTER_TERMINAL_PATH)
+
     while True:
         try:
             _run_once()

@@ -48,8 +48,9 @@ import time
 import traceback
 
 from alerte_pre_cloture import check_pre_close_alerts
-from config import POLL_INTERVAL, SA_PATH, VPS_ID
+from config import MASTER_TERMINAL_PATH, POLL_INTERVAL, SA_PATH, VPS_ID
 from mirror_publish import publish_master_positions
+from mt5_client import set_default_path
 from on_demand import check_all_requests
 from order_fills import check_order_fills
 from tasks import check_due_tasks
@@ -65,8 +66,13 @@ def run():
     if not os.path.exists(SA_PATH):
         raise SystemExit(f"[ERREUR] {SA_PATH} introuvable.")
 
+    # Indispensable dès qu'un deuxième terminal MT5 tourne sur la machine
+    # (compte suppléant) — sans ça, la connexion peut se faire au hasard sur
+    # le mauvais terminal (voir mt5_client.py).
+    set_default_path(MASTER_TERMINAL_PATH)
+
     db = firestore.Client.from_service_account_json(SA_PATH)
-    print(f"[BOOT] VPS_ID={VPS_ID} | poll={POLL_INTERVAL}s")
+    print(f"[BOOT] VPS_ID={VPS_ID} | poll={POLL_INTERVAL}s | terminal={MASTER_TERMINAL_PATH or '(défaut)'}")
 
     while True:
         try:

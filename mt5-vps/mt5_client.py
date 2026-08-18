@@ -6,14 +6,28 @@ valeur qu'elle retourne (jamais une variable importée directement) : c'est ce
 qui permet la reconnexion transparente si MT5 se déconnecte entre deux tours
 de boucle.
 
-Le paramètre `path` (optionnel) cible un terminal précis plutôt que celui par
-défaut — nécessaire pour mirror_follower.py, qui tourne dans un process
-séparé et doit se connecter à une DEUXIÈME installation MT5 (compte
-suppléant), jamais à celle du compte principal. Sans effet sur les appelants
-existants (aucun ne passe `path`, donc comportement inchangé pour eux).
+IMPORTANT (bug corrigé) : dès que PLUSIEURS terminaux MT5 tournent sur la
+même machine (compte principal + suppléant), `MetaTrader5.initialize()`
+SANS chemin explicite se connecte à un terminal de façon non déterministe —
+pas forcément le bon. `set_default_path()` fixe, une bonne fois pour toutes
+au démarrage d'un process, quel terminal ce process doit utiliser pour
+TOUTES ses connexions (y compris les reconnexions après coupure) — les
+modules qui appellent `ensure_mt5()` sans argument (la grande majorité)
+héritent automatiquement de ce chemin, pas besoin de le repasser partout.
+mirror_follower.py, qui tourne dans son propre process pour le compte
+suppléant, continue de passer son `path` explicitement à chaque appel.
 """
 
 mt5 = None
+_default_path = None
+
+
+def set_default_path(path):
+    """À appeler une seule fois, tout au début d'un script, avant le premier
+    ensure_mt5(). Sans ça, plusieurs terminaux qui tournent en même temps
+    sur la VPS peuvent se faire confondre (voir bug ci-dessus)."""
+    global _default_path
+    _default_path = path
 
 
 def _init_mt5(path=None):
@@ -23,7 +37,8 @@ def _init_mt5(path=None):
     except ImportError:
         print("[MT5] Package absent — pip install MetaTrader5")
         return None
-    ok = _mt5.initialize(path=path) if path else _mt5.initialize()
+    target_path = path or _default_path
+    ok = _mt5.initialize(path=target_path) if target_path else _mt5.initialize()
     if not ok:
         print(f"[MT5] initialize() échoué : {_mt5.last_error()}")
         return None

@@ -18,6 +18,12 @@ def _read(name, default=None):
 
 VPS_ID = _read("vps_id.txt") or os.environ.get("VPS_ID", "main")
 SA_PATH = os.path.join(_DIR, "service-account.json")
+
+# Chemin vers le terminal64.exe du compte PRINCIPAL — obligatoire dès que
+# plusieurs terminaux MT5 tournent sur la même machine (voir mt5_client.py :
+# initialize() sans chemin explicite peut se connecter au mauvais terminal).
+# Optionnel tant qu'un seul terminal MT5 tourne sur la VPS.
+MASTER_TERMINAL_PATH = _read("master_terminal_path.txt") or os.environ.get("MASTER_TERMINAL_PATH")
 POLL_INTERVAL = float(os.environ.get("POLL_INTERVAL", "10"))
 PRICE_SYMBOL = "USDJPY"
 MAGIC = int(os.environ.get("MT5_MAGIC", "234000"))
