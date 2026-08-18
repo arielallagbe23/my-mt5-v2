@@ -33,4 +33,27 @@ router.get('/status', requireAuth, async (req, res) => {
   })
 })
 
+// Toute la collection vps_status (un doc par compte MT5 — "main", "account2",
+// et tout futur suppléant), pour la page "Mes comptes". Renvoie l'account_size
+// du login actuellement connecté sur chaque doc, déjà déplié — pas besoin de
+// retoucher cette route à chaque compte ajouté.
+router.get('/all', requireAuth, async (req, res) => {
+  const snapshot = await db.collection('vps_status').get()
+  const result = {}
+  for (const doc of snapshot.docs) {
+    const data = doc.data()
+    const login = data.login ?? null
+    result[doc.id] = {
+      online: Boolean(data.online),
+      login,
+      equity: data.equity ?? null,
+      currency: data.currency ?? null,
+      server: data.server ?? null,
+      ts: data.ts ?? null,
+      accountSize: login != null ? ((data.accounts ?? {})[String(login)]?.account_size ?? null) : null,
+    }
+  }
+  res.json(result)
+})
+
 export default router

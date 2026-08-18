@@ -23,6 +23,7 @@ export const api = {
   logout: () => request('/api/auth/logout', { method: 'POST' }),
   me: () => request('/api/auth/me'),
   accountStatus: () => request('/api/account/status'),
+  allAccountsStatus: () => request('/api/account/all'),
   requestAccountStatus: () => request('/api/account/status/request', { method: 'POST' }),
   forgotPassword: (email) =>
     request('/api/auth/forgot-password', { method: 'POST', body: { email, origin: window.location.origin } }),
