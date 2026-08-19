@@ -15,6 +15,19 @@ from mt5_client import ensure_mt5
 from notify import notify
 from scenarios import evaluate_task
 
+# Spread (ask - bid) au-delà duquel on attend plutôt que d'agir — un spread
+# anormalement large (typiquement au rollover, vers 23h) signale des
+# conditions de marché instables. 0.005 = ~0.5 pip sur USDJPY.
+MAX_SPREAD = 0.005
+SPREAD_WAIT_TIMEOUT_SECONDS = 60 * 60
+
+# task_id -> horodatage UTC du premier tour où la condition était remplie
+# mais le spread trop large — pour abandonner après SPREAD_WAIT_TIMEOUT_SECONDS
+# plutôt que d'attendre indéfiniment. En mémoire seulement (comme les autres
+# suivis de ce type dans le projet) : un redémarrage du process relance
+# simplement le délai, sans conséquence réelle.
+_spread_wait_started = {}
+
 
 def _account_size(db, login):
     """Lit le capital de référence fixe (PAS l'équité live) depuis
@@ -173,6 +186,32 @@ def _execute_task(db, ref, task_id, task, target_dt):
     result = evaluate_task(task, candle, account_size)
     now_ms = int(time.time() * 1000)
 
+    # --- 2b. Condition remplie : on attend un spread correct avant d'agir,
+    # en DRY_RUN comme en réel (pour que la simulation reflète fidèlement ce
+    # qui se passerait réellement) — un spread anormalement large (typiquement
+    # au rollover, vers 23h) n'est pas un bon moment pour entrer, même sur un
+    # ordre différé. Ne fait rien ce tour-ci si trop large : la tâche reste
+    # "pending" et sera retentée au tour suivant (~10s), jusqu'à
+    # SPREAD_WAIT_TIMEOUT_SECONDS avant d'abandonner.
+    if result["matched"]:
+        tick = m.symbol_info_tick(symbol)
+        spread = round(tick.ask - tick.bid, 5) if tick is not None else None
+        if spread is None or spread > MAX_SPREAD:
+            started = _spread_wait_started.setdefault(task_id, datetime.now(timezone.utc))
+            waited_seconds = (datetime.now(timezone.utc) - started).total_seconds()
+            if waited_seconds < SPREAD_WAIT_TIMEOUT_SECONDS:
+                print(
+                    f"[TASK] {task_id} : spread trop large ({spread}), en attente depuis "
+                    f"{waited_seconds / 60:.1f} min, réessai au prochain tour"
+                )
+                return
+            _spread_wait_started.pop(task_id, None)
+            reason = f"spread resté au-dessus de {MAX_SPREAD} pendant plus de {SPREAD_WAIT_TIMEOUT_SECONDS // 60} min"
+            _report_and_delete(db, ref, task_id, task, reason, now_ms)
+            print(f"[TASK] {task_id} : abandon, {reason}")
+            return
+        _spread_wait_started.pop(task_id, None)
+
     # --- 3a. Mode simulation (DRY_RUN, activé par défaut) : on notifie ce qui
     # AURAIT été fait, mais order_send n'est jamais appelé. ---
     if DRY_RUN:
@@ -223,6 +262,16 @@ def _execute_task(db, ref, task_id, task, target_dt):
     ref.update({"status": "done", "result": result, "updatedAt": now_ms})
 
     res = m.order_send(request)
+    if res is not None and res.retcode == m.TRADE_RETCODE_MARKET_CLOSED:
+        # Marché fermé (rollover ~23h, weekend...) : aucun ordre n'a été placé
+        # (order_send a été rejeté, pas de risque de doublon), donc on annule
+        # le marquage "done" fait plus haut et on retente au tour suivant.
+        # Pas de timeout d'abandon ici contrairement au spread : c'est un ordre
+        # en attente (Limit), pas urgent, et la fermeture est temporaire par
+        # nature (le marché rouvre toujours) — pas de raison de renoncer.
+        ref.update({"status": "pending", "result": None, "updatedAt": int(time.time() * 1000)})
+        print(f"[TASK] {task_id} : marché fermé, réessai au prochain tour")
+        return
     if res is None or res.retcode != m.TRADE_RETCODE_DONE:
         error = str(m.last_error()) if res is None else res.comment
         result["error"] = error
