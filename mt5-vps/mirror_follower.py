@@ -14,6 +14,11 @@ IMPORTANT (quota Firestore dépassé, corrigé) : les écritures (statut,
 au pire toutes les 60s en heartbeat — avant, tout était réécrit à chaque
 tour (~10s) même sans le moindre changement, ce qui a fini par épuiser le
 quota gratuit Firestore (429 Quota exceeded) avec 3 process en continu.
+Même logique côté lecture : mirror_positions/mirror_orders (l'état du
+compte principal) ne sont plus interrogés à chaque tour (.stream()) mais
+poussés par deux écouteurs temps réel (on_snapshot) — Firestore prévient
+uniquement quand quelque chose change vraiment, pas de lecture entre deux
+changements réels.
 
 Un ordre différé est répliqué dès sa pose (pas seulement une fois
 déclenché) : en mode Hedging, l'ordre garde le même ticket en devenant une
@@ -41,6 +46,7 @@ Pré-requis Firestore (comme pour le compte principal) :
 """
 
 import os
+import threading
 import time
 import traceback
 
@@ -85,6 +91,57 @@ _pre_existing_tickets = None
 # valeur. Cache court (60s) par vps_id : {vps_id: (valeur, lu_à)}.
 ACCOUNT_SIZE_CACHE_SECONDS = 60
 _account_size_cache = {}
+
+# État du compte principal (positions ouvertes + ordres différés), poussé
+# par deux écouteurs temps réel (on_snapshot) sur mirror_positions et
+# mirror_orders — jamais interrogé nous-mêmes en boucle : Firestore nous
+# prévient automatiquement dès qu'un document change, pas de lecture entre
+# deux changements réels (contrairement à un .stream() à chaque tour).
+#
+# _positions_ready / _orders_ready : au tout premier démarrage, un écouteur
+# met un court instant à livrer son premier résultat — tant que ce n'est
+# pas fait, le cache est vide alors que le compte principal a peut-être
+# déjà des positions ouvertes. Sans ce garde-fou, sync_mirror agirait sur
+# une image incomplète et pourrait croire (à tort) que tout a fermé côté
+# principal, et fermer des miroirs par erreur, ou mal calculer
+# _pre_existing_tickets au démarrage.
+_master_state_lock = threading.Lock()
+_master_positions_cache = {}
+_master_orders_cache = {}
+_positions_ready = False
+_orders_ready = False
+_master_state_listeners_started = False
+
+
+def _on_positions_snapshot(query_snapshot, changes, read_time):
+    global _positions_ready
+    with _master_state_lock:
+        _master_positions_cache.clear()
+        for doc in query_snapshot:
+            data = doc.to_dict()
+            _master_positions_cache[str(data["ticket"])] = data
+        _positions_ready = True
+
+
+def _on_orders_snapshot(query_snapshot, changes, read_time):
+    global _orders_ready
+    with _master_state_lock:
+        _master_orders_cache.clear()
+        for doc in query_snapshot:
+            data = doc.to_dict()
+            _master_orders_cache[str(data["ticket"])] = data
+        _orders_ready = True
+
+
+def _start_master_state_listeners(db):
+    """Démarre les deux écouteurs une seule fois (threads gérés par le SDK
+    Firestore) — idempotent, sans effet si déjà démarrés."""
+    global _master_state_listeners_started
+    if _master_state_listeners_started:
+        return
+    db.collection("mirror_positions").on_snapshot(_on_positions_snapshot)
+    db.collection("mirror_orders").on_snapshot(_on_orders_snapshot)
+    _master_state_listeners_started = True
 
 
 def _account_size(db, vps_id):
@@ -315,8 +372,12 @@ def sync_mirror(db):
 
     _publish_own_status(db, m)
 
-    master_positions = {str(d.to_dict()["ticket"]): d.to_dict() for d in db.collection("mirror_positions").stream()}
-    master_orders = {str(d.to_dict()["ticket"]): d.to_dict() for d in db.collection("mirror_orders").stream()}
+    _start_master_state_listeners(db)
+    with _master_state_lock:
+        if not (_positions_ready and _orders_ready):
+            return  # premier(s) tour(s) : écouteurs pas encore synchronisés, on attend
+        master_positions = dict(_master_positions_cache)
+        master_orders = dict(_master_orders_cache)
 
     global _pre_existing_tickets
     if _pre_existing_tickets is None:
