@@ -152,14 +152,20 @@ export function TaskLauncher({
         </button>
       </div>
 
-      {saveError && <p className="text-sm text-red-400">{saveError}</p>}
+      {saveError && (
+        <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-center text-sm text-red-400">
+          {saveError}
+        </div>
+      )}
       {savedStatus === 'draft' && (
-        <p className="text-sm text-amber-400">Brouillon enregistré — tu peux revenir le terminer plus tard.</p>
+        <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-center text-sm text-amber-400">
+          Brouillon enregistré — tu peux revenir le terminer plus tard.
+        </div>
       )}
       {savedStatus === 'pending' && (
-        <p className="text-sm text-green-400">
+        <div className="rounded-xl border border-green-500/30 bg-green-500/10 p-3 text-center text-sm text-green-400">
           Tâche confirmée — elle s'exécutera automatiquement à l'heure prévue.
-        </p>
+        </div>
       )}
     </div>
   )
