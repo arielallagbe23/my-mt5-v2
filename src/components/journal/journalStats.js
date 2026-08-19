@@ -49,6 +49,12 @@ export function computeKpis(trades) {
   }
 }
 
+export function computeTodayNet(trades) {
+  const now = new Date()
+  const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime() / 1000
+  return trades.reduce((sum, t) => (t.closeTime >= startOfDay ? sum + t.net : sum), 0)
+}
+
 export function computeStreak(trades) {
   // trades est trié du plus récent au plus ancien
   if (trades.length === 0) return null
@@ -95,6 +101,22 @@ export function computeCurve(trades) {
   })
 }
 
+function shareOrDownload(content, mimeType, filename) {
+  const blob = new Blob([content], { type: mimeType })
+  const file = new File([blob], filename, { type: mimeType })
+
+  if (navigator.canShare?.({ files: [file] })) {
+    navigator.share({ files: [file], title: 'Journal mymt5' }).catch(() => {})
+    return
+  }
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  a.click()
+  URL.revokeObjectURL(url)
+}
+
 export function exportCsv(trades) {
   const header = 'Date,Symbole,Type,Volume,PrixOuverture,PrixCloture,Profit,Swap,Commission,Net,Raison\n'
   const rows = trades
@@ -114,17 +136,60 @@ export function exportCsv(trades) {
       ].join(','),
     )
     .join('\n')
-  const blob = new Blob([header + rows], { type: 'text/csv' })
-  const file = new File([blob], 'journal.csv', { type: 'text/csv' })
+  shareOrDownload(header + rows, 'text/csv', 'journal.csv')
+}
 
-  if (navigator.canShare?.({ files: [file] })) {
-    navigator.share({ files: [file], title: 'Journal mymt5' }).catch(() => {})
-    return
-  }
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = 'journal.csv'
-  a.click()
-  URL.revokeObjectURL(url)
+export function exportHtml(trades) {
+  const netTotal = trades.reduce((sum, t) => sum + t.net, 0)
+  const rows = trades
+    .map((t) => {
+      const netClass = t.net >= 0 ? 'pos' : 'neg'
+      return `<tr>
+        <td>${new Date(t.closeTime * 1000).toLocaleString('fr-FR')}</td>
+        <td>${t.symbol}</td>
+        <td>${t.type}</td>
+        <td>${formatVolume(t.volume)}</td>
+        <td>${t.priceOpen}</td>
+        <td>${t.priceClose}</td>
+        <td>${t.profit.toFixed(2)}</td>
+        <td>${t.swap.toFixed(2)}</td>
+        <td>${t.commission.toFixed(2)}</td>
+        <td class="${netClass}">${money(t.net)}</td>
+        <td>${t.reason}</td>
+      </tr>`
+    })
+    .join('')
+
+  const html = `<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<title>Journal mymt5</title>
+<style>
+  body { font-family: -apple-system, system-ui, sans-serif; background: #0b0f1a; color: #e2e8f0; padding: 24px; }
+  h1 { font-size: 20px; margin-bottom: 4px; }
+  p.meta { color: #94a3b8; font-size: 13px; margin-top: 0; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 16px; }
+  th, td { padding: 8px 10px; text-align: left; border-bottom: 1px solid #1e293b; white-space: nowrap; }
+  th { color: #94a3b8; text-transform: uppercase; font-size: 11px; letter-spacing: 0.05em; }
+  td.pos { color: #60a5fa; font-weight: 600; }
+  td.neg { color: #f87171; font-weight: 600; }
+</style>
+</head>
+<body>
+  <h1>Journal mymt5</h1>
+  <p class="meta">${trades.length} trades · Net total : ${money(netTotal)} · généré le ${new Date().toLocaleString('fr-FR')}</p>
+  <table>
+    <thead>
+      <tr>
+        <th>Date</th><th>Symbole</th><th>Type</th><th>Volume</th><th>Prix ouv.</th><th>Prix clôt.</th>
+        <th>Profit</th><th>Swap</th><th>Commission</th><th>Net</th><th>Raison</th>
+      </tr>
+    </thead>
+    <tbody>${rows}</tbody>
+  </table>
+</body>
+</html>`
+
+  shareOrDownload(html, 'text/html', 'journal.html')
 }

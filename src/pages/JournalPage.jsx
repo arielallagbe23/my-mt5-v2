@@ -9,7 +9,16 @@ import { ResultsBreakdownCard } from '../components/journal/ResultsBreakdownCard
 import { BestWorstStreakCard } from '../components/journal/BestWorstStreakCard'
 import { MonthlyPnlCard } from '../components/journal/MonthlyPnlCard'
 import { TransactionsTable } from '../components/journal/TransactionsTable'
-import { computeKpis, computeStreak, computeBreakdown, computeMonthly, computeCurve, exportCsv } from '../components/journal/journalStats'
+import {
+  computeKpis,
+  computeStreak,
+  computeBreakdown,
+  computeMonthly,
+  computeCurve,
+  computeTodayNet,
+  exportCsv,
+  exportHtml,
+} from '../components/journal/journalStats'
 
 const PAGE_SIZE = 10
 
@@ -57,6 +66,7 @@ export function JournalPage() {
 
   const kpis = useMemo(() => (trades ? computeKpis(trades) : null), [trades])
   const streak = useMemo(() => (trades ? computeStreak(trades) : null), [trades])
+  const todayNet = useMemo(() => (trades ? computeTodayNet(trades) : null), [trades])
   const breakdown = useMemo(() => (trades ? computeBreakdown(trades) : null), [trades])
   const monthly = useMemo(() => (trades ? computeMonthly(trades) : []), [trades])
   const dollarCurve = useMemo(() => (trades ? computeCurve(trades) : []), [trades])
@@ -76,7 +86,8 @@ export function JournalPage() {
     <div className={PAGE}>
       <JournalHeader
         tradesCount={trades?.length ?? null}
-        onExport={() => trades && exportCsv(trades)}
+        onExportCsv={() => trades && exportCsv(trades)}
+        onExportHtml={() => trades && exportHtml(trades)}
         exportDisabled={!trades || trades.length === 0}
         onSync={handleSync}
         syncing={syncing}
@@ -96,7 +107,7 @@ export function JournalPage() {
           <KpiGrid kpis={kpis} />
           <PerformanceCard netTotal={kpis.netTotal} curve={curve} unit={curveUnit} accountSize={accountSize} />
           <ResultsBreakdownCard breakdown={breakdown} />
-          <BestWorstStreakCard kpis={kpis} streak={streak} />
+          <BestWorstStreakCard kpis={kpis} streak={streak} todayNet={todayNet} accountSize={accountSize} />
           <MonthlyPnlCard monthly={monthly} />
           <TransactionsTable
             trades={trades}
