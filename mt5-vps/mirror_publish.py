@@ -6,17 +6,19 @@ pour que mirror_follower.py (compte suppléant, process séparé connecté à
 un deuxième terminal MT5) puisse les reproduire dès leur pose, pas
 seulement une fois déclenchés.
 
-Publie aussi le login live à chaque tour (vps_status/{VPS_ID}.login) — ce
-champ n'était sinon rafraîchi que sur demande ponctuelle de l'app
-(status_request), et pouvait donc rester périmé un moment après un
-changement de terminal/compte. mirror_follower.py en dépend pour retrouver
-account_size du compte principal (voir tasks.py._account_size pour le même
-problème côté tâches, réglé différemment là-bas via le login live de sa
-propre connexion MT5 — le suppléant, lui, n'a que Firestore).
+IMPORTANT (quota Firestore dépassé, corrigé) : n'écrit un document QUE si
+son contenu a réellement changé depuis la dernière fois — avant, chaque
+position/ordre était réécrit à chaque tour (~10s) même sans le moindre
+changement, ce qui a fini par épuiser le quota gratuit de Firestore
+(429 Quota exceeded) à lui seul, avec 3 process qui tournent en continu.
+Même principe pour le heartbeat vps_status : un vrai changement (login,
+online) déclenche une écriture immédiate, sinon un simple heartbeat de
+fraîcheur toutes les VPS_STATUS_HEARTBEAT_SECONDS suffit — pas besoin de
+retimestamper à chaque tour de boucle.
 
-Seule responsabilité de ce module : publier l'état tel quel, à chaque tour
-de boucle. Aucune décision, aucun calcul de risque — ça, c'est le rôle du
-suppléant lui-même, sur SES propres paramètres.
+Seule responsabilité de ce module : publier l'état tel quel. Aucune
+décision, aucun calcul de risque — ça, c'est le rôle du suppléant
+lui-même, sur SES propres paramètres.
 """
 
 import time
@@ -24,10 +26,54 @@ import time
 from config import PRICE_SYMBOL, VPS_ID
 from mt5_client import ensure_mt5
 
-# Dernier ensemble de tickets publiés — pour supprimer de Firestore ceux qui
-# ont fermé/disparu depuis (le suppléant s'en sert pour détecter ça).
-_last_published_position_tickets = None
-_last_published_order_tickets = None
+VPS_STATUS_HEARTBEAT_SECONDS = 60
+
+# Dernier snapshot publié par ticket (position/ordre) — pour ne réécrire
+# que ce qui a réellement changé. Dernier login/online publiés + horodatage
+# du dernier heartbeat, même logique pour vps_status.
+_last_published_positions = {}
+_last_published_orders = {}
+_last_vps_status = None
+_last_vps_status_ts = 0
+
+
+def _position_snapshot(pos):
+    return {
+        "symbol": pos.symbol,
+        "type": pos.type,  # 0 = Buy, 1 = Sell (brut — le suppléant fait le mapping)
+        "entry": pos.price_open,
+        "sl": pos.sl,
+        "tp": pos.tp,
+        "volume": pos.volume,
+        "comment": pos.comment,
+    }
+
+
+def _order_snapshot(order):
+    return {
+        "symbol": order.symbol,
+        "order_type": order.type,  # constante MT5 brute (BUY_LIMIT, SELL_LIMIT...), transmise telle quelle
+        "entry": order.price_open,
+        "sl": order.sl,
+        "tp": order.tp,
+        "volume": order.volume_current,
+        "comment": order.comment,
+    }
+
+
+def _publish_vps_heartbeat(db, ai):
+    """Écrit vps_status/{VPS_ID} immédiatement si login/online a changé,
+    sinon seulement toutes les VPS_STATUS_HEARTBEAT_SECONDS — pas à chaque
+    tour de boucle (~10s), pour ne pas gaspiller le quota d'écritures sur
+    une valeur qui ne change quasiment jamais."""
+    global _last_vps_status, _last_vps_status_ts
+    current = {"login": ai.login, "online": True}
+    now = time.time()
+    if current == _last_vps_status and (now - _last_vps_status_ts) < VPS_STATUS_HEARTBEAT_SECONDS:
+        return
+    db.collection("vps_status").document(VPS_ID).set({**current, "ts": int(now)}, merge=True)
+    _last_vps_status = current
+    _last_vps_status_ts = now
 
 
 def publish_master_positions(db):
@@ -37,9 +83,7 @@ def publish_master_positions(db):
 
     ai = m.account_info()
     if ai is not None:
-        db.collection("vps_status").document(VPS_ID).set(
-            {"login": ai.login, "online": True, "ts": int(time.time())}, merge=True
-        )
+        _publish_vps_heartbeat(db, ai)
 
     positions = m.positions_get(symbol=PRICE_SYMBOL) or ()
     current_tickets = set()
@@ -47,25 +91,20 @@ def publish_master_positions(db):
     for pos in positions:
         ticket = pos.ticket
         current_tickets.add(ticket)
+        snapshot = _position_snapshot(pos)
+        if _last_published_positions.get(ticket) == snapshot:
+            continue  # rien de changé depuis la dernière publication
         db.collection("mirror_positions").document(str(ticket)).set({
             "ticket": ticket,
-            "symbol": pos.symbol,
-            "type": pos.type,  # 0 = Buy, 1 = Sell (brut — le suppléant fait le mapping)
-            "entry": pos.price_open,
-            "sl": pos.sl,
-            "tp": pos.tp,
-            "volume": pos.volume,
-            "comment": pos.comment,
+            **snapshot,
             "updated_at": int(time.time()),
         })
+        _last_published_positions[ticket] = snapshot
 
-    global _last_published_position_tickets
-    if _last_published_position_tickets is not None:
-        closed_tickets = _last_published_position_tickets - current_tickets
-        for ticket in closed_tickets:
-            db.collection("mirror_positions").document(str(ticket)).delete()
-
-    _last_published_position_tickets = current_tickets
+    closed_tickets = set(_last_published_positions) - current_tickets
+    for ticket in closed_tickets:
+        db.collection("mirror_positions").document(str(ticket)).delete()
+        del _last_published_positions[ticket]
 
 
 def publish_master_orders(db):
@@ -84,22 +123,17 @@ def publish_master_orders(db):
     for order in orders:
         ticket = order.ticket
         current_tickets.add(ticket)
+        snapshot = _order_snapshot(order)
+        if _last_published_orders.get(ticket) == snapshot:
+            continue  # rien de changé depuis la dernière publication
         db.collection("mirror_orders").document(str(ticket)).set({
             "ticket": ticket,
-            "symbol": order.symbol,
-            "order_type": order.type,  # constante MT5 brute (BUY_LIMIT, SELL_LIMIT...), transmise telle quelle
-            "entry": order.price_open,
-            "sl": order.sl,
-            "tp": order.tp,
-            "volume": order.volume_current,
-            "comment": order.comment,
+            **snapshot,
             "updated_at": int(time.time()),
         })
+        _last_published_orders[ticket] = snapshot
 
-    global _last_published_order_tickets
-    if _last_published_order_tickets is not None:
-        closed_tickets = _last_published_order_tickets - current_tickets
-        for ticket in closed_tickets:
-            db.collection("mirror_orders").document(str(ticket)).delete()
-
-    _last_published_order_tickets = current_tickets
+    closed_tickets = set(_last_published_orders) - current_tickets
+    for ticket in closed_tickets:
+        db.collection("mirror_orders").document(str(ticket)).delete()
+        del _last_published_orders[ticket]

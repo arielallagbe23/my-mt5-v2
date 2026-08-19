@@ -5,8 +5,15 @@ quasi temps réel les positions ET les ordres différés USDJPY publiés par
 mirror_publish.py (compte principal), avec un lot recalculé au prorata de
 l'account_size de CE compte-ci (voir compute_follower_lot) — jamais un
 recalcul indépendant du risque, un simple prorata sur la taille de compte,
-relu à chaque tour (pas mis en cache) pour s'adapter automatiquement si un
-palier change (challenge validé, scaling plan...).
+mis en cache 60s (ACCOUNT_SIZE_CACHE_SECONDS) pour s'adapter automatiquement
+si un palier change (challenge validé, scaling plan...) sans relire
+Firestore à chaque tour de boucle pour retomber sur la même valeur.
+
+IMPORTANT (quota Firestore dépassé, corrigé) : les écritures (statut,
+état des miroirs) ne partent plus que si le contenu a réellement changé, ou
+au pire toutes les 60s en heartbeat — avant, tout était réécrit à chaque
+tour (~10s) même sans le moindre changement, ce qui a fini par épuiser le
+quota gratuit Firestore (429 Quota exceeded) avec 3 process en continu.
 
 Un ordre différé est répliqué dès sa pose (pas seulement une fois
 déclenché) : en mode Hedging, l'ordre garde le même ticket en devenant une
@@ -73,17 +80,30 @@ _mirrored_tickets = {}
 # redéfinit "déjà ouvert" au moment présent).
 _pre_existing_tickets = None
 
+# account_size change rarement (palier de challenge, scaling plan...) — pas
+# besoin de le relire à chaque tour (~10s) juste pour retomber sur la même
+# valeur. Cache court (60s) par vps_id : {vps_id: (valeur, lu_à)}.
+ACCOUNT_SIZE_CACHE_SECONDS = 60
+_account_size_cache = {}
+
 
 def _account_size(db, vps_id):
     """Même logique que _account_size dans tasks.py, mais paramétrée par
     vps_id — le compte principal et le suppléant ont chacun le leur."""
+    cached = _account_size_cache.get(vps_id)
+    if cached is not None and (time.time() - cached[1]) < ACCOUNT_SIZE_CACHE_SECONDS:
+        return cached[0]
+
     doc = db.collection("vps_status").document(vps_id).get()
-    if not doc.exists:
-        return None
-    data = doc.to_dict()
-    login = data.get("login")
-    entry = (data.get("accounts") or {}).get(str(login)) or {}
-    return entry.get("account_size")
+    value = None
+    if doc.exists:
+        data = doc.to_dict()
+        login = data.get("login")
+        entry = (data.get("accounts") or {}).get(str(login)) or {}
+        value = entry.get("account_size")
+
+    _account_size_cache[vps_id] = (value, time.time())
+    return value
 
 
 def compute_follower_lot(master_volume, master_account_size, follower_account_size):
@@ -96,32 +116,64 @@ def compute_follower_lot(master_volume, master_account_size, follower_account_si
     return max(0.01, round(master_volume * ratio, 2))
 
 
+STATUS_HEARTBEAT_SECONDS = 60
+
+_last_published_status = None
+_last_published_status_ts = 0
+
+
 def _publish_own_status(db, m):
     """Publie équité/login du suppléant — même forme de doc que le compte
     principal (vps_status/{VPS_ID}), juste sous FOLLOWER_ID. _account_size
-    lit le champ `login` de ce doc pour retrouver le bon account_size."""
+    lit le champ `login` de ce doc pour retrouver le bon account_size.
+
+    N'écrit que si login/online a changé, ou au moins toutes les
+    STATUS_HEARTBEAT_SECONDS pour garder l'équité affichée à peu près
+    fraîche — pas à chaque tour de boucle (~10s), qui a fini par épuiser
+    le quota gratuit Firestore avec 3 process tournant en continu."""
+    global _last_published_status, _last_published_status_ts
     ai = m.account_info()
     if ai is None:
         return
+
+    current = {"login": ai.login, "online": True}
+    now = time.time()
+    if current == _last_published_status and (now - _last_published_status_ts) < STATUS_HEARTBEAT_SECONDS:
+        return
+
     db.collection("vps_status").document(FOLLOWER_ID).set({
-        "online": True,
+        **current,
         "vps_id": FOLLOWER_ID,
-        "login": ai.login,
         "equity": ai.equity,
         "currency": ai.currency,
         "server": ai.server,
-        "ts": int(time.time()),
+        "ts": int(now),
     }, merge=True)
+    _last_published_status = current
+    _last_published_status_ts = now
+
+
+# Dernier contenu de _mirrored_tickets effectivement écrit dans Firestore —
+# pour ne réécrire mirror_state que si ça a changé (voir _save_state).
+_last_saved_tickets = None
 
 
 def _load_state(db):
-    global _mirrored_tickets
+    global _mirrored_tickets, _last_saved_tickets
     doc = db.collection("mirror_state").document(FOLLOWER_ID).get()
     _mirrored_tickets = doc.to_dict().get("tickets", {}) if doc.exists else {}
+    _last_saved_tickets = dict(_mirrored_tickets)
 
 
 def _save_state(db):
+    """N'écrit que si _mirrored_tickets a réellement changé depuis la
+    dernière sauvegarde — sinon, un tour de boucle sans aucune ouverture,
+    clôture ni annulation réécrivait quand même le même contenu."""
+    global _last_saved_tickets
+    if _mirrored_tickets == _last_saved_tickets:
+        return
     db.collection("mirror_state").document(FOLLOWER_ID).set({"tickets": _mirrored_tickets})
+    _last_saved_tickets = dict(_mirrored_tickets)
 
 
 def _open_mirror(m, master_ticket, master_pos, lot):
