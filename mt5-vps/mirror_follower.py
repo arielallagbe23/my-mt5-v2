@@ -111,6 +111,15 @@ _master_orders_cache = {}
 _positions_ready = False
 _orders_ready = False
 _master_state_listeners_started = False
+_listeners_started_at = None
+
+# Filet de sécurité : un écouteur qui reste bloqué "pas prêt" (permission
+# Firestore, coupure réseau au tout démarrage...) fait attendre sync_mirror
+# indéfiniment SANS AUCUNE erreur — contrairement à l'ancien .stream() à
+# chaque tour, qui aurait fait planter bruyamment. Passé ce délai, on log un
+# avertissement explicite à chaque tour tant que ça n'est pas résolu, pour
+# qu'une panne ne reste jamais silencieuse.
+LISTENER_STARTUP_WARNING_SECONDS = 60
 
 
 def _on_positions_snapshot(query_snapshot, changes, read_time):
@@ -136,12 +145,13 @@ def _on_orders_snapshot(query_snapshot, changes, read_time):
 def _start_master_state_listeners(db):
     """Démarre les deux écouteurs une seule fois (threads gérés par le SDK
     Firestore) — idempotent, sans effet si déjà démarrés."""
-    global _master_state_listeners_started
+    global _master_state_listeners_started, _listeners_started_at
     if _master_state_listeners_started:
         return
     db.collection("mirror_positions").on_snapshot(_on_positions_snapshot)
     db.collection("mirror_orders").on_snapshot(_on_orders_snapshot)
     _master_state_listeners_started = True
+    _listeners_started_at = time.time()
 
 
 def _account_size(db, vps_id):
@@ -375,7 +385,14 @@ def sync_mirror(db):
     _start_master_state_listeners(db)
     with _master_state_lock:
         if not (_positions_ready and _orders_ready):
-            return  # premier(s) tour(s) : écouteurs pas encore synchronisés, on attend
+            elapsed = time.time() - _listeners_started_at
+            if elapsed > LISTENER_STARTUP_WARNING_SECONDS:
+                print(
+                    f"[MIRROR] ATTENTION : écouteur(s) Firestore toujours pas prêt(s) après {elapsed:.0f}s "
+                    f"(positions_ready={_positions_ready} orders_ready={_orders_ready}) — "
+                    "vérifie la connexion réseau et les permissions Firestore, aucun mirroring en cours"
+                )
+            return  # écouteurs pas encore synchronisés, on attend
         master_positions = dict(_master_positions_cache)
         master_orders = dict(_master_orders_cache)
 

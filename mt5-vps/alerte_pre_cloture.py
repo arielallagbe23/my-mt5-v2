@@ -45,10 +45,20 @@ TIMEFRAMES = {
 
 # Poussé par l'écouteur temps réel sur settings/alerts (voir
 # _start_settings_listener) — jamais lu directement depuis Firestore dans
-# le chemin chaud (check_pre_close_alerts).
+# le chemin chaud (check_pre_close_alerts). Si l'écouteur ne se connecte
+# jamais (permission, réseau...), _enabled garde sa valeur par défaut
+# (H1/H4 activés) indéfiniment SANS AUCUNE erreur — filet de sécurité :
+# passé LISTENER_STARTUP_WARNING_SECONDS sans confirmation de connexion
+# (_listener_ready), on log un avertissement explicite plutôt que de
+# laisser une éventuelle panne totalement invisible.
 _settings_lock = threading.Lock()
 _enabled = {"H1": True, "H4": True}
 _listener_started = False
+_listener_ready = False
+_listener_started_at = None
+
+LISTENER_STARTUP_WARNING_SECONDS = 60
+_startup_warning_shown = False
 
 # Dernière bougie déjà alertée par timeframe (open_time_broker), chargée
 # une seule fois depuis Firestore au démarrage puis gardée en mémoire.
@@ -57,21 +67,41 @@ _alert_state_loaded = False
 
 
 def _on_settings_snapshot(doc_snapshot, changes, read_time):
+    global _listener_ready
     for doc in doc_snapshot:
         data = doc.to_dict() or {}
         with _settings_lock:
             _enabled["H1"] = data.get("h1", True)
             _enabled["H4"] = data.get("h4", True)
+            _listener_ready = True
 
 
 def _start_settings_listener(db):
     """Démarre l'écouteur une seule fois (thread géré par le SDK Firestore) —
     idempotent, sans effet si déjà démarré."""
-    global _listener_started
+    global _listener_started, _listener_started_at
     if _listener_started:
         return
     db.collection("settings").document("alerts").on_snapshot(_on_settings_snapshot)
     _listener_started = True
+    _listener_started_at = datetime.now(timezone.utc).timestamp()
+
+
+def _check_listener_health():
+    """Avertit une seule fois si l'écouteur n'a toujours pas confirmé sa
+    connexion après un long moment — sinon on continuerait à utiliser
+    silencieusement les valeurs par défaut sans jamais savoir pourquoi."""
+    global _startup_warning_shown
+    if _listener_ready or _startup_warning_shown or _listener_started_at is None:
+        return
+    elapsed = datetime.now(timezone.utc).timestamp() - _listener_started_at
+    if elapsed > LISTENER_STARTUP_WARNING_SECONDS:
+        print(
+            f"[ALERT] ATTENTION : écouteur Firestore (settings/alerts) toujours pas connecté "
+            f"après {elapsed:.0f}s — le réglage H1/H4 utilisé reste la valeur par défaut, "
+            "vérifie la connexion réseau et les permissions Firestore"
+        )
+        _startup_warning_shown = True
 
 
 def _load_alert_state(db):
@@ -106,6 +136,7 @@ def check_pre_close_alerts(db):
         return
 
     _start_settings_listener(db)
+    _check_listener_health()
     if not _alert_state_loaded:
         _load_alert_state(db)
 
