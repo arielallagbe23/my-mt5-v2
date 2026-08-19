@@ -20,6 +20,10 @@ dist-ssr
 service-account*.json
 .vercel
 
+# Claude Code local config (accumulates absolute local paths, and
+# settings.local.json can end up holding secrets typed into past commands)
+.claude/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

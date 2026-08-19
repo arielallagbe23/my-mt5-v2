@@ -15,9 +15,13 @@ export function Navbar({ page, onNavigate }) {
   return (
     <header className="sticky top-0 z-10 border-b border-white/10 bg-slate-950/80 pt-[max(0.75rem,env(safe-area-inset-top))] pr-[max(1.25rem,env(safe-area-inset-right))] pl-[max(1.25rem,env(safe-area-inset-left))] backdrop-blur-xl">
       <div className="flex h-14 items-center justify-between">
-        <button type="button" onClick={() => go('home')} className="text-lg font-bold text-white">
-          mymt5
-        </button>
+      <button
+        type="button"
+        onClick={() => go('home')}
+        className="text-2xl font-bold text-violet-400 hover:text-violet-300"
+      >
+        MyMt5
+      </button>
 
         <div className="relative">
           <button
