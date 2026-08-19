@@ -16,8 +16,20 @@ toutes les POLL_INTERVAL secondes) : la fenêtre d'alerte fait 10 minutes de
 large, donc largement de quoi retomber dedans avant qu'elle ne se referme,
 et le dédoublonnage Firestore (last_candle_open) garantit une seule notif
 par bougie.
+
+IMPORTANT (quota Firestore, optimisé) : settings/alerts (le toggle H1/H4 de
+la page Profil) était relu à chaque tour (~10s) alors qu'il ne change que
+si l'utilisateur y touche — remplacé par un ÉCOUTEUR TEMPS RÉEL
+(on_snapshot) : Firestore nous POUSSE la nouvelle valeur uniquement quand
+elle change vraiment, zéro lecture entre deux changements (potentiellement
+des mois), au lieu d'interroger "est-ce que ça a changé ?" en boucle. Le
+marqueur de dédoublonnage (alerts/pre_close_h1/h4) n'est lu qu'UNE FOIS au
+démarrage (pour restaurer l'état si le process redémarre en pleine fenêtre
+d'alerte) puis gardé en mémoire — rien d'autre que ce script n'écrit ces
+documents, donc le cache local reste toujours juste après ce chargement.
 """
 
+import threading
 from datetime import datetime, timezone
 
 from config import PRICE_SYMBOL
@@ -31,13 +43,47 @@ TIMEFRAMES = {
     "H4": 14400,
 }
 
+# Poussé par l'écouteur temps réel sur settings/alerts (voir
+# _start_settings_listener) — jamais lu directement depuis Firestore dans
+# le chemin chaud (check_pre_close_alerts).
+_settings_lock = threading.Lock()
+_enabled = {"H1": True, "H4": True}
+_listener_started = False
 
-def _enabled_timeframes(db):
-    """Lit settings/alerts (réglé depuis la page Profil de l'app) — les deux
-    timeframes sont actives par défaut si le doc n'existe pas encore."""
-    doc = db.collection("settings").document("alerts").get()
-    data = doc.to_dict() if doc.exists else {}
-    return {"H1": data.get("h1", True), "H4": data.get("h4", True)}
+# Dernière bougie déjà alertée par timeframe (open_time_broker), chargée
+# une seule fois depuis Firestore au démarrage puis gardée en mémoire.
+_last_alerted_open = {}
+_alert_state_loaded = False
+
+
+def _on_settings_snapshot(doc_snapshot, changes, read_time):
+    for doc in doc_snapshot:
+        data = doc.to_dict() or {}
+        with _settings_lock:
+            _enabled["H1"] = data.get("h1", True)
+            _enabled["H4"] = data.get("h4", True)
+
+
+def _start_settings_listener(db):
+    """Démarre l'écouteur une seule fois (thread géré par le SDK Firestore) —
+    idempotent, sans effet si déjà démarré."""
+    global _listener_started
+    if _listener_started:
+        return
+    db.collection("settings").document("alerts").on_snapshot(_on_settings_snapshot)
+    _listener_started = True
+
+
+def _load_alert_state(db):
+    """Restaure le dédoublonnage depuis Firestore, une seule fois au
+    démarrage — pour ne pas re-notifier si le process redémarre en pleine
+    fenêtre d'alerte."""
+    global _alert_state_loaded
+    for label in TIMEFRAMES:
+        doc = db.collection("alerts").document(f"pre_close_{label.lower()}").get()
+        if doc.exists:
+            _last_alerted_open[label] = doc.to_dict().get("last_candle_open")
+    _alert_state_loaded = True
 
 
 def _broker_offset_seconds(m, symbol):
@@ -58,7 +104,14 @@ def check_pre_close_alerts(db):
     m = ensure_mt5()
     if m is None:
         return
-    enabled = _enabled_timeframes(db)
+
+    _start_settings_listener(db)
+    if not _alert_state_loaded:
+        _load_alert_state(db)
+
+    with _settings_lock:
+        enabled = dict(_enabled)
+
     broker_offset = _broker_offset_seconds(m, PRICE_SYMBOL)
     for label, duration_seconds in TIMEFRAMES.items():
         if not enabled.get(label, True):
@@ -79,12 +132,8 @@ def check_timeframe(db, m, symbol, label, duration_seconds, broker_offset):
     now_utc = int(datetime.now(timezone.utc).timestamp())
     seconds_to_close = close_time_utc - now_utc
 
-    doc_ref = db.collection("alerts").document(f"pre_close_{label.lower()}")
-    doc = doc_ref.get()
-    last_alerted_open = doc.to_dict().get("last_candle_open") if doc.exists else None
-
     in_window = 0 <= seconds_to_close <= WARNING_MINUTES_BEFORE_CLOSE * 60
-    already_alerted = last_alerted_open == open_time_broker
+    already_alerted = _last_alerted_open.get(label) == open_time_broker
 
     if in_window and not already_alerted:
         minutes_left = round(seconds_to_close / 60)
@@ -92,10 +141,11 @@ def check_timeframe(db, m, symbol, label, duration_seconds, broker_offset):
             f"USDJPY — {label} clôture dans {minutes_left} min",
             "Vérifie la situation, prépare une tâche si besoin.",
         )
-        doc_ref.set({
+        db.collection("alerts").document(f"pre_close_{label.lower()}").set({
             "last_candle_open": open_time_broker,
             "updated_at": datetime.now(timezone.utc),
         })
+        _last_alerted_open[label] = open_time_broker
         print(f"[OK][{label}] Alerte envoyée, clôture dans {minutes_left} min")
     else:
         print(f"[SKIP][{label}] fenêtre={in_window} déjà_alerté={already_alerted}")
