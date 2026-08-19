@@ -178,7 +178,11 @@ def check_timeframe(db, m, symbol, label, duration_seconds, broker_offset):
         })
         _last_alerted_open[label] = open_time_broker
         print(f"[OK][{label}] Alerte envoyée, clôture dans {minutes_left} min")
-    else:
+    elif in_window:
+        # Silencieux en dehors de la fenêtre des 10 minutes — sinon ce log
+        # s'affiche à chaque tour (~10s) pendant ~4h par bougie H4 pour rien,
+        # juste bruit. Dans la fenêtre, ça confirme que le déjà_alerté joue
+        # bien son rôle de dédoublonnage.
         print(f"[SKIP][{label}] fenêtre={in_window} déjà_alerté={already_alerted}")
 
 
