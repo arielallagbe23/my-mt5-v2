@@ -18,20 +18,22 @@ disparaître (fermée : SL, TP, manuelle...) et notifie son résultat net en
 $ ainsi que la raison de clôture — réutilise _deals_to_trade de trades.py
 (même logique fiable basée sur DEAL_REASON, pas de duplication du calcul).
 Ce suivi-là reste sur TOUTES les positions, pas seulement H1/H4.
+
+Appelé depuis la boucle principale de mt5_status.py (comme tp_progress.py,
+trailing_stop.py...) — PAS un process séparé : ça l'était avant, via
+run_all.py, mais un déploiement qui ne lance que mt5_status.py (le cas le
+plus courant) faisait alors silencieusement l'impasse sur ce rapport et sur
+la notif de clôture de position.
 """
 
-import os
-import time
-import traceback
 from datetime import datetime, timedelta, timezone
 
-from config import MASTER_TERMINAL_PATH, PRICE_SYMBOL, SA_PATH
-from mt5_client import ensure_mt5, set_default_path
+from config import PRICE_SYMBOL
+from mt5_client import ensure_mt5
 from notify import notify
 from position_shared import ELIGIBLE_TIMEFRAMES, candles_current_and_previous, resolve_timeframe
 from trades import _deals_to_trade
 
-POLL_INTERVAL = 10
 SAFETY_DELAY_SECONDS = 2  # même précaution que trailing_stop.py après l'ouverture d'une nouvelle bougie
 
 # État en mémoire, propre à ce script (indépendant de _last_open_position_ids
@@ -52,9 +54,13 @@ def _position_progress(pos, close):
     direction = 1 if pos.type == 0 else -1  # POSITION_TYPE_BUY == 0
     diff = (close - entry) * direction  # >0 vers le TP, <0 vers le SL
 
-    if diff > 0 and pos.tp:
+    # abs(...) peut valoir 0 si le SL a été déplacé au breakeven (== entrée)
+    # par le trailing stop — sans ce garde-fou, une division par zéro plante
+    # ici et avorte tout _check_progress (H1 ET H4, toutes positions) pour
+    # ce tour, silencieusement.
+    if diff > 0 and pos.tp and pos.tp != entry:
         return "TP", diff / abs(pos.tp - entry) * 100
-    if diff < 0 and pos.sl:
+    if diff < 0 and pos.sl and pos.sl != entry:
         return "SL", abs(diff) / abs(pos.sl - entry) * 100
     return None, 0
 
@@ -126,7 +132,9 @@ def _check_closed_positions(m, positions):
     _last_open_tickets = current_tickets
 
 
-def _run_once(db):
+def check_position_level(db):
+    """Point d'entrée appelé depuis la boucle de mt5_status.py — même pattern
+    que les autres check_*(db) (tp_progress, trailing_stop...)."""
     m = ensure_mt5()
     if m is None:
         return
@@ -134,25 +142,3 @@ def _run_once(db):
     positions = m.positions_get(symbol=PRICE_SYMBOL) or ()
     _check_progress(db, m, positions)
     _check_closed_positions(m, positions)
-
-
-if __name__ == "__main__":
-    from google.cloud import firestore
-
-    # Indispensable dès qu'un deuxième terminal MT5 tourne sur la machine
-    # (compte suppléant) — sans ça, la connexion peut se faire au hasard sur
-    # le mauvais terminal (voir mt5_client.py).
-    set_default_path(MASTER_TERMINAL_PATH)
-
-    if not os.path.exists(SA_PATH):
-        raise SystemExit(f"[ERREUR] {SA_PATH} introuvable.")
-
-    db = firestore.Client.from_service_account_json(SA_PATH)
-
-    while True:
-        try:
-            _run_once(db)
-        except Exception:
-            print("[LOOP] erreur :")
-            traceback.print_exc()
-        time.sleep(POLL_INTERVAL)
