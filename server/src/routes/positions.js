@@ -26,12 +26,36 @@ router.get('/', requireAuth, async (req, res) => {
   const managedSnapshot = await db.collection('managed_positions').get()
   const managedTimeframeByTicket = new Map(managedSnapshot.docs.map((d) => [d.id, d.data().timeframe]))
 
+  // Une position ouverte par une tâche mymt5 (commentaire MT5 "task-{id}")
+  // est suivie (trailing stop + rapport) via le timeframe de SA tâche —
+  // jamais via managed_positions (réservé à l'activation manuelle). Même
+  // résolution que resolve_timeframe côté VPS (position_shared.py), pour
+  // que le badge affiché à l'app corresponde exactement à ce qui tourne
+  // réellement là-bas.
+  const taskIdByTicket = new Map(
+    positions
+      .filter((p) => p.comment?.startsWith('task-'))
+      .map((p) => [p.ticket, p.comment.slice('task-'.length)]),
+  )
+  const taskTimeframeById = new Map()
+  if (taskIdByTicket.size > 0) {
+    const entries = [...taskIdByTicket.values()]
+    const taskDocs = await Promise.all(entries.map((id) => db.collection('tasks').doc(id).get()))
+    taskDocs.forEach((taskDoc, i) => {
+      if (taskDoc.exists) taskTimeframeById.set(entries[i], taskDoc.data().timeframe)
+    })
+  }
+
   res.json({
     orders: data.orders ?? [],
-    positions: positions.map((p) => ({
-      ...p,
-      managedTimeframe: managedTimeframeByTicket.get(String(p.ticket)) ?? null,
-    })),
+    positions: positions.map((p) => {
+      const taskId = taskIdByTicket.get(p.ticket)
+      const resolved = taskId ? taskTimeframeById.get(taskId) : managedTimeframeByTicket.get(String(p.ticket))
+      return {
+        ...p,
+        managedTimeframe: MANAGEABLE_TIMEFRAMES.has(resolved) ? resolved : null,
+      }
+    }),
     ts: data.ts ?? null,
   })
 })

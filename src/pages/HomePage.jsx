@@ -365,35 +365,37 @@ export function HomePage() {
                 </span>
               </div>
               {slStage && <p className="mt-2 text-xs font-semibold text-indigo-300">Actuellement {slStage}</p>}
-              {!p.comment?.startsWith('task-') && (
-                <div className="mt-3 border-t border-white/10 pt-3">
-                  {p.managedTimeframe ? (
-                    <p className="text-xs font-semibold text-green-400">
-                      Suivi actif ({p.managedTimeframe}) — trailing stop + progression TP
-                    </p>
-                  ) : (
-                    <div className="flex items-center gap-2">
-                      <p className="flex-1 text-xs text-slate-400">Position hors mymt5 — activer le suivi ?</p>
-                      <select
-                        value={monitoringTimeframes[p.ticket] ?? 'H1'}
-                        onChange={(e) => setMonitoringTimeframe(p.ticket, e.target.value)}
-                        className="min-h-8 rounded-full border border-white/10 bg-white/5 px-2 text-xs text-white"
-                      >
-                        <option value="H1">H1</option>
-                        <option value="H4">H4</option>
-                      </select>
-                      <button
-                        type="button"
-                        onClick={() => activateMonitoring(p.ticket)}
-                        disabled={activatingTicket === p.ticket}
-                        className="min-h-8 shrink-0 rounded-full bg-indigo-500/15 px-3 text-xs font-semibold text-indigo-300 disabled:opacity-60"
-                      >
-                        {activatingTicket === p.ticket ? 'Activation...' : 'Activer'}
-                      </button>
-                    </div>
-                  )}
-                </div>
-              )}
+              <div className="mt-3 border-t border-white/10 pt-3">
+                {p.managedTimeframe ? (
+                  <p className="text-xs font-semibold text-green-400">
+                    Suivi actif ({p.managedTimeframe}) — trailing stop + rapport de position
+                  </p>
+                ) : p.comment?.startsWith('task-') ? (
+                  <p className="text-xs font-semibold text-red-400">
+                    Suivi inactif — trailing stop et rapport de position ne s'appliqueront pas
+                  </p>
+                ) : (
+                  <div className="flex items-center gap-2">
+                    <p className="flex-1 text-xs text-red-400">Suivi inactif — position hors mymt5, activer ?</p>
+                    <select
+                      value={monitoringTimeframes[p.ticket] ?? 'H1'}
+                      onChange={(e) => setMonitoringTimeframe(p.ticket, e.target.value)}
+                      className="min-h-8 rounded-full border border-white/10 bg-white/5 px-2 text-xs text-white"
+                    >
+                      <option value="H1">H1</option>
+                      <option value="H4">H4</option>
+                    </select>
+                    <button
+                      type="button"
+                      onClick={() => activateMonitoring(p.ticket)}
+                      disabled={activatingTicket === p.ticket}
+                      className="min-h-8 shrink-0 rounded-full bg-indigo-500/15 px-3 text-xs font-semibold text-indigo-300 disabled:opacity-60"
+                    >
+                      {activatingTicket === p.ticket ? 'Activation...' : 'Activer'}
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
           )
         })}
