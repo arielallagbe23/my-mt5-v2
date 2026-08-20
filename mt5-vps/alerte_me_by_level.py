@@ -1,112 +1,47 @@
 #!/usr/bin/env python3
 """
-alerte_me_by_level.py — Situe chaque position USDJPY suivie (H1/H4, même
-timeframe que trailing_stop.py) par rapport à son entrée (PE), son TP et
-son SL, au close de la bougie H1/H4 qui vient de se terminer : progression
-exacte vers le TP (si le close est du côté profit) ou vers le SL (si du
-côté perte). Ne notifie qu'UNE FOIS par nouvelle bougie H1/H4 de la
-position — même rythme que le trailing stop, pour éviter le flot de
-notifications qu'un minuteur fixe (15 min, jusqu'à 4 notifs/heure/position)
-donnait. Conséquence assumée : les positions sans timeframe H1/H4 résolu
-(jamais suivies, ni par une tâche ni activées à la main) ne sont plus
-concernées par cette notif — exactement le même périmètre que le trailing
-stop, par cohérence.
+alerte_me_by_level.py — Détecte, à chaque tour de boucle (~10s, pas lié aux
+bougies — sinon une clôture met jusqu'à 4h à être remarquée), une position
+qui vient de disparaître (fermée : SL, TP, manuelle...) et notifie son
+résultat net en $ ainsi que la raison de clôture — réutilise _deals_to_trade
+de trades.py (même logique fiable basée sur DEAL_REASON, pas de duplication
+du calcul). Porte sur TOUTES les positions, pas seulement H1/H4 — SAUF
+celles suivies par trailing_stop.py (doc trailing_levels/{ticket} existant),
+qui notifie déjà leur propre clôture (TP/SL hit + net) ; sans cette
+exclusion, une position suivie recevrait deux notifs de clôture distinctes
+pour le même événement.
 
-Détecte aussi, à chaque tour de boucle (~10s, pas lié aux bougies — sinon
-une clôture met jusqu'à 4h à être remarquée), une position qui vient de
-disparaître (fermée : SL, TP, manuelle...) et notifie son résultat net en
-$ ainsi que la raison de clôture — réutilise _deals_to_trade de trades.py
-(même logique fiable basée sur DEAL_REASON, pas de duplication du calcul).
-Ce suivi-là reste sur TOUTES les positions, pas seulement H1/H4.
+Le rapport de situation (progression vers TP/SL) et le trailing stop
+vivaient ici aussi jusqu'à leur fusion dans trailing_stop.py — les deux
+tournaient déjà sur le même déclencheur (bougie H1/H4 qui vient de se
+terminer), contrairement à cette détection-ci qui doit rester réactive à
+chaque tour, pas seulement au rythme des bougies.
 
 Appelé depuis la boucle principale de mt5_status.py (comme tp_progress.py,
 trailing_stop.py...) — PAS un process séparé : ça l'était avant, via
 run_all.py, mais un déploiement qui ne lance que mt5_status.py (le cas le
-plus courant) faisait alors silencieusement l'impasse sur ce rapport et sur
-la notif de clôture de position.
+plus courant) faisait alors silencieusement l'impasse sur cette notif.
 """
 
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 
 from config import PRICE_SYMBOL
 from mt5_client import ensure_mt5
 from notify import notify
-from position_shared import ELIGIBLE_TIMEFRAMES, candles_current_and_previous, resolve_timeframe
 from trades import _deals_to_trade
-
-SAFETY_DELAY_SECONDS = 2  # même précaution que trailing_stop.py après l'ouverture d'une nouvelle bougie
 
 # État en mémoire, propre à ce script (indépendant de _last_open_position_ids
 # dans trades.py, qui tourne dans un autre process/boucle).
 _last_open_tickets = None
 
-# timeframe -> candle_time de la dernière bougie déjà traitée pour la
-# notif de progression — même mécanisme que trailing_stop.py.
-_last_processed_candle_time = {}
 
-
-def _position_progress(pos, close):
-    """Situe le close par rapport à PE/TP/SL : soit vers le TP (profit),
-    soit vers le SL (perte), jamais les deux. Retourne (label, pct) avec
-    label "TP" ou "SL", ou (None, 0) si le close est exactement à l'entrée
-    ou si le niveau concerné (TP/SL) n'est pas défini sur la position."""
-    entry = pos.price_open
-    direction = 1 if pos.type == 0 else -1  # POSITION_TYPE_BUY == 0
-    diff = (close - entry) * direction  # >0 vers le TP, <0 vers le SL
-
-    # abs(...) peut valoir 0 si le SL a été déplacé au breakeven (== entrée)
-    # par le trailing stop — sans ce garde-fou, une division par zéro plante
-    # ici et avorte tout _check_progress (H1 ET H4, toutes positions) pour
-    # ce tour, silencieusement.
-    if diff > 0 and pos.tp and pos.tp != entry:
-        return "TP", diff / abs(pos.tp - entry) * 100
-    if diff < 0 and pos.sl and pos.sl != entry:
-        return "SL", abs(diff) / abs(pos.sl - entry) * 100
-    return None, 0
-
-
-def _check_progress(db, m, positions):
-    """Notifie la progression TP/SL, une seule fois par nouvelle bougie
-    H1/H4 — même détection qu'en trailing_stop.py (nouvelle bougie + délai
-    de sécurité de 2s), appliquée séparément à chaque timeframe."""
-    now_utc = datetime.now(timezone.utc)
-
-    for timeframe in ELIGIBLE_TIMEFRAMES:
-        previous_bar, current_bar = candles_current_and_previous(m, PRICE_SYMBOL, timeframe)
-        if previous_bar is None:
-            continue
-
-        current_time = int(current_bar["time"])
-        if _last_processed_candle_time.get(timeframe) == current_time:
-            continue  # déjà traité pour cette bougie
-
-        candle_open = datetime.fromtimestamp(current_time, tz=timezone.utc)
-        if now_utc < candle_open + timedelta(seconds=SAFETY_DELAY_SECONDS):
-            continue  # trop tôt, on retente au tour suivant
-
-        _last_processed_candle_time[timeframe] = current_time
-        close = float(previous_bar["close"])
-        now_str = now_utc.strftime("%H:%M:%S")
-
-        for pos in positions:
-            if resolve_timeframe(db, pos.ticket, pos.comment) != timeframe:
-                continue
-            label, pct = _position_progress(pos, close)
-            if label is None:
-                continue
-            notify(
-                f"mymt5 — on est à {pct:.2f}% du {label}",
-                f"{pos.symbol} (ticket {pos.ticket}) : close {close}, entrée {pos.price_open}",
-            )
-            print(f"[{now_str}] ticket {pos.ticket} : {pct:.2f}% du {label} (close {close})")
-
-
-def _check_closed_positions(m, positions):
+def _check_closed_positions(db, m, positions):
     """Détecte les tickets ouverts au tour précédent et disparus à celui-ci
     (déjà récupérés ce tour-ci, pas de second appel MT5), et notifie leur
     résultat net (profit + swap + commission) en $ et la raison de clôture
-    (SL/TP/CLIENT/...). Premier tour après démarrage : on mémorise l'état
-    sans rien notifier."""
+    (SL/TP/CLIENT/...) — sauf les positions suivies par trailing_stop.py,
+    qui s'en charge déjà avec un message combiné. Premier tour après
+    démarrage : on mémorise l'état sans rien notifier."""
     global _last_open_tickets
     current_tickets = {p.ticket for p in positions}
 
@@ -116,6 +51,9 @@ def _check_closed_positions(m, positions):
 
     closed_tickets = _last_open_tickets - current_tickets
     for ticket in closed_tickets:
+        if db.collection("trailing_levels").document(str(ticket)).get().exists:
+            continue  # déjà notifié par trailing_stop.py (_check_closed)
+
         deals = m.history_deals_get(position=ticket) or ()
         trade = _deals_to_trade(m, ticket, deals)
         if trade is None:
@@ -132,7 +70,7 @@ def _check_closed_positions(m, positions):
     _last_open_tickets = current_tickets
 
 
-def check_position_level(db):
+def check_closed_positions_notify(db):
     """Point d'entrée appelé depuis la boucle de mt5_status.py — même pattern
     que les autres check_*(db) (tp_progress, trailing_stop...)."""
     m = ensure_mt5()
@@ -140,5 +78,4 @@ def check_position_level(db):
         return
 
     positions = m.positions_get(symbol=PRICE_SYMBOL) or ()
-    _check_progress(db, m, positions)
-    _check_closed_positions(m, positions)
+    _check_closed_positions(db, m, positions)

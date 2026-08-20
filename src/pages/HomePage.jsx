@@ -14,6 +14,10 @@ function formatPrice(value) {
   return typeof value === 'number' ? value.toFixed(3) : '—'
 }
 
+function formatHistoryTime(ts) {
+  return typeof ts === 'number' ? new Date(ts * 1000).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) : '—'
+}
+
 function formatExecutionTime(value) {
   if (!value) return '—'
   return new Date(value).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' })
@@ -141,6 +145,7 @@ export function HomePage() {
   const [closingTicket, setClosingTicket] = useState(null)
   const [closeError, setCloseError] = useState('')
   const [now, setNow] = useState(() => new Date())
+  const [histories, setHistories] = useState({})
 
   useEffect(() => {
     const id = setInterval(() => setNow(new Date()), 60_000)
@@ -165,6 +170,20 @@ export function HomePage() {
       .finally(() => setLoading(false))
     api.marketRecap().then(setMarketRecap).catch(() => {})
   }
+
+  // Historique de suivi (trailing stop + rapport) par position, une seule
+  // requête par ticket suivi — pas la peine de la relire à chaque poll de
+  // "load()", juste quand la liste des positions suivies change.
+  useEffect(() => {
+    const trackedTickets = (data?.positions ?? []).filter((p) => p.managedTimeframe).map((p) => p.ticket)
+    trackedTickets.forEach((ticket) => {
+      api
+        .trailingHistory(ticket)
+        .then((result) => setHistories((current) => ({ ...current, [ticket]: result.history ?? [] })))
+        .catch(() => {})
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data?.positions?.map((p) => p.ticket).join(',')])
 
   useEffect(() => {
     load()
@@ -341,16 +360,19 @@ export function HomePage() {
               </span>
               <span className="text-xs text-slate-400">{formatExecutionTime(t.executionTime)}</span>
             </div>
-            <div className="mt-2 grid grid-cols-3 gap-2 text-xs text-slate-400">
-              <span>
-                Timeframe : <span className="font-semibold text-white">{t.timeframe ?? '—'}</span>
-              </span>
-              <span>
-                Risque : <span className="font-semibold text-white">{t.risk != null ? `${t.risk}%` : '—'}</span>
-              </span>
-              <span>
-                Statut : <span className="font-semibold text-white">{t.status === 'draft' ? 'Brouillon' : 'En attente'}</span>
-              </span>
+            <div className="mt-2 grid grid-cols-3 gap-2">
+              <div className="flex flex-col items-center gap-0.5 rounded-xl bg-white/5 p-2 text-center">
+                <span className="text-[10px] font-semibold tracking-wide text-slate-500 uppercase">Timeframe</span>
+                <span className="text-sm font-semibold text-white">{t.timeframe ?? '—'}</span>
+              </div>
+              <div className="flex flex-col items-center gap-0.5 rounded-xl bg-white/5 p-2 text-center">
+                <span className="text-[10px] font-semibold tracking-wide text-slate-500 uppercase">Risque</span>
+                <span className="text-sm font-semibold text-white">{t.risk != null ? `${t.risk}%` : '—'}</span>
+              </div>
+              <div className="flex flex-col items-center gap-0.5 rounded-xl bg-white/5 p-2 text-center">
+                <span className="text-[10px] font-semibold tracking-wide text-slate-500 uppercase">Statut</span>
+                <span className="text-sm font-semibold text-white">{t.status === 'draft' ? 'Brouillon' : 'En attente'}</span>
+              </div>
             </div>
           </div>
         ))}
@@ -360,6 +382,94 @@ export function HomePage() {
         <p className="text-xs font-bold tracking-[0.14em] text-slate-500 uppercase">Positions ouvertes</p>
         {loading && !data && <p className="text-sm text-slate-400">Chargement...</p>}
         {!loading && positions.length === 0 && <p className="text-sm text-slate-400">Aucune position ouverte.</p>}
+
+        {!loading && positions.length === 0 && (
+          <div className="rounded-2xl bg-amber-500/5 p-3">
+            <p className="text-[10px] font-bold tracking-[0.14em] text-amber-400 uppercase">
+              Aperçu — pas une vraie position
+            </p>
+            <div className="mt-2 flex items-center justify-between gap-2">
+              <span className="rounded-full bg-red-500/15 px-2 py-0.5 text-xs font-semibold text-red-300">Sell</span>
+              <span className="text-sm font-semibold text-blue-400">+41.20</span>
+            </div>
+            <div className="mt-2 grid grid-cols-3 gap-2">
+              <div className="flex flex-col items-center gap-0.5 rounded-xl bg-white/5 p-2 text-center">
+                <span className="text-[10px] font-semibold tracking-wide text-slate-500 uppercase">Entrée</span>
+                <span className="text-sm font-semibold text-white">158.912</span>
+              </div>
+              <div className="flex flex-col items-center gap-0.5 rounded-xl bg-white/5 p-2 text-center">
+                <span className="text-[10px] font-semibold tracking-wide text-slate-500 uppercase">Actuel</span>
+                <span className="text-sm font-semibold text-white">158.598</span>
+              </div>
+              <div className="flex flex-col items-center gap-0.5 rounded-xl bg-white/5 p-2 text-center">
+                <span className="text-[10px] font-semibold tracking-wide text-slate-500 uppercase">Volume</span>
+                <span className="text-sm font-semibold text-white">2.65</span>
+              </div>
+            </div>
+            <p className="mt-2 text-center text-xs font-semibold text-green-400">Suivi actif (H4) — trailing stop + rapport de position</p>
+            <div className="mt-3 flex flex-col gap-3 text-xs">
+              <p className="text-slate-400">
+                <span className="text-slate-500">07:00</span> — prix de close compris entre 158.807 et 158.912, rien
+                n'a été fait
+              </p>
+              <p className="text-slate-400">
+                <span className="text-slate-500">11:00</span> — prix de close compris entre 158.702 et 158.807, rien
+                n'a été fait
+              </p>
+              <p className="text-indigo-300">
+                <span className="text-slate-500">15:00</span> — prix de close compris entre 158.598 et 158.702, le SL
+                est passé à BE
+              </p>
+              <p className="text-indigo-300 font-semibold">
+                <span className="text-slate-500">19:00</span> — prix de close compris entre 158.514 et 158.598, le SL
+                est passé à 25%
+              </p>
+            </div>
+          </div>
+        )}
+
+        {!loading && positions.length === 0 && (
+          <div className="mt-4 rounded-2xl bg-amber-500/5 p-3">
+            <p className="text-[10px] font-bold tracking-[0.14em] text-amber-400 uppercase">
+              Aperçu — pas une vraie position
+            </p>
+            <div className="mt-2 flex items-center justify-between gap-2">
+              <span className="rounded-full bg-blue-500/15 px-2 py-0.5 text-xs font-semibold text-blue-300">Buy</span>
+              <span className="text-sm font-semibold text-blue-400">+21.00</span>
+            </div>
+            <div className="mt-2 grid grid-cols-3 gap-2">
+              <div className="flex flex-col items-center gap-0.5 rounded-xl bg-white/5 p-2 text-center">
+                <span className="text-[10px] font-semibold tracking-wide text-slate-500 uppercase">Entrée</span>
+                <span className="text-sm font-semibold text-white">150.200</span>
+              </div>
+              <div className="flex flex-col items-center gap-0.5 rounded-xl bg-white/5 p-2 text-center">
+                <span className="text-[10px] font-semibold tracking-wide text-slate-500 uppercase">Actuel</span>
+                <span className="text-sm font-semibold text-white">150.410</span>
+              </div>
+              <div className="flex flex-col items-center gap-0.5 rounded-xl bg-white/5 p-2 text-center">
+                <span className="text-[10px] font-semibold tracking-wide text-slate-500 uppercase">Volume</span>
+                <span className="text-sm font-semibold text-white">1.20</span>
+              </div>
+            </div>
+            <div className="mt-3 flex items-center gap-2 border-t border-white/10 pt-3">
+              <p className="flex-1 text-xs text-red-400">Suivi inactif — position hors mymt5, activer ?</p>
+              <select
+                disabled
+                className="min-h-8 rounded-full border border-white/10 bg-white/5 px-2 text-xs text-white"
+              >
+                <option>H1</option>
+              </select>
+              <button
+                type="button"
+                disabled
+                className="min-h-8 shrink-0 rounded-full bg-indigo-500/15 px-3 text-xs font-semibold text-indigo-300 opacity-60"
+              >
+                Activer
+              </button>
+            </div>
+          </div>
+        )}
+
         {positions.map((p) => {
           const slStage = slStageLabel(p)
           return (
@@ -380,23 +490,44 @@ export function HomePage() {
                   {typeof p.profit === 'number' ? p.profit.toFixed(2) : '—'}
                 </span>
               </div>
-              <div className="mt-2 grid grid-cols-3 gap-2 text-xs text-slate-400">
-                <span>
-                  Entrée : <span className="font-semibold text-white">{formatPrice(p.priceOpen)}</span>
-                </span>
-                <span>
-                  Actuel : <span className="font-semibold text-white">{formatPrice(p.priceCurrent)}</span>
-                </span>
-                <span>
-                  Volume : <span className="font-semibold text-white">{p.volume}</span>
-                </span>
+              <div className="mt-2 grid grid-cols-3 gap-2">
+                <div className="flex flex-col items-center gap-0.5 rounded-xl bg-white/5 p-2 text-center">
+                  <span className="text-[10px] font-semibold tracking-wide text-slate-500 uppercase">Entrée</span>
+                  <span className="text-sm font-semibold text-white">{formatPrice(p.priceOpen)}</span>
+                </div>
+                <div className="flex flex-col items-center gap-0.5 rounded-xl bg-white/5 p-2 text-center">
+                  <span className="text-[10px] font-semibold tracking-wide text-slate-500 uppercase">Actuel</span>
+                  <span className="text-sm font-semibold text-white">{formatPrice(p.priceCurrent)}</span>
+                </div>
+                <div className="flex flex-col items-center gap-0.5 rounded-xl bg-white/5 p-2 text-center">
+                  <span className="text-[10px] font-semibold tracking-wide text-slate-500 uppercase">Volume</span>
+                  <span className="text-sm font-semibold text-white">{p.volume}</span>
+                </div>
               </div>
               {slStage && <p className="mt-2 text-xs font-semibold text-indigo-300">Actuellement {slStage}</p>}
               <div className="mt-3 flex flex-col gap-2 border-t border-white/10 pt-3">
                 {p.managedTimeframe ? (
-                  <p className="text-xs font-semibold text-green-400">
-                    Suivi actif ({p.managedTimeframe}) — trailing stop + rapport de position
-                  </p>
+                  <>
+                    <p className="text-center text-xs font-semibold text-green-400">
+                      Suivi actif ({p.managedTimeframe}) — trailing stop + rapport de position
+                    </p>
+                    {histories[p.ticket]?.length > 0 && (
+                      <div className="flex flex-col gap-3 text-xs">
+                        {histories[p.ticket].map((h, i) => {
+                          const isLast = i === histories[p.ticket].length - 1
+                          const isSlMove = h.message?.includes('SL est passé')
+                          return (
+                            <p
+                              key={`${h.ts}-${i}`}
+                              className={isSlMove ? `text-indigo-300${isLast ? ' font-semibold' : ''}` : 'text-slate-400'}
+                            >
+                              <span className="text-slate-500">{formatHistoryTime(h.ts)}</span> — {h.message}
+                            </p>
+                          )
+                        })}
+                      </div>
+                    )}
+                  </>
                 ) : (
                   <div className="flex items-center gap-2">
                     <p className="flex-1 text-xs text-red-400">Suivi inactif — trailing stop et rapport ne s'appliqueront pas</p>
@@ -478,16 +609,19 @@ export function HomePage() {
               </span>
               <span className="text-xs text-slate-400">{o.symbol}</span>
             </div>
-            <div className="mt-2 grid grid-cols-3 gap-2 text-xs text-slate-400">
-              <span>
-                Prix : <span className="font-semibold text-white">{formatPrice(o.price)}</span>
-              </span>
-              <span>
-                SL : <span className="font-semibold text-white">{formatPrice(o.sl)}</span>
-              </span>
-              <span>
-                TP : <span className="font-semibold text-white">{formatPrice(o.tp)}</span>
-              </span>
+            <div className="mt-2 grid grid-cols-3 gap-2">
+              <div className="flex flex-col items-center gap-0.5 rounded-xl bg-white/5 p-2 text-center">
+                <span className="text-[10px] font-semibold tracking-wide text-slate-500 uppercase">Prix</span>
+                <span className="text-sm font-semibold text-white">{formatPrice(o.price)}</span>
+              </div>
+              <div className="flex flex-col items-center gap-0.5 rounded-xl bg-white/5 p-2 text-center">
+                <span className="text-[10px] font-semibold tracking-wide text-slate-500 uppercase">SL</span>
+                <span className="text-sm font-semibold text-white">{formatPrice(o.sl)}</span>
+              </div>
+              <div className="flex flex-col items-center gap-0.5 rounded-xl bg-white/5 p-2 text-center">
+                <span className="text-[10px] font-semibold tracking-wide text-slate-500 uppercase">TP</span>
+                <span className="text-sm font-semibold text-white">{formatPrice(o.tp)}</span>
+              </div>
             </div>
           </div>
         ))}

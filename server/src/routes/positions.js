@@ -109,4 +109,20 @@ router.get('/close/result', requireAuth, async (req, res) => {
   res.json(doc.data())
 })
 
+// Historique de suivi (trailing stop + rapport) d'une position, écrit par
+// trailing_stop.py à chaque nouvelle bougie H1/H4 (mt5-vps/trailing_levels/
+// {ticket}/history) — les 20 derniers messages, du plus ancien au plus
+// récent.
+router.get('/:ticket/trailing-history', requireAuth, async (req, res) => {
+  const snapshot = await db
+    .collection('trailing_levels')
+    .doc(req.params.ticket)
+    .collection('history')
+    .orderBy('ts', 'desc')
+    .limit(20)
+    .get()
+
+  res.json({ history: snapshot.docs.map((d) => d.data()).reverse() })
+})
+
 export default router

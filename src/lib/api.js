@@ -41,6 +41,7 @@ export const api = {
     request(`/api/positions/${ticket}/activate-monitoring`, { method: 'POST', body: { timeframe } }),
   requestClosePosition: (ticket) => request(`/api/positions/${ticket}/close`, { method: 'POST' }),
   closePositionResult: () => request('/api/positions/close/result'),
+  trailingHistory: (ticket) => request(`/api/positions/${ticket}/trailing-history`),
   trades: () => request('/api/trades'),
   syncTrades: () => request('/api/trades/sync', { method: 'POST' }),
   reports: () => request('/api/reports'),

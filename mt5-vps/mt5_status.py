@@ -6,12 +6,12 @@ mt5_status.py — Point d'entrée du VPS. Toutes les POLL_INTERVAL secondes :
   - alerte ~10 min avant chaque clôture de bougie H1/H4 sur USDJPY
     (alerte_pre_cloture.py) ;
   - surveille les ordres différés et positions ouvertes : notifie un
-    déclenchement d'ordre, la progression vers le TP, et déplace le SL par
-    paliers (BE, 25%, 50%) — respecte DRY_RUN comme le reste (order_fills.py,
-    untracked_positions.py, tp_progress.py, trailing_stop.py) ;
-  - notifie, à chaque clôture de bougie H1/H4, où en est chaque position
-    suivie par rapport à son entrée/TP/SL, et la notif de clôture de
-    position avec son résultat net (alerte_me_by_level.py) ;
+    déclenchement d'ordre, la progression vers le TP, notifie où en est
+    chaque position suivie (TP/SL) à chaque clôture H1/H4 et déplace le SL
+    par paliers (BE, 25%, 50%) — respecte DRY_RUN comme le reste
+    (order_fills.py, untracked_positions.py, tp_progress.py, trailing_stop.py) ;
+  - notifie la clôture d'une position suivie ou non, avec son résultat net
+    (alerte_me_by_level.py) ;
   - alimente l'historique des trades fermés (trades.py) ;
   - publie l'état des positions ouvertes et des ordres différés pour le
     compte suppléant (mirror_publish.py — voir mirror_follower.py, process séparé).
@@ -33,8 +33,8 @@ par fichier :
   order_fills.py            — détecte un ordre différé qui se transforme en position
   untracked_positions.py    — détecte une position ouverte hors mymt5
   tp_progress.py            — notifie la progression vers le TP (seuils 50/75/95/100%, basé sur le pic)
-  trailing_stop.py          — déplace le SL par paliers (basé sur la clôture, pas le pic)
-  alerte_me_by_level.py     — rapport de situation par rapport à PE/TP/SL à chaque clôture H1/H4 + notif de clôture de position
+  trailing_stop.py          — rapport de situation (PE/TP/SL) + déplacement du SL par paliers, à chaque clôture H1/H4
+  alerte_me_by_level.py     — notif de clôture de position (résultat net), à chaque tour de boucle
   trades.py                 — historique des trades fermés (import + alimentation automatique)
   mirror_publish.py         — publie les positions pour le compte suppléant (voir mirror_follower.py)
 
@@ -51,7 +51,7 @@ import os
 import time
 import traceback
 
-from alerte_me_by_level import check_position_level
+from alerte_me_by_level import check_closed_positions_notify
 from alerte_pre_cloture import check_pre_close_alerts
 from config import MASTER_TERMINAL_PATH, POLL_INTERVAL, SA_PATH, VPS_ID
 from mirror_publish import publish_master_orders, publish_master_positions
@@ -88,7 +88,7 @@ def run():
             check_untracked_positions(db)
             check_tp_progress(db)
             check_trailing_stop(db)
-            check_position_level(db)
+            check_closed_positions_notify(db)
             check_closed_positions(db)
             publish_master_positions(db)
             publish_master_orders(db)
