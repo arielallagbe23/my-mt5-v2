@@ -60,10 +60,11 @@ router.get('/', requireAuth, async (req, res) => {
   })
 })
 
-// Active le suivi (trailing stop + progression TP) côté VPS pour une position
-// qui n'a PAS été ouverte par une tâche mymt5 (ouverte manuellement, ou par
-// un autre EA) — le VPS lit ce document en fallback quand le commentaire MT5
-// de la position ne pointe vers aucune tâche connue.
+// Active le suivi (trailing stop + rapport) côté VPS. Sert de solution de
+// repli pour resolve_timeframe (position_shared.py) : essayée dès que la
+// tâche d'origine ne donne rien (position ouverte hors mymt5, tâche
+// supprimée, timeframe manquant sur la tâche...) — utile même pour une
+// position issue d'une tâche si le badge affiche "Suivi inactif".
 router.post('/:ticket/activate-monitoring', requireAuth, async (req, res) => {
   const { timeframe } = req.body ?? {}
   if (!MANAGEABLE_TIMEFRAMES.has(timeframe)) {
@@ -75,6 +76,31 @@ router.post('/:ticket/activate-monitoring', requireAuth, async (req, res) => {
     activatedAt: Date.now(),
   })
   res.status(201).json({ ticket: req.params.ticket, timeframe })
+})
+
+// Ferme une position au marché depuis l'app (bouton "urgence") — le VPS lit
+// commands/close_position_request et envoie l'ordre de clôture réel (ou le
+// simule en DRY_RUN, comme le reste).
+router.post('/:ticket/close', requireAuth, async (req, res) => {
+  const ticket = Number(req.params.ticket)
+  if (!Number.isInteger(ticket)) {
+    return res.status(400).json({ error: 'Ticket invalide' })
+  }
+
+  await db.collection('commands').doc('close_position_request').set({
+    status: 'pending',
+    ticket,
+    ts: Date.now(),
+  })
+  res.status(202).json({ requested: true })
+})
+
+router.get('/close/result', requireAuth, async (req, res) => {
+  const doc = await db.collection('close_position_results').doc('main').get()
+  if (!doc.exists) {
+    return res.status(503).json({ error: 'Indisponible' })
+  }
+  res.json(doc.data())
 })
 
 export default router

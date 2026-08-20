@@ -137,6 +137,9 @@ export function HomePage() {
   const [recapRefreshError, setRecapRefreshError] = useState('')
   const [monitoringTimeframes, setMonitoringTimeframes] = useState({})
   const [activatingTicket, setActivatingTicket] = useState(null)
+  const [confirmCloseTicket, setConfirmCloseTicket] = useState(null)
+  const [closingTicket, setClosingTicket] = useState(null)
+  const [closeError, setCloseError] = useState('')
   const [now, setNow] = useState(() => new Date())
 
   useEffect(() => {
@@ -224,6 +227,30 @@ export function HomePage() {
       setError("Impossible d'activer le suivi pour cette position")
     } finally {
       setActivatingTicket(null)
+    }
+  }
+
+  async function closePosition(ticket) {
+    setCloseError('')
+    setClosingTicket(ticket)
+    try {
+      const result = await requestAndPoll({
+        request: () => api.requestClosePosition(ticket),
+        fetch: () => api.closePositionResult(),
+        isFresh: isFreshTs,
+      })
+      if (!result) {
+        setCloseError('VPS indisponible — impossible de confirmer la fermeture.')
+        return
+      }
+      if (!result.success) {
+        setCloseError(result.error ?? 'Échec de la fermeture.')
+        return
+      }
+      setConfirmCloseTicket(null)
+      load()
+    } finally {
+      setClosingTicket(null)
     }
   }
 
@@ -365,18 +392,14 @@ export function HomePage() {
                 </span>
               </div>
               {slStage && <p className="mt-2 text-xs font-semibold text-indigo-300">Actuellement {slStage}</p>}
-              <div className="mt-3 border-t border-white/10 pt-3">
+              <div className="mt-3 flex flex-col gap-2 border-t border-white/10 pt-3">
                 {p.managedTimeframe ? (
                   <p className="text-xs font-semibold text-green-400">
                     Suivi actif ({p.managedTimeframe}) — trailing stop + rapport de position
                   </p>
-                ) : p.comment?.startsWith('task-') ? (
-                  <p className="text-xs font-semibold text-red-400">
-                    Suivi inactif — trailing stop et rapport de position ne s'appliqueront pas
-                  </p>
                 ) : (
                   <div className="flex items-center gap-2">
-                    <p className="flex-1 text-xs text-red-400">Suivi inactif — position hors mymt5, activer ?</p>
+                    <p className="flex-1 text-xs text-red-400">Suivi inactif — trailing stop et rapport ne s'appliqueront pas</p>
                     <select
                       value={monitoringTimeframes[p.ticket] ?? 'H1'}
                       onChange={(e) => setMonitoringTimeframe(p.ticket, e.target.value)}
@@ -394,6 +417,44 @@ export function HomePage() {
                       {activatingTicket === p.ticket ? 'Activation...' : 'Activer'}
                     </button>
                   </div>
+                )}
+
+                {confirmCloseTicket === p.ticket ? (
+                  <div className="flex flex-col gap-2 rounded-xl border border-red-500/30 bg-red-500/10 p-2.5">
+                    <p className="text-xs text-red-300">
+                      Fermer cette position au prix du marché maintenant ? Irréversible.
+                    </p>
+                    {closeError && <p className="text-xs text-red-400">{closeError}</p>}
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setConfirmCloseTicket(null)}
+                        disabled={closingTicket === p.ticket}
+                        className="min-h-8 flex-1 rounded-full border border-white/10 bg-white/5 text-xs font-semibold text-slate-300 disabled:opacity-60"
+                      >
+                        Annuler
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => closePosition(p.ticket)}
+                        disabled={closingTicket === p.ticket}
+                        className="min-h-8 flex-1 rounded-full bg-red-600 text-xs font-semibold text-white disabled:opacity-60"
+                      >
+                        {closingTicket === p.ticket ? 'Fermeture...' : 'Confirmer la fermeture'}
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCloseError('')
+                      setConfirmCloseTicket(p.ticket)
+                    }}
+                    className="min-h-8 self-start rounded-full border border-red-500/30 px-3 text-xs font-semibold text-red-400"
+                  >
+                    Fermer en urgence
+                  </button>
                 )}
               </div>
             </div>

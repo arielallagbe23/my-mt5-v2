@@ -39,6 +39,8 @@ export const api = {
   requestPositions: () => request('/api/positions/request', { method: 'POST' }),
   activatePositionMonitoring: (ticket, timeframe) =>
     request(`/api/positions/${ticket}/activate-monitoring`, { method: 'POST', body: { timeframe } }),
+  requestClosePosition: (ticket) => request(`/api/positions/${ticket}/close`, { method: 'POST' }),
+  closePositionResult: () => request('/api/positions/close/result'),
   trades: () => request('/api/trades'),
   syncTrades: () => request('/api/trades/sync', { method: 'POST' }),
   reports: () => request('/api/reports'),

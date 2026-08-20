@@ -318,6 +318,89 @@ def _handle_set_order_request(db, doc):
     _publish_order_result(db, result)
 
 
+def _publish_close_position_result(db, result):
+    db.collection("close_position_results").document("main").set({**result, "ts": int(time.time())})
+
+
+def _handle_close_position_request(db, doc):
+    """Ferme une position au marché depuis l'app (bouton "urgence" sur la
+    carte de position) — commands/close_position_request. Respecte DRY_RUN
+    comme tout le reste : en simulation, on notifie ce qui aurait été
+    envoyé sans jamais appeler order_send(). La notif "position fermée"
+    (net en $) part séparément, au prochain tour, via check_position_level
+    (comme pour un SL/TP touché) — pas la peine de la dupliquer ici."""
+    ref = doc.reference
+    ticket = doc.to_dict().get("ticket")
+    result = {"ticket": ticket, "success": False}
+
+    m = ensure_mt5()
+    if m is None:
+        result["error"] = "MT5 indisponible"
+        ref.update({"status": "done"})
+        _publish_close_position_result(db, result)
+        return
+
+    positions = m.positions_get(ticket=ticket) or ()
+    if not positions:
+        result["error"] = "Position introuvable (déjà fermée ?)"
+        ref.update({"status": "done"})
+        _publish_close_position_result(db, result)
+        return
+    pos = positions[0]
+
+    tick = m.symbol_info_tick(pos.symbol)
+    if tick is None:
+        result["error"] = "Prix indisponible"
+        ref.update({"status": "done"})
+        _publish_close_position_result(db, result)
+        return
+
+    is_buy = pos.type == 0  # POSITION_TYPE_BUY
+    side = "Buy" if is_buy else "Sell"
+
+    if DRY_RUN:
+        result["success"] = True
+        result["dryRun"] = True
+        notify("mymt5 — [DRY-RUN] Fermeture manuelle", f"{pos.symbol} {side} (ticket {ticket}) fermerait ici")
+        ref.update({"status": "done"})
+        _publish_close_position_result(db, result)
+        print(f"[CLOSE] (dry-run) ticket {ticket} fermerait ici")
+        return
+
+    # Marqué "done" AVANT l'envoi réel — même principe que _execute_task
+    # (tasks.py) et _handle_set_order_request ci-dessus : si le process
+    # plantait entre order_send() et cette écriture, la commande resterait
+    # "pending" et serait reprise au tour suivant, envoyant potentiellement
+    # un deuxième ordre de clôture.
+    ref.update({"status": "done"})
+
+    res = m.order_send({
+        "action": m.TRADE_ACTION_DEAL,
+        "position": ticket,
+        "symbol": pos.symbol,
+        "volume": pos.volume,
+        "type": m.ORDER_TYPE_SELL if is_buy else m.ORDER_TYPE_BUY,
+        "price": tick.bid if is_buy else tick.ask,
+        "deviation": 20,
+        "magic": MAGIC,
+        "comment": "manual-close",
+        "type_time": m.ORDER_TIME_GTC,
+        "type_filling": m.ORDER_FILLING_IOC,
+    })
+
+    if res is None or res.retcode != m.TRADE_RETCODE_DONE:
+        error = str(m.last_error()) if res is None else res.comment
+        result["error"] = error
+        notify("mymt5 — échec fermeture manuelle", f"{pos.symbol} {side} (ticket {ticket}) : {error}")
+        print(f"[CLOSE] échec ticket {ticket} : {error}")
+    else:
+        result["success"] = True
+        notify("mymt5 — position fermée manuellement", f"{pos.symbol} {side} (ticket {ticket})")
+        print(f"[CLOSE] ticket {ticket} fermé manuellement")
+
+    _publish_close_position_result(db, result)
+
+
 def _handle_market_recap_request(db, doc):
     """Relance à la main les 9 scripts qui alimentent le Market Recap
     (commands/market_recap_request) — pour le cas où la tâche planifiée du
@@ -352,6 +435,7 @@ HANDLERS = {
     "positions_request": _handle_positions_request,
     "trades_sync_request": handle_trades_sync_request,
     "set_order_request": _handle_set_order_request,
+    "close_position_request": _handle_close_position_request,
     "market_recap_request": _handle_market_recap_request,
 }
 
