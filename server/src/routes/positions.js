@@ -49,8 +49,14 @@ router.get('/', requireAuth, async (req, res) => {
   res.json({
     orders: data.orders ?? [],
     positions: positions.map((p) => {
+      // Même ordre de résolution que resolve_timeframe côté VPS
+      // (position_shared.py) : la tâche d'origine d'abord, l'activation
+      // manuelle en repli SEULEMENT si la tâche n'a rien donné (doc
+      // supprimé, champ timeframe absent) — jamais l'inverse, sinon un clic
+      // sur "Activer" pour une position issue d'une tâche n'a aucun effet
+      // visible ici.
       const taskId = taskIdByTicket.get(p.ticket)
-      const resolved = taskId ? taskTimeframeById.get(taskId) : managedTimeframeByTicket.get(String(p.ticket))
+      const resolved = (taskId ? taskTimeframeById.get(taskId) : undefined) ?? managedTimeframeByTicket.get(String(p.ticket))
       return {
         ...p,
         managedTimeframe: MANAGEABLE_TIMEFRAMES.has(resolved) ? resolved : null,
