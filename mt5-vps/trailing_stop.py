@@ -338,27 +338,19 @@ def check_trailing_stop(db):
 
     _check_closed(db, m)
 
-    # "Maintenant" doit venir de MT5 (heure SERVEUR du broker), jamais de
-    # l'horloge système (vraie UTC) : current_time (ci-dessous) est aussi en
-    # heure serveur, et les comparer mélangerait deux horloges différentes
-    # (le broker peut être décalé de 2-3h selon la saison) — piège déjà
-    # documenté dans alerte_pre_cloture.py, reproduit ici par erreur lors de
-    # la réécriture de ce fichier : le déplacement du SL et le rapport ne
-    # se déclenchaient alors jamais, silencieusement.
-    tick = m.symbol_info_tick(PRICE_SYMBOL)
-    if tick is None:
-        return
-    broker_now = int(tick.time)
-
     for timeframe in ELIGIBLE_TIMEFRAMES:
+        # Aucune horloge consultée ici, ni système ni broker : on compare
+        # juste l'heure d'ouverture de la bougie courante à la dernière
+        # valeur vue. Dès qu'elle change, une nouvelle bougie vient de
+        # s'ouvrir — donc position 1 (_last_closed_candle) est déjà
+        # complète par construction, pas de délai de sécurité à calculer.
+        # Immunisé par nature contre tout décalage de fuseau/broker (voir
+        # le bug corrigé juste avant ce commentaire).
         current_time = _current_candle_time(m, timeframe)
         if current_time is None:
             continue
         if _last_processed_candle_time.get(timeframe) == current_time:
             continue  # déjà traité pour cette bougie
-
-        if broker_now < current_time + 2:
-            continue  # trop tôt, on retente au tour suivant
 
         _last_processed_candle_time[timeframe] = current_time
 
