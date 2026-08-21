@@ -21,6 +21,7 @@ import {
   exportCsv,
   exportHtml,
 } from '../components/journal/journalStats'
+import { parseTradeHistoryCsv } from '../components/journal/importCsv'
 
 const PAGE_SIZE = 10
 
@@ -31,6 +32,8 @@ export function JournalPage() {
   const [error, setError] = useState('')
   const [page, setPage] = useState(1)
   const [accountSize, setAccountSize] = useState(null)
+  const [importing, setImporting] = useState(false)
+  const [importResult, setImportResult] = useState('')
 
   function load() {
     setError('')
@@ -66,6 +69,31 @@ export function JournalPage() {
     }
   }
 
+  async function handleImportFile(file) {
+    setImporting(true)
+    setImportResult('')
+    setError('')
+    try {
+      const text = await file.text()
+      const { trades: parsed, skipped: unparsed } = parseTradeHistoryCsv(text)
+      if (parsed.length === 0) {
+        setError("Aucun trade valide trouvé dans ce fichier — vérifie que c'est bien un export d'historique MT5.")
+        return
+      }
+      const { imported, skipped } = await api.importTrades(parsed)
+      setImportResult(
+        `${imported} trade${imported > 1 ? 's' : ''} importé${imported > 1 ? 's' : ''}` +
+          (skipped > 0 ? `, ${skipped} déjà présent${skipped > 1 ? 's' : ''} (ignoré${skipped > 1 ? 's' : ''})` : '') +
+          (unparsed > 0 ? `, ${unparsed} ligne${unparsed > 1 ? 's' : ''} illisible${unparsed > 1 ? 's' : ''}` : ''),
+      )
+      load()
+    } catch (err) {
+      setError(err.message || "Échec de l'import")
+    } finally {
+      setImporting(false)
+    }
+  }
+
   const kpis = useMemo(() => (trades ? computeKpis(trades) : null), [trades])
   const streak = useMemo(() => (trades ? computeStreak(trades) : null), [trades])
   const todayNet = useMemo(() => (trades ? computeTodayNet(trades) : null), [trades])
@@ -97,9 +125,12 @@ export function JournalPage() {
         exportDisabled={!trades || trades.length === 0}
         onSync={handleSync}
         syncing={syncing}
+        onImportFile={handleImportFile}
+        importing={importing}
       />
 
       {error && <p className="text-sm text-red-400">{error}</p>}
+      {importResult && <p className="text-sm text-blue-400">{importResult}</p>}
       {loading && <p className="text-sm text-slate-400">Chargement...</p>}
       {!loading && trades && trades.length === 0 && (
         <p className="text-sm text-slate-400">

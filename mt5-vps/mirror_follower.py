@@ -88,9 +88,11 @@ _pre_existing_tickets = None
 
 # account_size change rarement (palier de challenge, scaling plan...) — pas
 # besoin de le relire à chaque tour (~10s) juste pour retomber sur la même
-# valeur. Cache court (60s) par vps_id : {vps_id: (valeur, lu_à)}.
+# valeur. Cache court (60s) par vps_id : {vps_id: (valeur, lu_à)}. Même
+# principe pour le multiplicateur de risque (_risk_multiplier_cache).
 ACCOUNT_SIZE_CACHE_SECONDS = 60
 _account_size_cache = {}
+_risk_multiplier_cache = {}
 
 # État du compte principal (positions ouvertes + ordres différés), poussé
 # par deux écouteurs temps réel (on_snapshot) sur mirror_positions et
@@ -173,14 +175,32 @@ def _account_size(db, vps_id):
     return value
 
 
-def compute_follower_lot(master_volume, master_account_size, follower_account_size):
+def _risk_multiplier(db, vps_id):
+    """Multiplicateur de risque édité depuis la page "Mes comptes"
+    (account_settings/{vps_id}.riskMultiplier, propriété de l'app — jamais
+    écrit par le VPS). 1 par défaut (aucune modification) si absent."""
+    cached = _risk_multiplier_cache.get(vps_id)
+    if cached is not None and (time.time() - cached[1]) < ACCOUNT_SIZE_CACHE_SECONDS:
+        return cached[0]
+
+    doc = db.collection("account_settings").document(vps_id).get()
+    value = doc.to_dict().get("riskMultiplier", 1) if doc.exists else 1
+
+    _risk_multiplier_cache[vps_id] = (value, time.time())
+    return value
+
+
+def compute_follower_lot(master_volume, master_account_size, follower_account_size, risk_multiplier=1):
     """Prorata simple sur l'account_size — le lot suit le même ratio que
     les tailles de compte (compte suppléant deux fois plus gros -> lot
-    doublé), pas un recalcul indépendant du risque à partir de l'entrée/SL."""
+    doublé), pas un recalcul indépendant du risque à partir de l'entrée/SL.
+    risk_multiplier s'applique PAR-DESSUS ce prorata (x2 double le lot déjà
+    proratisé), jamais à la place — c'est un ajustement du suppléant, pas
+    un recalcul du risque du compte principal."""
     if not master_account_size or not follower_account_size or not master_volume:
         return None
     ratio = follower_account_size / master_account_size
-    return max(0.01, round(master_volume * ratio, 2))
+    return max(0.01, round(master_volume * ratio * risk_multiplier, 2))
 
 
 STATUS_HEARTBEAT_SECONDS = 60
@@ -411,13 +431,14 @@ def sync_mirror(db):
 
     master_account_size = _account_size(db, MASTER_VPS_ID)
     follower_account_size = _account_size(db, FOLLOWER_ID)
+    risk_multiplier = _risk_multiplier(db, FOLLOWER_ID)
 
     # 1a. Ouvrir les positions du compte principal pas encore miroitées (ni
     # déjà ouvertes avant le démarrage de ce process — voir _pre_existing_tickets).
     for master_ticket, master_pos in master_positions.items():
         if master_ticket in _mirrored_tickets or master_ticket in _pre_existing_tickets:
             continue
-        lot = compute_follower_lot(master_pos["volume"], master_account_size, follower_account_size)
+        lot = compute_follower_lot(master_pos["volume"], master_account_size, follower_account_size, risk_multiplier)
         if lot is None:
             print(f"[MIRROR] account_size manquant (principal ou suppléant), position {master_ticket} ignorée pour l'instant")
             continue
@@ -427,7 +448,7 @@ def sync_mirror(db):
     for master_ticket, master_order in master_orders.items():
         if master_ticket in _mirrored_tickets or master_ticket in _pre_existing_tickets:
             continue
-        lot = compute_follower_lot(master_order["volume"], master_account_size, follower_account_size)
+        lot = compute_follower_lot(master_order["volume"], master_account_size, follower_account_size, risk_multiplier)
         if lot is None:
             print(f"[MIRROR] account_size manquant (principal ou suppléant), ordre différé {master_ticket} ignoré pour l'instant")
             continue

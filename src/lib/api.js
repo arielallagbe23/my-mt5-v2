@@ -24,6 +24,8 @@ export const api = {
   me: () => request('/api/auth/me'),
   accountStatus: () => request('/api/account/status'),
   allAccountsStatus: () => request('/api/account/all'),
+  updateAccountSettings: (vpsId, settings) =>
+    request(`/api/account/${vpsId}/settings`, { method: 'PATCH', body: settings }),
   requestAccountStatus: () => request('/api/account/status/request', { method: 'POST' }),
   forgotPassword: (email) =>
     request('/api/auth/forgot-password', { method: 'POST', body: { email, origin: window.location.origin } }),
@@ -44,6 +46,7 @@ export const api = {
   trailingHistory: (ticket) => request(`/api/positions/${ticket}/trailing-history`),
   trades: () => request('/api/trades'),
   syncTrades: () => request('/api/trades/sync', { method: 'POST' }),
+  importTrades: (trades) => request('/api/trades/import', { method: 'POST', body: { trades } }),
   reports: () => request('/api/reports'),
   archiveReport: (id) => request(`/api/reports/${id}/archive`, { method: 'POST' }),
   deleteReport: (id) => request(`/api/reports/${id}`, { method: 'DELETE' }),

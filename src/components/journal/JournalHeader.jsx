@@ -1,4 +1,8 @@
-export function JournalHeader({ tradesCount, onExportCsv, onExportHtml, exportDisabled, onSync, syncing }) {
+import { useRef } from 'react'
+
+export function JournalHeader({ tradesCount, onExportCsv, onExportHtml, exportDisabled, onSync, syncing, onImportFile, importing }) {
+  const fileInputRef = useRef(null)
+
   return (
     <div className="flex items-start justify-between gap-2">
       <div>
@@ -23,6 +27,25 @@ export function JournalHeader({ tradesCount, onExportCsv, onExportHtml, exportDi
           className="min-h-9 rounded-full border border-white/10 px-3 text-sm font-semibold text-white disabled:opacity-40"
         >
           HTML
+        </button>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept=".csv,text/csv"
+          className="hidden"
+          onChange={(e) => {
+            const file = e.target.files?.[0]
+            if (file) onImportFile(file)
+            e.target.value = ''
+          }}
+        />
+        <button
+          type="button"
+          onClick={() => fileInputRef.current?.click()}
+          disabled={importing}
+          className="min-h-9 rounded-full border border-white/10 px-3 text-sm font-semibold text-white disabled:opacity-60"
+        >
+          {importing ? 'Import...' : 'Importer'}
         </button>
         <button
           type="button"
