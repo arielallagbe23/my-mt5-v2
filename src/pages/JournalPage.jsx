@@ -113,6 +113,29 @@ export function JournalPage() {
     [dollarCurve, accountSize],
   )
 
+  // Même courbe, mais sur le trimestre en cours uniquement — mise en avant à
+  // la place de la courbe globale (déplacée tout en bas), pour ne pas ouvrir
+  // le Journal sur le chiffre le plus flatteur. Un seul mois était trop
+  // court pour être lisible.
+  const now = new Date()
+  const currentYear = now.getFullYear()
+  const currentQuarter = Math.floor(now.getMonth() / 3) // 0-3
+  const currentQuarterLabel = `T${currentQuarter + 1} ${currentYear}`
+  const currentQuarterTrades = useMemo(
+    () =>
+      (trades ?? []).filter((t) => {
+        const d = new Date(t.closeTime * 1000)
+        return d.getFullYear() === currentYear && Math.floor(d.getMonth() / 3) === currentQuarter
+      }),
+    [trades, currentYear, currentQuarter],
+  )
+  const quarterlyNet = currentQuarterTrades.reduce((sum, t) => sum + t.net, 0)
+  const quarterlyDollarCurve = useMemo(() => computeCurve(currentQuarterTrades), [currentQuarterTrades])
+  const quarterlyCurve = useMemo(
+    () => (accountSize ? quarterlyDollarCurve.map((v) => (v / accountSize) * 100) : quarterlyDollarCurve),
+    [quarterlyDollarCurve, accountSize],
+  )
+
   const totalPages = trades ? Math.max(1, Math.ceil(trades.length / PAGE_SIZE)) : 1
   const pageTrades = trades ? trades.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE) : []
 
@@ -142,7 +165,13 @@ export function JournalPage() {
         <>
           <NetPnlCard netTotal={kpis.netTotal} />
           <KpiGrid kpis={kpis} currentMonthR={currentMonthR} />
-          <PerformanceCard netTotal={kpis.netTotal} curve={curve} unit={curveUnit} accountSize={accountSize} />
+          <PerformanceCard
+            netTotal={quarterlyNet}
+            curve={quarterlyCurve}
+            unit={curveUnit}
+            accountSize={accountSize}
+            title={`Courbe de performance — ${currentQuarterLabel}`}
+          />
           <ResultsBreakdownCard breakdown={breakdown} />
           <TradingCalendarCard dailyNet={dailyNet} />
           <BestWorstStreakCard kpis={kpis} streak={streak} todayNet={todayNet} accountSize={accountSize} />
@@ -154,6 +183,13 @@ export function JournalPage() {
             totalPages={totalPages}
             onPrevPage={() => setPage((p) => Math.max(1, p - 1))}
             onNextPage={() => setPage((p) => Math.min(totalPages, p + 1))}
+          />
+          <PerformanceCard
+            netTotal={kpis.netTotal}
+            curve={curve}
+            unit={curveUnit}
+            accountSize={accountSize}
+            title="Courbe de performance — globale"
           />
         </>
       )}
