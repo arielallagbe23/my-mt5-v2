@@ -38,14 +38,13 @@ function segmentPath({ startAngle, sweep }) {
 }
 
 export function Donut({ breakdown }) {
-  const { tp, slLoss, slProtected, other, total } = breakdown
+  const { tp, sl, be, total } = breakdown
   if (total === 0) return null
 
   const rawSegments = [
     { value: tp, color: '#3b82f6', label: 'Take Profit' },
-    { value: slLoss, color: '#ef4444', label: 'Stop Loss' },
-    { value: slProtected, color: '#22c55e', label: 'SL protégé (BE+)' },
-    { value: other, color: '#f59e0b', label: 'Autre' },
+    { value: sl, color: '#ef4444', label: 'Stop Loss' },
+    { value: be, color: '#f59e0b', label: 'BE' },
   ].filter((s) => s.value > 0)
 
   // Démarre en haut (12h) et balaie dans le sens horaire — même convention

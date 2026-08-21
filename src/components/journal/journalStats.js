@@ -67,19 +67,25 @@ export function computeStreak(trades) {
   return { isWin, count }
 }
 
-export function computeBreakdown(trades) {
+// Un trade dont le net (en % du capital de référence) reste dans cette
+// bande autour de 0 est un BE (SL déplacé au breakeven par le trailing
+// stop, touché sans gain ni perte significative) — ni un vrai TP, ni un
+// vrai SL, peu importe ce que dit le champ `reason` de MT5 (peu fiable :
+// une clôture manuelle ou via l'app tague CLIENT/EXPERT même quand elle a
+// lieu pile au niveau du SL/TP).
+const BE_BAND_PCT = 0.03
+
+export function computeBreakdown(trades, accountSize) {
   let tp = 0
-  let slLoss = 0
-  let slProtected = 0
-  let other = 0
+  let sl = 0
+  let be = 0
   for (const t of trades) {
-    if (t.reason === 'TP') tp++
-    else if (t.reason === 'SL') {
-      if (t.net >= 0) slProtected++
-      else slLoss++
-    } else other++
+    const pct = accountSize ? (t.net / accountSize) * 100 : null
+    if (pct !== null && Math.abs(pct) <= BE_BAND_PCT) be++
+    else if (t.net >= 0) tp++
+    else sl++
   }
-  return { tp, slLoss, slProtected, other, total: trades.length }
+  return { tp, sl, be, total: trades.length }
 }
 
 export function computeMonthly(trades) {

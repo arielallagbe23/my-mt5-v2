@@ -67,7 +67,7 @@ export function JournalPage() {
   const kpis = useMemo(() => (trades ? computeKpis(trades) : null), [trades])
   const streak = useMemo(() => (trades ? computeStreak(trades) : null), [trades])
   const todayNet = useMemo(() => (trades ? computeTodayNet(trades) : null), [trades])
-  const breakdown = useMemo(() => (trades ? computeBreakdown(trades) : null), [trades])
+  const breakdown = useMemo(() => (trades ? computeBreakdown(trades, accountSize) : null), [trades, accountSize])
   const monthly = useMemo(() => (trades ? computeMonthly(trades) : []), [trades])
   const dollarCurve = useMemo(() => (trades ? computeCurve(trades) : []), [trades])
   // Le % est toujours rapporté au capital de base FIXE (account_size), jamais
