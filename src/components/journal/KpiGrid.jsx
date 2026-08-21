@@ -1,8 +1,22 @@
-import { money, pct } from './journalStats'
+import { money, pct, formatR } from './journalStats'
 
-export function KpiGrid({ kpis }) {
+export function KpiGrid({ kpis, currentMonthR }) {
   return (
     <div className="grid grid-cols-2 gap-3">
+      <div className="rounded-2xl border border-white/10 bg-white/5 p-3">
+        <p className="text-xs text-slate-400 uppercase">R global</p>
+        <p className={`text-xl font-bold ${kpis.rTotal >= 0 ? 'text-blue-400' : 'text-red-400'}`}>
+          {formatR(kpis.rTotal)}
+        </p>
+        <p className="text-xs text-slate-500">1R = perte moyenne ({money(kpis.avgLoss)})</p>
+      </div>
+      <div className="rounded-2xl border border-white/10 bg-white/5 p-3">
+        <p className="text-xs text-slate-400 uppercase">R ce mois-ci</p>
+        <p className={`text-xl font-bold ${currentMonthR >= 0 ? 'text-blue-400' : 'text-red-400'}`}>
+          {formatR(currentMonthR)}
+        </p>
+        <p className="text-xs text-slate-500">performance du mois en cours</p>
+      </div>
       <div className="rounded-2xl border border-white/10 bg-white/5 p-3">
         <p className="text-xs text-slate-400 uppercase">Win rate</p>
         <p className="text-xl font-bold text-white">{pct(kpis.winRate)}</p>

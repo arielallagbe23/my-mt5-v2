@@ -6,6 +6,7 @@ import { NetPnlCard } from '../components/journal/NetPnlCard'
 import { KpiGrid } from '../components/journal/KpiGrid'
 import { PerformanceCard } from '../components/journal/PerformanceCard'
 import { ResultsBreakdownCard } from '../components/journal/ResultsBreakdownCard'
+import { TradingCalendarCard } from '../components/journal/TradingCalendarCard'
 import { BestWorstStreakCard } from '../components/journal/BestWorstStreakCard'
 import { MonthlyPnlCard } from '../components/journal/MonthlyPnlCard'
 import { TransactionsTable } from '../components/journal/TransactionsTable'
@@ -14,6 +15,7 @@ import {
   computeStreak,
   computeBreakdown,
   computeMonthly,
+  computeDailyNet,
   computeCurve,
   computeTodayNet,
   exportCsv,
@@ -68,7 +70,11 @@ export function JournalPage() {
   const streak = useMemo(() => (trades ? computeStreak(trades) : null), [trades])
   const todayNet = useMemo(() => (trades ? computeTodayNet(trades) : null), [trades])
   const breakdown = useMemo(() => (trades ? computeBreakdown(trades, accountSize) : null), [trades, accountSize])
+  const dailyNet = useMemo(() => (trades ? computeDailyNet(trades) : new Map()), [trades])
   const monthly = useMemo(() => (trades ? computeMonthly(trades) : []), [trades])
+  const currentMonthKey = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`
+  const currentMonthNet = monthly.find(([key]) => key === currentMonthKey)?.[1] ?? null
+  const currentMonthR = currentMonthNet != null && kpis?.riskUnit ? currentMonthNet / kpis.riskUnit : null
   const dollarCurve = useMemo(() => (trades ? computeCurve(trades) : []), [trades])
   // Le % est toujours rapporté au capital de base FIXE (account_size), jamais
   // à l'équité live — même règle que le sizing des tâches (risk_sizing_strategy).
@@ -104,9 +110,10 @@ export function JournalPage() {
       {kpis && trades.length > 0 && (
         <>
           <NetPnlCard netTotal={kpis.netTotal} />
-          <KpiGrid kpis={kpis} />
+          <KpiGrid kpis={kpis} currentMonthR={currentMonthR} />
           <PerformanceCard netTotal={kpis.netTotal} curve={curve} unit={curveUnit} accountSize={accountSize} />
           <ResultsBreakdownCard breakdown={breakdown} />
+          <TradingCalendarCard dailyNet={dailyNet} />
           <BestWorstStreakCard kpis={kpis} streak={streak} todayNet={todayNet} accountSize={accountSize} />
           <MonthlyPnlCard monthly={monthly} />
           <TransactionsTable

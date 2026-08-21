@@ -28,6 +28,10 @@ export function formatAxisValue(value, unit) {
   return unit === 'pct' ? formatSignedPct(value) : money(value)
 }
 
+export function formatR(value) {
+  return typeof value === 'number' ? `${value >= 0 ? '+' : ''}${value.toFixed(2)} R` : '—'
+}
+
 export function computeKpis(trades) {
   const total = trades.length
   const wins = trades.filter((t) => t.net > 0)
@@ -35,6 +39,14 @@ export function computeKpis(trades) {
   const netTotal = trades.reduce((sum, t) => sum + t.net, 0)
   const grossWin = wins.reduce((sum, t) => sum + t.net, 0)
   const grossLoss = Math.abs(losses.reduce((sum, t) => sum + t.net, 0))
+  const avgLoss = losses.length ? -grossLoss / losses.length : null
+
+  // 1R = la perte moyenne observée (en valeur absolue) — pas de risque
+  // déclaré à l'entrée stocké par trade, donc on prend comme unité de
+  // référence ce qui a été RÉELLEMENT perdu en moyenne sur un trade perdant.
+  // Un même 1R sert de référence stable pour le R global ET chaque mois
+  // (voir riskUnit plus bas), pour rester comparable d'un mois à l'autre.
+  const riskUnit = avgLoss ? Math.abs(avgLoss) : null
 
   return {
     total,
@@ -43,7 +55,9 @@ export function computeKpis(trades) {
     winCount: wins.length,
     profitFactor: grossLoss ? grossWin / grossLoss : null,
     avgWin: wins.length ? grossWin / wins.length : null,
-    avgLoss: losses.length ? -grossLoss / losses.length : null,
+    avgLoss,
+    riskUnit,
+    rTotal: riskUnit ? netTotal / riskUnit : null,
     best: trades.reduce((m, t) => (m === null || t.net > m.net ? t : m), null),
     worst: trades.reduce((m, t) => (m === null || t.net < m.net ? t : m), null),
   }
@@ -96,6 +110,16 @@ export function computeMonthly(trades) {
     byMonth.set(key, (byMonth.get(key) ?? 0) + t.net)
   }
   return [...byMonth.entries()].sort(([a], [b]) => a.localeCompare(b))
+}
+
+export function computeDailyNet(trades) {
+  const byDay = new Map()
+  for (const t of trades) {
+    const d = new Date(t.closeTime * 1000)
+    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+    byDay.set(key, (byDay.get(key) ?? 0) + t.net)
+  }
+  return byDay
 }
 
 export function computeCurve(trades) {
