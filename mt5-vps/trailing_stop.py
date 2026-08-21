@@ -1,5 +1,4 @@
 import time
-from datetime import datetime, timedelta, timezone
 
 from google.cloud.firestore_v1.base_query import FieldFilter
 
@@ -339,7 +338,17 @@ def check_trailing_stop(db):
 
     _check_closed(db, m)
 
-    now_utc = datetime.now(timezone.utc)
+    # "Maintenant" doit venir de MT5 (heure SERVEUR du broker), jamais de
+    # l'horloge système (vraie UTC) : current_time (ci-dessous) est aussi en
+    # heure serveur, et les comparer mélangerait deux horloges différentes
+    # (le broker peut être décalé de 2-3h selon la saison) — piège déjà
+    # documenté dans alerte_pre_cloture.py, reproduit ici par erreur lors de
+    # la réécriture de ce fichier : le déplacement du SL et le rapport ne
+    # se déclenchaient alors jamais, silencieusement.
+    tick = m.symbol_info_tick(PRICE_SYMBOL)
+    if tick is None:
+        return
+    broker_now = int(tick.time)
 
     for timeframe in ELIGIBLE_TIMEFRAMES:
         current_time = _current_candle_time(m, timeframe)
@@ -348,8 +357,7 @@ def check_trailing_stop(db):
         if _last_processed_candle_time.get(timeframe) == current_time:
             continue  # déjà traité pour cette bougie
 
-        candle_open = datetime.fromtimestamp(current_time, tz=timezone.utc)
-        if now_utc < candle_open + timedelta(seconds=2):
+        if broker_now < current_time + 2:
             continue  # trop tôt, on retente au tour suivant
 
         _last_processed_candle_time[timeframe] = current_time
