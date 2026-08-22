@@ -39,11 +39,27 @@ def _deals_to_trade(m, position_id, deals):
     """Construit un enregistrement de trade à partir des deals MT5 d'une
     même position fermée. Retourne None si les deals ne forment pas une
     paire entrée/sortie complète (position encore ouverte, deals de type
-    BALANCE parasites, données incohérentes...)."""
+    BALANCE parasites, données incohérentes...).
+
+    Gère les clôtures PARTIELLES (plusieurs deals de sortie) : avant, seul
+    le PREMIER deal de sortie (next(...)) était utilisé — un trade clôturé
+    en 2 fois se retrouvait tronqué à sa première moitié (mauvais volume,
+    mauvais prix, et closeTime figée sur la première sortie au lieu de la
+    dernière, donc la position semblait fermée bien avant qu'elle ne le
+    soit réellement). Maintenant : volume total et prix moyen pondéré sur
+    TOUTES les sorties, closeTime/reason/comment pris sur la DERNIÈRE (celle
+    qui a réellement vidé la position). profit/swap/commission étaient déjà
+    sommés sur tous les deals, donc déjà corrects même avant ce fix."""
     in_deal = next((d for d in deals if d.entry == m.DEAL_ENTRY_IN), None)
-    out_deal = next((d for d in deals if d.entry in (m.DEAL_ENTRY_OUT, m.DEAL_ENTRY_OUT_BY)), None)
-    if in_deal is None or out_deal is None:
+    out_deals = [d for d in deals if d.entry in (m.DEAL_ENTRY_OUT, m.DEAL_ENTRY_OUT_BY)]
+    if in_deal is None or not out_deals:
         return None
+
+    last_out = max(out_deals, key=lambda d: d.time)
+    total_out_volume = sum(d.volume for d in out_deals)
+    avg_close_price = (
+        sum(d.price * d.volume for d in out_deals) / total_out_volume if total_out_volume else last_out.price
+    )
 
     profit = sum(d.profit for d in deals)
     swap = sum(d.swap for d in deals)
@@ -51,19 +67,19 @@ def _deals_to_trade(m, position_id, deals):
 
     return {
         "positionId": position_id,
-        "symbol": out_deal.symbol,
+        "symbol": last_out.symbol,
         "type": "Buy" if in_deal.type == m.DEAL_TYPE_BUY else "Sell",
-        "volume": out_deal.volume,
+        "volume": total_out_volume,
         "priceOpen": in_deal.price,
-        "priceClose": out_deal.price,
+        "priceClose": avg_close_price,
         "profit": profit,
         "swap": swap,
         "commission": commission,
         "net": profit + swap + commission,
         "openTime": int(in_deal.time),
-        "closeTime": int(out_deal.time),
-        "reason": _reason_name(m, out_deal.reason),
-        "comment": out_deal.comment,
+        "closeTime": int(last_out.time),
+        "reason": _reason_name(m, last_out.reason),
+        "comment": last_out.comment,
         "ts": int(time.time()),
     }
 
