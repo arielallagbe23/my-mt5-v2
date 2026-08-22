@@ -72,15 +72,21 @@ def _sl_price(entry, levels, sl_pct):
     return entry if sl_pct == 0 else levels[sl_pct]
 
 
-def _store_levels(db, ticket, entry, tp, levels):
+def _store_levels(db, ticket, entry, tp, levels, sl):
     """Stocké en base (Firestore, pas juste en mémoire) pour survivre à un
-    redémarrage du VPS et servir de référence à chaque nouvelle bougie."""
+    redémarrage du VPS et servir de référence à chaque nouvelle bougie.
+    `sl` (le SL de la position au moment où on la voit pour la première
+    fois) sert de référence pour détecter une modification manuelle plus
+    tard (voir _check_sl_drift, section 11) — sans ça, on n'a aucune base
+    de comparaison tant que le trailing n'a pas encore bougé le SL une
+    première fois."""
     db.collection("trailing_levels").document(str(ticket)).set({
         "entry": entry,
         "tp": tp,
         "levels": {str(pct): price for pct, price in levels.items()},
         "applied": -1,
         "closed": False,
+        "current_sl": sl,
     })
 
 
@@ -95,6 +101,14 @@ def _update_applied(db, ticket, target_pct):
     """Marque ce palier comme traité, pour ne jamais le retraiter ni
     reculer le SL à la bougie suivante."""
     db.collection("trailing_levels").document(str(ticket)).update({"applied": target_pct})
+
+
+def _update_current_sl(db, ticket, sl):
+    """Met à jour la référence du SL "connu du bot" — appelé uniquement
+    après un order_send réel réussi (jamais en DRY_RUN, où le SL réel ne
+    bouge pas), pour que _check_sl_drift compare toujours à la bonne
+    valeur de référence."""
+    db.collection("trailing_levels").document(str(ticket)).update({"current_sl": sl})
 
 
 # ============================================================
@@ -263,9 +277,12 @@ def _check_closed(db, m):
 
 
 def _move_sl(m, ticket, symbol, tp, sl_price):
+    """Renvoie True si le SL a RÉELLEMENT été déplacé côté MT5 (jamais en
+    DRY_RUN — voir _update_current_sl, qui ne doit se fier qu'à un
+    changement réel)."""
     if DRY_RUN:
         print(f"[TRAILING] (dry-run) ticket {ticket} : SL aurait été déplacé à {sl_price:.3f}")
-        return
+        return False
 
     res = m.order_send({
         "action": m.TRADE_ACTION_SLTP,
@@ -277,13 +294,44 @@ def _move_sl(m, ticket, symbol, tp, sl_price):
     if res is None or res.retcode != m.TRADE_RETCODE_DONE:
         error = str(m.last_error()) if res is None else res.comment
         print(f"[TRAILING] ticket {ticket} : échec déplacement SL à {sl_price:.3f} : {error}")
-        return
+        return False
 
     print(f"[TRAILING] ticket {ticket} : SL déplacé à {sl_price:.3f}")
+    return True
 
 
 # ============================================================
-# 10. ORCHESTRATION — point d'entrée appelé depuis mt5_status.py.
+# 11. DÉRIVE DU SL — détecte, à CHAQUE tour de boucle (pas lié aux bougies),
+#    un SL qui a changé sans passer par _move_sl : modifié à la main
+#    depuis MT5, ou par un autre EA. Le trailing stop ne "sait" que ce
+#    qu'IL a fait — sans ce contrôle, un ajustement manuel est invisible.
+# ============================================================
+
+SL_DRIFT_TOLERANCE = 0.001  # marge d'arrondi broker, pas un vrai changement en dessous
+
+
+def _check_sl_drift(db, m):
+    open_positions = {p.ticket: p for p in (m.positions_get(symbol=PRICE_SYMBOL) or ())}
+    for doc in db.collection("trailing_levels").where(filter=FieldFilter("closed", "==", False)).stream():
+        ticket = int(doc.id)
+        pos = open_positions.get(ticket)
+        if pos is None:
+            continue  # fermée entre-temps, _check_closed s'en charge
+
+        data = doc.to_dict()
+        expected_sl = data.get("current_sl")
+        if expected_sl is None or abs(pos.sl - expected_sl) <= SL_DRIFT_TOLERANCE:
+            continue
+
+        message = f"SL modifié manuellement : {expected_sl:.3f} → {pos.sl:.3f}"
+        _log_report(db, ticket, message, int(time.time()))
+        notify(f"mymt5 — SL modifié à la main (ticket {ticket})", message)
+        print(f"[TRAILING] ticket {ticket} : {message}")
+        doc.reference.update({"current_sl": pos.sl})
+
+
+# ============================================================
+# 12. ORCHESTRATION — point d'entrée appelé depuis mt5_status.py.
 # ============================================================
 
 _last_processed_candle_time = {}
@@ -301,7 +349,7 @@ def _process_position(db, m, pos, close):
         if not tp:
             return  # pas de TP défini, rien à trailer ni à rapporter
         levels = _compute_levels(entry, tp)
-        _store_levels(db, ticket, entry, tp, levels)
+        _store_levels(db, ticket, entry, tp, levels, pos.sl)
         applied = -1
     else:
         entry = tracked["entry"]
@@ -324,19 +372,21 @@ def _process_position(db, m, pos, close):
     _update_applied(db, ticket, target_pct)
     if target_pct in SL_TARGET:
         sl_price = _sl_price(entry, levels, SL_TARGET[target_pct])
-        _move_sl(m, ticket, pos.symbol, tp, sl_price)
+        if _move_sl(m, ticket, pos.symbol, tp, sl_price):
+            _update_current_sl(db, ticket, sl_price)
 
 
 def check_trailing_stop(db):
     """Point d'entrée appelé depuis la boucle de mt5_status.py. Détecte les
-    positions fermées à chaque tour (~10s), et — une fois par nouvelle
-    bougie H1/H4 — rapporte + trail chaque position suivie de ce
-    timeframe."""
+    positions fermées et un SL modifié en dehors du bot à chaque tour
+    (~10s), et — une fois par nouvelle bougie H1/H4 — rapporte + trail
+    chaque position suivie de ce timeframe."""
     m = ensure_mt5()
     if m is None:
         return
 
     _check_closed(db, m)
+    _check_sl_drift(db, m)
 
     for timeframe in ELIGIBLE_TIMEFRAMES:
         # Aucune horloge consultée ici, ni système ni broker : on compare
