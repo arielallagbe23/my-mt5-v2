@@ -3,6 +3,8 @@ mt5_status.py — Point d'entrée du VPS. Toutes les POLL_INTERVAL secondes :
   - répond aux demandes ponctuelles de l'app en UNE requête Firestore groupée
     (on_demand.py) — pas de lecture fixe par type de commande ;
   - scanne les tâches de trading dues et les exécute (tasks.py) ;
+  - scanne les ordres manuels programmés à heure fixe et les exécute, avec
+    réessai automatique en cas d'échec temporaire (scheduled_orders.py) ;
   - alerte ~10 min avant chaque clôture de bougie H1/H4 sur USDJPY
     (alerte_pre_cloture.py) ;
   - surveille les ordres différés et positions ouvertes : notifie un
@@ -28,6 +30,7 @@ par fichier :
   on_demand.py              — réponses aux demandes ponctuelles (équité, prix, bougie, positions)
   scenarios.py              — logique de trading pure (taille de position, conditions d'entrée)
   tasks.py                  — scan + exécution des tâches dues (utilise mt5_client + scenarios)
+  scheduled_orders.py       — scan + exécution des ordres manuels programmés (même pattern que tasks.py, sans scénario)
   alerte_pre_cloture.py     — alerte ~10 min avant clôture H1/H4 sur USDJPY
   position_shared.py        — primitives partagées par les modules ci-dessous (timeframe, bougies, progression)
   order_fills.py            — détecte un ordre différé qui se transforme en position
@@ -58,6 +61,7 @@ from mirror_publish import publish_master_orders, publish_master_positions
 from mt5_client import set_default_path
 from on_demand import check_all_requests
 from order_fills import check_order_fills
+from scheduled_orders import check_due_scheduled_orders
 from tasks import check_due_tasks
 from tp_progress import check_tp_progress
 from trades import check_closed_positions
@@ -83,6 +87,7 @@ def run():
         try:
             check_all_requests(db)
             check_due_tasks(db)
+            check_due_scheduled_orders(db)
             check_pre_close_alerts(db)
             check_order_fills(db)
             check_untracked_positions(db)
