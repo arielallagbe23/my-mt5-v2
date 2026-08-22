@@ -35,6 +35,8 @@ export function TasksPage({ taskId } = {}) {
   const [priceCondition, setPriceCondition] = useState('')
   const [supportPrice, setSupportPrice] = useState('')
   const [risk, setRisk] = useState('')
+  const [riskUnit, setRiskUnit] = useState('percent')
+  const [riskAmountInput, setRiskAmountInput] = useState('')
   const [accountSize, setAccountSize] = useState(null)
   const [equity, setEquity] = useState(null)
   const [riskMode, setRiskMode] = useState('manual')
@@ -67,6 +69,8 @@ export function TasksPage({ taskId } = {}) {
       setPriceCondition('')
       setSupportPrice('')
       setRisk('')
+      setRiskUnit('percent')
+      setRiskAmountInput('')
       setCandle(null)
       setCandleDateTime('')
       setLoadingTask(false)
@@ -86,6 +90,8 @@ export function TasksPage({ taskId } = {}) {
         setPriceCondition(task.priceCondition != null ? String(task.priceCondition) : '')
         setSupportPrice(task.supportPrice != null ? String(task.supportPrice) : '')
         setRisk(task.risk != null ? String(task.risk) : '')
+        setRiskUnit(task.riskType === 'amount' ? 'amount' : 'percent')
+        setRiskAmountInput(task.riskAmount != null ? String(task.riskAmount) : '')
         setCurrentTaskId(task.id)
       })
       .catch(() => setTaskSaveError('Impossible de charger le brouillon'))
@@ -239,9 +245,21 @@ export function TasksPage({ taskId } = {}) {
     }
   }, [riskMode, autoRiskPercent])
 
+  // Le mode auto (Paramètres) est toujours en %, jamais en montant fixe —
+  // si riskUnit était resté sur "amount" avant un passage en auto, on
+  // l'ignore plutôt que d'envoyer un montant obsolète.
+  const effectiveRiskUnit = riskMode === 'auto' ? 'percent' : riskUnit
+
   const riskPercent = parseFloat(risk)
+  const parsedRiskAmountInput = parseFloat(riskAmountInput)
   const riskAmount =
-    accountSize != null && Number.isFinite(riskPercent) ? (riskPercent / 100) * accountSize : null
+    effectiveRiskUnit === 'amount'
+      ? Number.isFinite(parsedRiskAmountInput)
+        ? parsedRiskAmountInput
+        : null
+      : accountSize != null && Number.isFinite(riskPercent)
+        ? (riskPercent / 100) * accountSize
+        : null
 
   function toggleScenario(next) {
     setScenario((current) => (current === next ? null : next))
@@ -263,7 +281,10 @@ export function TasksPage({ taskId } = {}) {
       executionTime: executionTime ? `${executionTime}:00` : null,
       priceCondition: Number.isFinite(parsedPriceCondition) ? parsedPriceCondition : null,
       supportPrice: Number.isFinite(parsedSupportPrice) ? parsedSupportPrice : null,
-      risk: Number.isFinite(parsedRisk) ? parsedRisk : null,
+      riskType: effectiveRiskUnit,
+      risk: effectiveRiskUnit === 'percent' ? (Number.isFinite(parsedRisk) ? parsedRisk : null) : null,
+      riskAmount:
+        effectiveRiskUnit === 'amount' ? (Number.isFinite(parsedRiskAmountInput) ? parsedRiskAmountInput : null) : null,
     }
   }
 
@@ -310,13 +331,30 @@ export function TasksPage({ taskId } = {}) {
 
     const payload = { ...buildPayload(), status: 'pending' }
 
-    if ([payload.fibo100, payload.fibo0, payload.priceCondition, payload.supportPrice, payload.risk].includes(null)) {
-      setTaskSaveError('Remplis tous les champs (Fibo, prix, risque) avant d\'enregistrer.')
+    if ([payload.fibo100, payload.fibo0, payload.priceCondition, payload.supportPrice].includes(null)) {
+      setTaskSaveError('Remplis tous les champs (Fibo, prix) avant d\'enregistrer.')
       return
     }
-    if (payload.risk <= 0 || payload.risk > MAX_RISK_PERCENT) {
-      setTaskSaveError(`Risque invalide (doit être entre 0 et ${MAX_RISK_PERCENT}%).`)
-      return
+
+    if (payload.riskType === 'amount') {
+      if (payload.riskAmount == null || payload.riskAmount <= 0) {
+        setTaskSaveError('Renseigne un montant risqué valide.')
+        return
+      }
+      const maxAmount = accountSize != null ? (MAX_RISK_PERCENT / 100) * accountSize : null
+      if (maxAmount != null && payload.riskAmount > maxAmount) {
+        setTaskSaveError(`Montant risqué trop élevé (max ${maxAmount.toFixed(2)}$, soit ${MAX_RISK_PERCENT}% du capital).`)
+        return
+      }
+    } else {
+      if (payload.risk == null) {
+        setTaskSaveError('Renseigne le risque.')
+        return
+      }
+      if (payload.risk <= 0 || payload.risk > MAX_RISK_PERCENT) {
+        setTaskSaveError(`Risque invalide (doit être entre 0 et ${MAX_RISK_PERCENT}%).`)
+        return
+      }
     }
 
     await persist(payload)
@@ -402,6 +440,10 @@ export function TasksPage({ taskId } = {}) {
         onRiskChange={setRisk}
         riskAmount={riskAmount}
         riskMode={riskMode}
+        riskUnit={riskUnit}
+        onRiskUnitChange={setRiskUnit}
+        riskAmountInput={riskAmountInput}
+        onRiskAmountInputChange={setRiskAmountInput}
         growthPercent={growthPercent}
         onSaveDraft={saveDraft}
         onFinalize={finalizeTask}

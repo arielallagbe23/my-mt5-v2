@@ -34,9 +34,24 @@ def evaluate_task(task, candle, account_size):
     # Filet de sécurité indépendant de l'API : même si une tâche avec un risque
     # aberrant arrivait jusqu'ici (bug, édition manuelle dans Firestore...), on
     # refuse de l'exécuter plutôt que de laisser passer un ordre disproportionné.
-    risk = task.get("risk")
-    if not isinstance(risk, (int, float)) or risk <= 0 or risk > MAX_RISK_PERCENT:
-        return {"matched": False, "reason": f"Risque invalide ou hors limite (max {MAX_RISK_PERCENT}%) : {risk}"}
+    # Deux façons de saisir le risque (riskType, voir resolve_risk_amount dans
+    # scenario_shared.py) : un montant fixe en $, plafonné au même 2% du
+    # capital que le mode %, juste exprimé en dollars.
+    if task.get("riskType") == "amount":
+        risk_amount = task.get("riskAmount")
+        if not isinstance(risk_amount, (int, float)) or risk_amount <= 0:
+            return {"matched": False, "reason": f"Montant risqué invalide : {risk_amount}"}
+        if account_size:
+            max_amount = (MAX_RISK_PERCENT / 100) * account_size
+            if risk_amount > max_amount:
+                return {
+                    "matched": False,
+                    "reason": f"Montant risqué trop élevé (max {max_amount:.2f}$, soit {MAX_RISK_PERCENT}% du capital) : {risk_amount}",
+                }
+    else:
+        risk = task.get("risk")
+        if not isinstance(risk, (int, float)) or risk <= 0 or risk > MAX_RISK_PERCENT:
+            return {"matched": False, "reason": f"Risque invalide ou hors limite (max {MAX_RISK_PERCENT}%) : {risk}"}
 
     scenario = task.get("scenario")
     if scenario == "sell":

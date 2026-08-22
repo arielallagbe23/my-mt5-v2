@@ -6,7 +6,9 @@ const router = Router()
 
 const SCENARIOS = new Set(['buy', 'sell'])
 const TIMEFRAMES = new Set(['M15', 'H1', 'H4'])
+const RISK_TYPES = new Set(['percent', 'amount'])
 const MAX_RISK_PERCENT = 2 // garde-fou : jamais plus de 2% du capital risqué sur une tâche
+const VPS_ID = process.env.MT5_VPS_ID ?? 'main'
 
 function serialize(doc) {
   const data = doc.data()
@@ -21,6 +23,8 @@ function serialize(doc) {
     priceCondition: data.priceCondition,
     supportPrice: data.supportPrice,
     risk: data.risk,
+    riskType: data.riskType ?? 'percent',
+    riskAmount: data.riskAmount ?? null,
     status: data.status,
     result: data.result ?? null,
     createdAt: data.createdAt,
@@ -28,8 +32,41 @@ function serialize(doc) {
   }
 }
 
+// account_size du compte actuellement connecté — sert de plafond au montant
+// risqué en mode "amount" (même 2% max que le mode %, juste exprimé en $).
+// null si le VPS n'a encore rien publié : dans ce cas on laisse passer côté
+// serveur, le VPS refait ce même contrôle de façon indépendante à
+// l'évaluation (voir MAX_RISK_PERCENT dans scenarios.py) et refusera la
+// tâche s'il ne peut pas non plus déterminer account_size.
+async function fetchAccountSize() {
+  const doc = await db.collection('vps_status').doc(VPS_ID).get()
+  if (!doc.exists) return null
+  const data = doc.data()
+  if (data.login == null) return null
+  return (data.accounts ?? {})[String(data.login)]?.account_size ?? null
+}
+
+function validateRiskType(body) {
+  const { riskType } = body ?? {}
+  if (riskType != null && !RISK_TYPES.has(riskType)) return 'Type de risque invalide (percent ou amount)'
+  return null
+}
+
+async function validateRiskAmountCap(body) {
+  const { riskType, riskAmount } = body ?? {}
+  if (riskType !== 'amount' || typeof riskAmount !== 'number' || !Number.isFinite(riskAmount)) return null
+  const accountSize = await fetchAccountSize()
+  if (accountSize == null) return null
+  const maxAmount = (MAX_RISK_PERCENT / 100) * accountSize
+  if (riskAmount > maxAmount) {
+    return `Montant risqué trop élevé (max ${maxAmount.toFixed(2)}$, soit ${MAX_RISK_PERCENT}% du capital)`
+  }
+  return null
+}
+
 function validateTaskBody(body) {
-  const { scenario, fibo100, fibo0, timeframe, executionTime, priceCondition, supportPrice, risk } = body ?? {}
+  const { scenario, fibo100, fibo0, timeframe, executionTime, priceCondition, supportPrice, risk, riskType, riskAmount } =
+    body ?? {}
 
   if (!SCENARIOS.has(scenario)) return 'Scénario invalide (buy ou sell)'
   if (!TIMEFRAMES.has(timeframe)) return 'Timeframe invalide (M15, H1 ou H4)'
@@ -39,11 +76,21 @@ function validateTaskBody(body) {
     ['fibo0', fibo0],
     ['priceCondition', priceCondition],
     ['supportPrice', supportPrice],
-    ['risk', risk],
   ]) {
     if (typeof value !== 'number' || !Number.isFinite(value)) return `Champ ${label} invalide`
   }
-  if (risk <= 0 || risk > MAX_RISK_PERCENT) return `Risque invalide (doit être entre 0 et ${MAX_RISK_PERCENT}%)`
+
+  const riskTypeError = validateRiskType(body)
+  if (riskTypeError) return riskTypeError
+
+  if (riskType === 'amount') {
+    if (typeof riskAmount !== 'number' || !Number.isFinite(riskAmount) || riskAmount <= 0) {
+      return 'Montant risqué invalide'
+    }
+  } else {
+    if (typeof risk !== 'number' || !Number.isFinite(risk)) return 'Champ risk invalide'
+    if (risk <= 0 || risk > MAX_RISK_PERCENT) return `Risque invalide (doit être entre 0 et ${MAX_RISK_PERCENT}%)`
+  }
   return null
 }
 
@@ -51,7 +98,8 @@ function validateTaskBody(body) {
 // fini de le remplir) — on valide juste que ce qui EST rempli a le bon type,
 // pour ne jamais enregistrer une valeur incohérente en base.
 function validateDraftBody(body) {
-  const { scenario, fibo100, fibo0, timeframe, executionTime, priceCondition, supportPrice, risk } = body ?? {}
+  const { scenario, fibo100, fibo0, timeframe, executionTime, priceCondition, supportPrice, risk, riskType, riskAmount } =
+    body ?? {}
 
   if (scenario != null && !SCENARIOS.has(scenario)) return 'Scénario invalide (buy ou sell)'
   if (timeframe != null && !TIMEFRAMES.has(timeframe)) return 'Timeframe invalide (M15, H1 ou H4)'
@@ -64,12 +112,18 @@ function validateDraftBody(body) {
     ['priceCondition', priceCondition],
     ['supportPrice', supportPrice],
     ['risk', risk],
+    ['riskAmount', riskAmount],
   ]) {
     if (value != null && (typeof value !== 'number' || !Number.isFinite(value))) return `Champ ${label} invalide`
   }
+
+  const riskTypeError = validateRiskType(body)
+  if (riskTypeError) return riskTypeError
+
   if (typeof risk === 'number' && (risk <= 0 || risk > MAX_RISK_PERCENT)) {
     return `Risque invalide (doit être entre 0 et ${MAX_RISK_PERCENT}%)`
   }
+  if (typeof riskAmount === 'number' && riskAmount <= 0) return 'Montant risqué invalide'
   return null
 }
 
@@ -128,8 +182,22 @@ router.post('/', requireAuth, async (req, res) => {
   const error = status === 'draft' ? validateDraftBody(req.body) : validateTaskBody(req.body)
   if (error) return res.status(400).json({ error })
 
-  const { scenario, scenarioId, fibo100, fibo0, timeframe, executionTime, priceCondition, supportPrice, risk } =
-    req.body
+  const capError = await validateRiskAmountCap(req.body)
+  if (capError) return res.status(400).json({ error: capError })
+
+  const {
+    scenario,
+    scenarioId,
+    fibo100,
+    fibo0,
+    timeframe,
+    executionTime,
+    priceCondition,
+    supportPrice,
+    risk,
+    riskType,
+    riskAmount,
+  } = req.body
 
   const now = Date.now()
   const docRef = await db.collection('tasks').add({
@@ -143,6 +211,8 @@ router.post('/', requireAuth, async (req, res) => {
     priceCondition: priceCondition ?? null,
     supportPrice: supportPrice ?? null,
     risk: risk ?? null,
+    riskType: riskType ?? 'percent',
+    riskAmount: riskAmount ?? null,
     status,
     result: null,
     createdAt: now,
@@ -165,8 +235,22 @@ router.patch('/:id', requireAuth, async (req, res) => {
   const error = status === 'draft' ? validateDraftBody(merged) : validateTaskBody(merged)
   if (error) return res.status(400).json({ error })
 
-  const { scenario, scenarioId, fibo100, fibo0, timeframe, executionTime, priceCondition, supportPrice, risk } =
-    merged
+  const capError = await validateRiskAmountCap(merged)
+  if (capError) return res.status(400).json({ error: capError })
+
+  const {
+    scenario,
+    scenarioId,
+    fibo100,
+    fibo0,
+    timeframe,
+    executionTime,
+    priceCondition,
+    supportPrice,
+    risk,
+    riskType,
+    riskAmount,
+  } = merged
 
   await ref.update({
     scenario: scenario ?? null,
@@ -178,6 +262,8 @@ router.patch('/:id', requireAuth, async (req, res) => {
     priceCondition: priceCondition ?? null,
     supportPrice: supportPrice ?? null,
     risk: risk ?? null,
+    riskType: riskType ?? 'percent',
+    riskAmount: riskAmount ?? null,
     status,
     updatedAt: Date.now(),
   })

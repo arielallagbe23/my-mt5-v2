@@ -81,6 +81,22 @@ def golden_zone(fibo100, fibo0, fibo2_bound):
     return low, mid, high, sl1, tp1
 
 
+def resolve_risk_amount(task, account_size):
+    """Montant réellement risqué sur cette tâche, en $ — deux façons de le
+    saisir à la création, mutuellement exclusives (riskType) :
+      - "amount" : task["riskAmount"] directement, un montant fixe choisi à
+        la main (moins le FEE_BUFFER de compute_lot_size, comme le reste).
+      - "percent" (par défaut, comportement historique) : task["risk"]% du
+        capital de référence FIXE (account_size, jamais l'équité live —
+        voir risk_sizing_strategy).
+    Utilisée par Buy/Sell 1 (entrée manuelle) ET finish_buy_order/
+    finish_sell_order (Buy/Sell 2/3/4) — un seul endroit pour cette
+    décision, avant ce fix elle était dupliquée 4 fois."""
+    if task.get("riskType") == "amount":
+        return task.get("riskAmount")
+    return (task["risk"] / 100) * account_size if account_size else None
+
+
 def finish_sell_order(entry_price, sl, tp, candle_close, task, account_size):
     """Vérifie l'ordre SL > Entrée > TP, calcule le lot, et construit le
     résultat "matched". Partagé par Sell 2/3/4 (Sell 1 a sa propre logique
@@ -91,7 +107,7 @@ def finish_sell_order(entry_price, sl, tp, candle_close, task, account_size):
             "reason": f"Ordre incohérent (SL {sl} / Entrée {entry_price} / TP {tp})",
         }
 
-    risk_amount = (task["risk"] / 100) * account_size if account_size else None
+    risk_amount = resolve_risk_amount(task, account_size)
     lot = compute_lot_size(risk_amount, entry_price, sl, candle_close)
 
     return {
@@ -114,7 +130,7 @@ def finish_buy_order(entry_price, sl, tp, candle_close, task, account_size):
             "reason": f"Ordre incohérent (SL {sl} / Entrée {entry_price} / TP {tp})",
         }
 
-    risk_amount = (task["risk"] / 100) * account_size if account_size else None
+    risk_amount = resolve_risk_amount(task, account_size)
     lot = compute_lot_size(risk_amount, entry_price, sl, candle_close)
 
     return {

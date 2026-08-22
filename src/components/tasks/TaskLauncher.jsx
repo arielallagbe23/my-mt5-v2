@@ -18,6 +18,10 @@ export function TaskLauncher({
   onRiskChange,
   riskAmount,
   riskMode = 'manual',
+  riskUnit = 'percent',
+  onRiskUnitChange,
+  riskAmountInput,
+  onRiskAmountInputChange,
   growthPercent,
   onSaveDraft,
   onFinalize,
@@ -86,43 +90,79 @@ export function TaskLauncher({
         ) : (
           <>
             <div className="flex gap-2">
-              {RISK_PRESETS.map((preset) => (
-                <button
-                  key={preset}
-                  type="button"
-                  onClick={() => {
-                    onRiskChange(preset)
-                    setCustomRisk(false)
-                  }}
-                  className={`min-h-9 flex-1 rounded-xl text-sm font-semibold transition-colors ${
-                    !customRisk && risk === preset ? 'bg-indigo-600 text-white' : 'bg-indigo-500/15 text-indigo-300'
-                  }`}
-                >
-                  {preset}%
-                </button>
-              ))}
               <button
                 type="button"
-                onClick={() => setCustomRisk(true)}
-                className={`min-h-9 flex-1 rounded-xl text-sm font-semibold transition-colors ${
-                  customRisk ? 'bg-indigo-600 text-white' : 'bg-indigo-500/15 text-indigo-300'
+                onClick={() => onRiskUnitChange('percent')}
+                className={`min-h-8 flex-1 rounded-xl text-xs font-semibold transition-colors ${
+                  riskUnit === 'percent' ? 'bg-indigo-600 text-white' : 'bg-white/5 text-slate-400'
                 }`}
               >
-                Autre
+                % du capital
+              </button>
+              <button
+                type="button"
+                onClick={() => onRiskUnitChange('amount')}
+                className={`min-h-8 flex-1 rounded-xl text-xs font-semibold transition-colors ${
+                  riskUnit === 'amount' ? 'bg-indigo-600 text-white' : 'bg-white/5 text-slate-400'
+                }`}
+              >
+                Montant fixe ($)
               </button>
             </div>
-            {customRisk && (
+
+            {riskUnit === 'amount' ? (
               <input
                 type="number"
                 inputMode="decimal"
                 min="0"
-                max="2"
-                step="0.1"
-                placeholder="Max 2%"
-                value={risk}
-                onChange={(event) => onRiskChange(event.target.value)}
+                step="1"
+                placeholder="Montant en $"
+                value={riskAmountInput}
+                onChange={(event) => onRiskAmountInputChange(event.target.value)}
                 className={COMPACT_INPUT}
               />
+            ) : (
+              <>
+                <div className="flex gap-2">
+                  {RISK_PRESETS.map((preset) => (
+                    <button
+                      key={preset}
+                      type="button"
+                      onClick={() => {
+                        onRiskChange(preset)
+                        setCustomRisk(false)
+                      }}
+                      className={`min-h-9 flex-1 rounded-xl text-sm font-semibold transition-colors ${
+                        !customRisk && risk === preset ? 'bg-indigo-600 text-white' : 'bg-indigo-500/15 text-indigo-300'
+                      }`}
+                    >
+                      {preset}%
+                    </button>
+                  ))}
+                  <button
+                    type="button"
+                    onClick={() => setCustomRisk(true)}
+                    className={`min-h-9 flex-1 rounded-xl text-sm font-semibold transition-colors ${
+                      customRisk ? 'bg-indigo-600 text-white' : 'bg-indigo-500/15 text-indigo-300'
+                    }`}
+                  >
+                    Autre
+                  </button>
+                </div>
+                {customRisk && (
+                  <input
+                    type="number"
+                    inputMode="decimal"
+                    min="0"
+                    max="2"
+                    step="0.1"
+                    placeholder="Max 2%"
+                    value={risk}
+                    onChange={(event) => onRiskChange(event.target.value)}
+                    className={COMPACT_INPUT}
+                  />
+                )}
+              </>
             )}
           </>
         )}

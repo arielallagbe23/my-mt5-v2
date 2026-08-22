@@ -5,7 +5,7 @@ en dessous (ou à) la borne basse de la golden zone. Le routeur
 fonction — elle ne fait que construire l'ordre.
 """
 
-from scenario_shared import compute_lot_size, fibo_price
+from scenario_shared import compute_lot_size, fibo_price, resolve_risk_amount
 
 
 def evaluate_buy_1(task, candle, account_size):
@@ -29,7 +29,7 @@ def evaluate_buy_1(task, candle, account_size):
             "reason": f"Ordre incohérent (SL {sl} / Entrée {entry_price} / TP {tp})",
         }
 
-    risk_amount = (task["risk"] / 100) * account_size if account_size else None
+    risk_amount = resolve_risk_amount(task, account_size)
     lot = compute_lot_size(risk_amount, entry_price, sl, candle["close"])
 
     return {
