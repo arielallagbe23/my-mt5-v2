@@ -47,6 +47,13 @@ export function computeKpis(trades) {
   // Un même 1R sert de référence stable pour le R global ET chaque mois
   // (voir riskUnit plus bas), pour rester comparable d'un mois à l'autre.
   const riskUnit = avgLoss ? Math.abs(avgLoss) : null
+  const avgWin = wins.length ? grossWin / wins.length : null
+
+  // Espérance : combien on gagne EN MOYENNE par trade, gagnants et perdants
+  // confondus — (taux de réussite × gain moyen) - (taux d'échec × perte
+  // moyenne). La métrique qui dit si le système est rentable sur la durée,
+  // indépendamment du win rate seul.
+  const expectancy = total ? (wins.length / total) * (avgWin ?? 0) - (losses.length / total) * (riskUnit ?? 0) : null
 
   return {
     total,
@@ -54,10 +61,11 @@ export function computeKpis(trades) {
     winRate: total ? (wins.length / total) * 100 : null,
     winCount: wins.length,
     profitFactor: grossLoss ? grossWin / grossLoss : null,
-    avgWin: wins.length ? grossWin / wins.length : null,
+    avgWin,
     avgLoss,
     riskUnit,
     rTotal: riskUnit ? netTotal / riskUnit : null,
+    expectancy,
     best: trades.reduce((m, t) => (m === null || t.net > m.net ? t : m), null),
     worst: trades.reduce((m, t) => (m === null || t.net < m.net ? t : m), null),
   }

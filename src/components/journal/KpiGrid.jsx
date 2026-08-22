@@ -17,6 +17,13 @@ export function KpiGrid({ kpis, currentMonthR }) {
         </p>
         <p className="text-xs text-slate-500">performance du mois en cours</p>
       </div>
+      <div className="col-span-2 rounded-2xl border border-white/10 bg-white/5 p-3">
+        <p className="text-xs text-slate-400 uppercase">Expectancy</p>
+        <p className={`text-xl font-bold ${kpis.expectancy >= 0 ? 'text-blue-400' : 'text-red-400'}`}>
+          {money(kpis.expectancy)}
+        </p>
+        <p className="text-xs text-slate-500">gain moyen par trade, gagnant ou perdant</p>
+      </div>
       <div className="rounded-2xl border border-white/10 bg-white/5 p-3">
         <p className="text-xs text-slate-400 uppercase">Win rate</p>
         <p className="text-xl font-bold text-white">{pct(kpis.winRate)}</p>

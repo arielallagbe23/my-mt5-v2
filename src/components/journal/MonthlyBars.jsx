@@ -14,12 +14,12 @@ export function MonthlyBars({ monthly }) {
 
   return (
     <div className="overflow-x-auto">
-      <div className="flex h-24 items-end gap-2" style={{ width: monthly.length * (BAR_WIDTH + 8) }}>
+      <div className="flex h-40 items-end gap-2" style={{ width: monthly.length * (BAR_WIDTH + 8) }}>
         {monthly.map(([key, value]) => (
           <div key={key} className="flex shrink-0 flex-col items-center gap-1" style={{ width: BAR_WIDTH }}>
             <div
               className={`w-full rounded-t ${value >= 0 ? 'bg-blue-500' : 'bg-red-500'}`}
-              style={{ height: `${Math.max(4, (Math.abs(value) / maxAbs) * 80)}px` }}
+              style={{ height: `${Math.max(4, (Math.abs(value) / maxAbs) * 130)}px` }}
             />
             <span className="text-[10px] whitespace-nowrap text-slate-500">{formatMonthLabel(key)}</span>
           </div>
