@@ -16,6 +16,7 @@ from datetime import datetime, timedelta, timezone
 
 from google.cloud.firestore_v1.base_query import FieldFilter
 
+import crypto_utils
 from config import DRY_RUN, MAGIC, MAX_RISK_PERCENT, PRICE_SYMBOL, VPS_ID
 from mt5_client import ensure_mt5
 from notify import notify
@@ -401,6 +402,65 @@ def _handle_close_position_request(db, doc):
     _publish_close_position_result(db, result)
 
 
+def _publish_switch_account_result(db, result):
+    db.collection("switch_account_results").document("main").set({**result, "ts": int(time.time())})
+
+
+def _handle_switch_account_request(db, doc):
+    """Change de compte MT5 à distance (nouveau cycle FTMO, sans avoir à se
+    connecter au VPS) — commands/switch_account_request. Le mot de passe
+    arrive chiffré (voir crypto_utils.py) : déchiffré en mémoire juste le
+    temps de l'appel mt5.login(), jamais écrit sur disque. Le champ chiffré
+    est effacé du document tout de suite après — pas la peine qu'il traîne,
+    même chiffré. Ignore DRY_RUN : changer de compte n'est pas un ordre de
+    trading, ce garde-fou-là ne concerne pas cette action."""
+    ref = doc.reference
+    data = doc.to_dict()
+    login = data.get("login")
+    server = data.get("server")
+    encrypted_password = data.get("encryptedPassword")
+
+    ref.update({"status": "done", "encryptedPassword": ""})
+
+    result = {"login": login, "success": False}
+
+    try:
+        password = crypto_utils.decrypt_password(encrypted_password)
+    except ValueError as exc:
+        result["error"] = str(exc)
+        _publish_switch_account_result(db, result)
+        print(f"[SWITCH] déchiffrement échoué : {exc}")
+        return
+
+    m = ensure_mt5()
+    if m is None:
+        result["error"] = "MT5 indisponible"
+        _publish_switch_account_result(db, result)
+        return
+
+    ok = m.login(login, password=password, server=server)
+    if not ok:
+        result["error"] = str(m.last_error())
+        notify("mymt5 — échec changement de compte", f"login {login} : {result['error']}")
+        print(f"[SWITCH] échec login {login} : {result['error']}")
+        _publish_switch_account_result(db, result)
+        return
+
+    ai = m.account_info()
+    if ai is None:
+        result["error"] = "Connecté mais account_info() indisponible"
+        _publish_switch_account_result(db, result)
+        return
+
+    result["success"] = True
+    result["balance"] = ai.balance
+    result["currency"] = ai.currency
+    result["server"] = ai.server
+    notify("mymt5 — compte changé", f"Nouveau compte {login} ({ai.server}) — balance {ai.balance:.2f} {ai.currency}")
+    print(f"[SWITCH] connecté au compte {login} ({ai.server})")
+    _publish_switch_account_result(db, result)
+
+
 def _handle_market_recap_request(db, doc):
     """Relance à la main les 9 scripts qui alimentent le Market Recap
     (commands/market_recap_request) — pour le cas où la tâche planifiée du
@@ -437,6 +497,7 @@ HANDLERS = {
     "set_order_request": _handle_set_order_request,
     "close_position_request": _handle_close_position_request,
     "market_recap_request": _handle_market_recap_request,
+    "switch_account_request": _handle_switch_account_request,
 }
 
 

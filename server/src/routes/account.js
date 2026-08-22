@@ -1,9 +1,29 @@
 import { Router } from 'express'
+import crypto from 'node:crypto'
 import { db } from '../firebase.js'
 import { requireAuth } from '../middleware/auth.js'
 
 const router = Router()
 const VPS_ID = process.env.MT5_VPS_ID ?? 'main'
+
+// Chiffre le mot de passe MT5 avant de le poser dans Firestore (le VPS a la
+// même clé — ACCOUNT_SWITCH_KEY — dans son fichier local
+// account_switch_key.txt, jamais commité, même régime que cron_secret.txt).
+// AES-256-GCM : IV (12) + tag d'authentification (16) + texte chiffré,
+// concaténés puis encodés en base64 — le VPS les sépare dans le même ordre
+// pour déchiffrer côté Python (cryptography.hazmat AESGCM, qui attend
+// ciphertext+tag concaténés, d'où l'ordre choisi ici).
+function encryptPassword(password) {
+  const key = Buffer.from(process.env.ACCOUNT_SWITCH_KEY ?? '', 'base64')
+  if (key.length !== 32) {
+    throw new Error('ACCOUNT_SWITCH_KEY absente ou invalide côté serveur')
+  }
+  const iv = crypto.randomBytes(12)
+  const cipher = crypto.createCipheriv('aes-256-gcm', key, iv)
+  const ciphertext = Buffer.concat([cipher.update(password, 'utf8'), cipher.final()])
+  const authTag = cipher.getAuthTag()
+  return Buffer.concat([iv, authTag, ciphertext]).toString('base64')
+}
 
 router.post('/status/request', requireAuth, async (req, res) => {
   await db.collection('commands').doc('status_request').set({
@@ -91,6 +111,50 @@ router.patch('/:vpsId/settings', requireAuth, async (req, res) => {
   const payload = { pseudo: pseudo?.trim() || null, riskMultiplier, updatedAt: Date.now() }
   await db.collection('account_settings').doc(req.params.vpsId).set(payload)
   res.json(payload)
+})
+
+// Bascule le compte principal sur un nouveau login/mot de passe/serveur —
+// pour le cycle FTMO (nouveau compte tous les 3 mois) sans avoir à se
+// connecter au VPS pour retaper les identifiants dans le terminal. Le mot
+// de passe ne touche jamais le disque en clair : chiffré ici, le VPS le
+// déchiffre en mémoire juste le temps de l'appel mt5.login(), puis efface
+// le champ chiffré du document.
+router.post('/switch', requireAuth, async (req, res) => {
+  const { login, password, server } = req.body ?? {}
+
+  if (!Number.isInteger(login) || login <= 0) {
+    return res.status(400).json({ error: 'Login invalide' })
+  }
+  if (typeof password !== 'string' || password.length === 0) {
+    return res.status(400).json({ error: 'Mot de passe requis' })
+  }
+  if (typeof server !== 'string' || server.trim().length === 0) {
+    return res.status(400).json({ error: 'Serveur requis (ex: FTMO-Server2)' })
+  }
+
+  let encryptedPassword
+  try {
+    encryptedPassword = encryptPassword(password)
+  } catch {
+    return res.status(500).json({ error: 'Chiffrement indisponible côté serveur' })
+  }
+
+  await db.collection('commands').doc('switch_account_request').set({
+    status: 'pending',
+    login,
+    encryptedPassword,
+    server: server.trim(),
+    ts: Date.now(),
+  })
+  res.status(202).json({ requested: true })
+})
+
+router.get('/switch/result', requireAuth, async (req, res) => {
+  const doc = await db.collection('switch_account_results').doc('main').get()
+  if (!doc.exists) {
+    return res.status(503).json({ error: 'Indisponible' })
+  }
+  res.json(doc.data())
 })
 
 export default router

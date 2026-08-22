@@ -26,6 +26,9 @@ export const api = {
   allAccountsStatus: () => request('/api/account/all'),
   updateAccountSettings: (vpsId, settings) =>
     request(`/api/account/${vpsId}/settings`, { method: 'PATCH', body: settings }),
+  requestSwitchAccount: (login, password, server) =>
+    request('/api/account/switch', { method: 'POST', body: { login, password, server } }),
+  switchAccountResult: () => request('/api/account/switch/result'),
   requestAccountStatus: () => request('/api/account/status/request', { method: 'POST' }),
   forgotPassword: (email) =>
     request('/api/auth/forgot-password', { method: 'POST', body: { email, origin: window.location.origin } }),

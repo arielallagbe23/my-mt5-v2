@@ -39,6 +39,13 @@ SERPAPI_KEY = _read("serpapi_key.txt") or os.environ.get("SERPAPI_KEY")
 # Clé API Anthropic pour 09_bilan_quotidien.py — jamais commitée, même régime.
 ANTHROPIC_API_KEY = _read("anthropic_key.txt") or os.environ.get("ANTHROPIC_API_KEY")
 
+# Clé partagée avec server/src/routes/account.js pour chiffrer le mot de
+# passe MT5 lors d'un changement de compte à distance (voir crypto_utils.py
+# et on_demand.py, _handle_switch_account_request) — jamais commitée, même
+# régime que cron_secret.txt. MÊME valeur des deux côtés (Vercel + ce
+# fichier), sinon le déchiffrement échoue.
+ACCOUNT_SWITCH_KEY = _read("account_switch_key.txt") or os.environ.get("ACCOUNT_SWITCH_KEY")
+
 # Tant que dry_run.txt contient "true" (ou n'existe pas), les tâches sont évaluées
 # et notifiées normalement mais AUCUN ordre réel n'est envoyé à MT5. Repasser à
 # "false" dans ce fichier une fois le comportement vérifié plusieurs fois.

@@ -4,3 +4,4 @@ tzdata
 requests
 python-dateutil
 anthropic
+cryptography

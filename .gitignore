@@ -19,6 +19,7 @@ dist-ssr
 !*/.env.example
 service-account*.json
 .vercel
+mt5-vps/*.txt
 
 # Claude Code local config (accumulates absolute local paths, and
 # settings.local.json can end up holding secrets typed into past commands)
