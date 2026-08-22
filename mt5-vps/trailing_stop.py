@@ -29,6 +29,21 @@ def _task_timeframe(db, comment):
     return doc.to_dict().get("timeframe")
 
 
+def _resolve_timeframe(db, ticket, comment):
+    """Timeframe à utiliser pour CETTE position : la tâche d'origine en
+    priorité, sinon l'activation manuelle depuis l'accueil
+    (managed_positions/{ticket}, écrite par le bouton "Activer" sur une
+    position ouverte hors mymt5). Sans ce repli, une position "activée"
+    affiche "Suivi actif" côté app (server/src/routes/positions.js résout
+    déjà les deux) mais n'est en réalité suivie par rien ici — même
+    résolution des deux côtés, pour que le badge ne mente jamais."""
+    timeframe = _task_timeframe(db, comment)
+    if timeframe:
+        return timeframe
+    doc = db.collection("managed_positions").document(str(ticket)).get()
+    return doc.to_dict().get("timeframe") if doc.exists else None
+
+
 # ============================================================
 # 2. OUVERTURE DE LA POSITION — dès qu'elle est ouverte, on a besoin de son
 #    point d'entrée et de son TP pour tout ce qui suit.
@@ -410,6 +425,6 @@ def check_trailing_stop(db):
         close = float(candle["close"])
 
         for pos in m.positions_get(symbol=PRICE_SYMBOL) or ():
-            if _task_timeframe(db, pos.comment) != timeframe:
+            if _resolve_timeframe(db, pos.ticket, pos.comment) != timeframe:
                 continue
             _process_position(db, m, pos, close)
