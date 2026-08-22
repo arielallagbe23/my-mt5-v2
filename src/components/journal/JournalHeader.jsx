@@ -4,14 +4,14 @@ export function JournalHeader({ tradesCount, onExportCsv, onExportHtml, exportDi
   const fileInputRef = useRef(null)
 
   return (
-    <div className="flex items-start justify-between gap-2">
+    <div className="flex flex-col gap-3">
       <div>
         <h1 className="text-2xl font-bold text-white sm:text-3xl">Journal</h1>
         <p className="text-xs text-slate-400 my-2">
           {tradesCount === null ? '...' : `${tradesCount} trades · tout l'historique`}
         </p>
       </div>
-      <div className="flex shrink-0 flex-wrap justify-end gap-2">
+      <div className="flex flex-wrap gap-2">
         <button
           type="button"
           onClick={onExportCsv}
