@@ -146,6 +146,8 @@ export function HomePage() {
   const [closeError, setCloseError] = useState('')
   const [now, setNow] = useState(() => new Date())
   const [histories, setHistories] = useState({})
+  const [scheduledOrders, setScheduledOrders] = useState([])
+  const [cancellingScheduledId, setCancellingScheduledId] = useState(null)
 
   useEffect(() => {
     const id = setInterval(() => setNow(new Date()), 60_000)
@@ -198,7 +200,20 @@ export function HomePage() {
         ),
       )
       .catch(() => {})
+    api.scheduledOrders().then(setScheduledOrders).catch(() => {})
   }, [])
+
+  async function cancelScheduledOrder(id) {
+    setCancellingScheduledId(id)
+    try {
+      await api.cancelScheduledOrder(id)
+      setScheduledOrders((current) => current.filter((o) => o.id !== id))
+    } catch {
+      api.scheduledOrders().then(setScheduledOrders).catch(() => {})
+    } finally {
+      setCancellingScheduledId(null)
+    }
+  }
 
   async function archiveReport(id) {
     setReports((current) => current.filter((r) => r.id !== id))
@@ -287,7 +302,8 @@ export function HomePage() {
   const bilanQuotidien = marketRecap['09_bilan_quotidien']
   const netVolume = positions.reduce((sum, p) => sum + (p.type === 'Sell' ? -p.volume : p.volume), 0)
   const totalFloatingPnl = positions.reduce((sum, p) => sum + (typeof p.profit === 'number' ? p.profit : 0), 0)
-  const activityCount = upcomingTasks.length + positions.length + orders.length + reports.length
+  const activityCount =
+    upcomingTasks.length + positions.length + orders.length + reports.length + scheduledOrders.length
 
   return (
     <div className={PAGE}>
@@ -536,6 +552,51 @@ export function HomePage() {
                 <span className="text-sm font-semibold text-white">{formatPrice(o.tp)}</span>
               </div>
             </div>
+          </div>
+        ))}
+      </section>
+
+      <section className="mt-5 flex flex-col gap-2 rounded-2xl border border-white/10 bg-white/5 p-4">
+        <p className="text-xs font-bold tracking-[0.14em] text-slate-500 uppercase">
+          Ordres programmés {scheduledOrders.length > 0 && `(${scheduledOrders.length})`}
+        </p>
+        {scheduledOrders.length === 0 && <p className="text-sm text-slate-400">Aucun ordre programmé.</p>}
+        {scheduledOrders.map((o) => (
+          <div key={o.id} className="rounded-2xl border border-white/10 bg-white/5 p-3">
+            <div className="flex items-center justify-between gap-2">
+              <span
+                className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
+                  o.side === 'sell' ? 'bg-red-500/15 text-red-300' : 'bg-blue-500/15 text-blue-300'
+                }`}
+              >
+                {o.side === 'sell' ? 'Vendre' : 'Acheter'} · {o.orderKind === 'market' ? 'Marché' : 'Différé'}
+              </span>
+              <span className="text-xs text-slate-400">{formatExecutionTime(o.executionTime)}</span>
+            </div>
+            <div className="mt-2 grid grid-cols-3 gap-2">
+              <div className="flex flex-col items-center gap-0.5 rounded-xl bg-white/5 p-2 text-center">
+                <span className="text-[10px] font-semibold tracking-wide text-slate-500 uppercase">SL</span>
+                <span className="text-sm font-semibold text-white">{formatPrice(o.sl)}</span>
+              </div>
+              <div className="flex flex-col items-center gap-0.5 rounded-xl bg-white/5 p-2 text-center">
+                <span className="text-[10px] font-semibold tracking-wide text-slate-500 uppercase">TP</span>
+                <span className="text-sm font-semibold text-white">{o.tp != null ? formatPrice(o.tp) : '—'}</span>
+              </div>
+              <div className="flex flex-col items-center gap-0.5 rounded-xl bg-white/5 p-2 text-center">
+                <span className="text-[10px] font-semibold tracking-wide text-slate-500 uppercase">Risque</span>
+                <span className="text-sm font-semibold text-white">
+                  {o.riskType === 'amount' ? `${o.riskAmount}$` : `${o.risk}%`}
+                </span>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => cancelScheduledOrder(o.id)}
+              disabled={cancellingScheduledId === o.id}
+              className="mt-3 min-h-8 rounded-full border border-red-500/30 px-3 text-xs font-semibold text-red-400 disabled:opacity-60"
+            >
+              {cancellingScheduledId === o.id ? 'Annulation...' : 'Annuler'}
+            </button>
           </div>
         ))}
       </section>
