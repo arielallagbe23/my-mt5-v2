@@ -18,6 +18,7 @@ export function AccountsPage() {
   const [edits, setEdits] = useState({})
   const [saving, setSaving] = useState(null)
   const [saveError, setSaveError] = useState('')
+  const [editingId, setEditingId] = useState(null)
 
   const [switchLogin, setSwitchLogin] = useState('')
   const [switchPassword, setSwitchPassword] = useState('')
@@ -67,11 +68,21 @@ export function AccountsPage() {
     try {
       await api.updateAccountSettings(vpsId, { pseudo: edit.pseudo.trim() || null, riskMultiplier })
       await load()
+      setEditingId(null)
     } catch (err) {
       setSaveError(err.message)
     } finally {
       setSaving(null)
     }
+  }
+
+  function cancelEdit(vpsId, info) {
+    setSaveError('')
+    setEdits((current) => ({
+      ...current,
+      [vpsId]: { pseudo: info.pseudo ?? '', riskMultiplier: String(info.riskMultiplier ?? 1) },
+    }))
+    setEditingId(null)
   }
 
   function handleSwitchReview() {
@@ -167,40 +178,62 @@ export function AccountsPage() {
               </div>
 
               <div className="mt-3 flex flex-col gap-2 border-t border-white/10 pt-3">
-                <div className="flex gap-2">
-                  <label className="flex flex-1 flex-col gap-1 text-xs text-slate-400">
-                    Pseudo
-                    <input
-                      type="text"
-                      value={edit.pseudo}
-                      onChange={(e) => updateEdit(vpsId, 'pseudo', e.target.value)}
-                      placeholder={VPS_LABELS[vpsId] ?? vpsId}
-                      maxLength={40}
-                      className={FIELD_INPUT}
-                    />
-                  </label>
-                  <label className="flex w-28 flex-col gap-1 text-xs text-slate-400">
-                    Multiplicateur
-                    <input
-                      type="number"
-                      inputMode="decimal"
-                      min="0.1"
-                      max="5"
-                      step="0.1"
-                      value={edit.riskMultiplier}
-                      onChange={(e) => updateEdit(vpsId, 'riskMultiplier', e.target.value)}
-                      className={FIELD_INPUT}
-                    />
-                  </label>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => saveSettings(vpsId)}
-                  disabled={!changed || saving === vpsId}
-                  className="min-h-8 self-start rounded-full bg-indigo-500/15 px-3 text-xs font-semibold text-indigo-300 disabled:opacity-40"
-                >
-                  {saving === vpsId ? 'Enregistrement...' : 'Enregistrer'}
-                </button>
+                {editingId === vpsId ? (
+                  <>
+                    <div className="flex gap-2">
+                      <label className="flex flex-1 flex-col gap-1 text-xs text-slate-400">
+                        Pseudo
+                        <input
+                          type="text"
+                          value={edit.pseudo}
+                          onChange={(e) => updateEdit(vpsId, 'pseudo', e.target.value)}
+                          placeholder={VPS_LABELS[vpsId] ?? vpsId}
+                          maxLength={40}
+                          className={FIELD_INPUT}
+                        />
+                      </label>
+                      <label className="flex w-28 flex-col gap-1 text-xs text-slate-400">
+                        Multiplicateur
+                        <input
+                          type="number"
+                          inputMode="decimal"
+                          min="0.1"
+                          max="5"
+                          step="0.1"
+                          value={edit.riskMultiplier}
+                          onChange={(e) => updateEdit(vpsId, 'riskMultiplier', e.target.value)}
+                          className={FIELD_INPUT}
+                        />
+                      </label>
+                    </div>
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => cancelEdit(vpsId, info)}
+                        disabled={saving === vpsId}
+                        className="min-h-8 rounded-full border border-white/10 bg-white/5 px-3 text-xs font-semibold text-slate-300 disabled:opacity-40"
+                      >
+                        Annuler
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => saveSettings(vpsId)}
+                        disabled={!changed || saving === vpsId}
+                        className="min-h-8 rounded-full bg-indigo-500/15 px-3 text-xs font-semibold text-indigo-300 disabled:opacity-40"
+                      >
+                        {saving === vpsId ? 'Enregistrement...' : 'Enregistrer'}
+                      </button>
+                    </div>
+                  </>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setEditingId(vpsId)}
+                    className="min-h-8 self-start rounded-full bg-white/5 px-3 text-xs font-semibold text-slate-300"
+                  >
+                    Modifier
+                  </button>
+                )}
               </div>
             </li>
           )
