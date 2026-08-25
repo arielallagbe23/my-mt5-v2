@@ -34,6 +34,8 @@ export function TasksPage({ taskId } = {}) {
   const [executionTime, setExecutionTime] = useState('')
   const [priceCondition, setPriceCondition] = useState('')
   const [supportPrice, setSupportPrice] = useState('')
+  const [manualSl, setManualSl] = useState('')
+  const [manualTp, setManualTp] = useState('')
   const [risk, setRisk] = useState('')
   const [riskUnit, setRiskUnit] = useState('percent')
   const [riskAmountInput, setRiskAmountInput] = useState('')
@@ -68,6 +70,8 @@ export function TasksPage({ taskId } = {}) {
       setExecutionTime('')
       setPriceCondition('')
       setSupportPrice('')
+      setManualSl('')
+      setManualTp('')
       setRisk('')
       setRiskUnit('percent')
       setRiskAmountInput('')
@@ -89,6 +93,8 @@ export function TasksPage({ taskId } = {}) {
         setExecutionTime(task.executionTime ? task.executionTime.slice(0, 16) : '')
         setPriceCondition(task.priceCondition != null ? String(task.priceCondition) : '')
         setSupportPrice(task.supportPrice != null ? String(task.supportPrice) : '')
+        setManualSl(task.manualSl != null ? String(task.manualSl) : '')
+        setManualTp(task.manualTp != null ? String(task.manualTp) : '')
         setRisk(task.risk != null ? String(task.risk) : '')
         setRiskUnit(task.riskType === 'amount' ? 'amount' : 'percent')
         setRiskAmountInput(task.riskAmount != null ? String(task.riskAmount) : '')
@@ -156,6 +162,15 @@ export function TasksPage({ taskId } = {}) {
   const candleBound = scenario === 'buy' ? candle?.high : scenario === 'sell' ? candle?.low : null
   const levels2 =
     scenario && typeof candleBound === 'number' ? computeFiboLevels(parseFloat(fibo0), candleBound) : null
+
+  // Mêmes niveaux que ceux calculés côté VPS pour un scénario auto-détecté
+  // (voir golden_zone/sell_1.py/buy_1.py dans mt5-vps) — proposés ici comme
+  // raccourcis pour préremplir "SL défini"/"TP défini" ; SL1 nécessite la
+  // bougie de référence (Fibo 2), les autres ne dépendent que du Fibo 1.
+  const sl1Value = levels2?.find((l) => l.level === 0.8)?.price ?? null
+  const sl2Value = levels?.find((l) => l.level === -0.05)?.price ?? null
+  const tp1Value = levels?.find((l) => l.level === 0.588)?.price ?? null
+  const tp2Value = levels?.find((l) => l.level === 0.975)?.price ?? null
 
   const taggedLevels1 = levels ? levels.map((l) => ({ ...l, fibo: 1 })) : null
   const taggedLevels2 = levels2 ? levels2.map((l) => ({ ...l, fibo: 2 })) : null
@@ -270,6 +285,8 @@ export function TasksPage({ taskId } = {}) {
     const parsedFibo0 = parseFloat(fibo0)
     const parsedPriceCondition = parseFloat(priceCondition)
     const parsedSupportPrice = parseFloat(supportPrice)
+    const parsedManualSl = parseFloat(manualSl)
+    const parsedManualTp = parseFloat(manualTp)
     const parsedRisk = parseFloat(risk)
 
     return {
@@ -281,6 +298,8 @@ export function TasksPage({ taskId } = {}) {
       executionTime: executionTime ? `${executionTime}:00` : null,
       priceCondition: Number.isFinite(parsedPriceCondition) ? parsedPriceCondition : null,
       supportPrice: Number.isFinite(parsedSupportPrice) ? parsedSupportPrice : null,
+      manualSl: Number.isFinite(parsedManualSl) ? parsedManualSl : null,
+      manualTp: Number.isFinite(parsedManualTp) ? parsedManualTp : null,
       riskType: effectiveRiskUnit,
       risk: effectiveRiskUnit === 'percent' ? (Number.isFinite(parsedRisk) ? parsedRisk : null) : null,
       riskAmount:
@@ -436,6 +455,14 @@ export function TasksPage({ taskId } = {}) {
         onPriceConditionChange={setPriceCondition}
         supportPrice={supportPrice}
         onSupportPriceChange={setSupportPrice}
+        sl1Value={sl1Value}
+        sl2Value={sl2Value}
+        tp1Value={tp1Value}
+        tp2Value={tp2Value}
+        manualSl={manualSl}
+        onManualSlChange={setManualSl}
+        manualTp={manualTp}
+        onManualTpChange={setManualTp}
         risk={risk}
         onRiskChange={setRisk}
         riskAmount={riskAmount}

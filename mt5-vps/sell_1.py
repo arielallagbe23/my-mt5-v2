@@ -5,7 +5,7 @@ a déjà vérifié cette position avant d'appeler cette fonction — elle ne fai
 que construire l'ordre.
 """
 
-from scenario_shared import compute_lot_size, fibo_price, resolve_risk_amount
+from scenario_shared import apply_manual_override, compute_lot_size, fibo_price, resolve_risk_amount
 
 
 def evaluate_sell_1(task, candle, account_size):
@@ -18,6 +18,7 @@ def evaluate_sell_1(task, candle, account_size):
 
     sl = fibo_price(fibo100, fibo0, -0.05)  # niveau -0,05% du Fibo 1 -> stop loss
     tp = fibo_price(fibo100, fibo0, 0.588)  # niveau 58,8% du Fibo 1 -> take profit
+    sl, tp = apply_manual_override(task, sl, tp)
     entry_price = task["supportPrice"]
 
     # --- Garde-fou de sécurité : un Sell Limit n'a de sens que si SL > Entrée > TP. ---

@@ -53,6 +53,14 @@ def evaluate_task(task, candle, account_size):
         if not isinstance(risk, (int, float)) or risk <= 0 or risk > MAX_RISK_PERCENT:
             return {"matched": False, "reason": f"Risque invalide ou hors limite (max {MAX_RISK_PERCENT}%) : {risk}"}
 
+    # SL/TP fixés à la main sur la tâche (voir apply_manual_override dans
+    # scenario_shared.py) : facultatifs, mais s'ils sont là, doivent être des
+    # nombres — sinon l'override plus loin échouerait silencieusement.
+    for label in ("manualSl", "manualTp"):
+        value = task.get(label)
+        if value is not None and not isinstance(value, (int, float)):
+            return {"matched": False, "reason": f"{label} invalide : {value}"}
+
     scenario = task.get("scenario")
     if scenario == "sell":
         return evaluate_sell(task, candle, account_size)

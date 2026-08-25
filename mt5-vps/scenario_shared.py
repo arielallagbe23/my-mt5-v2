@@ -81,6 +81,22 @@ def golden_zone(fibo100, fibo0, fibo2_bound):
     return low, mid, high, sl1, tp1
 
 
+def apply_manual_override(task, sl, tp):
+    """Le SL et/ou le TP calculés par le scénario auto-détecté peuvent être
+    remplacés par une valeur fixée à la main sur la tâche (page Gestion
+    tâche — boutons SL1/SL2/TP1/TP2 pour préremplir, ou saisie libre).
+    L'entrée reste toujours celle du scénario ; seuls SL/TP changent, et
+    uniquement ceux effectivement renseignés (task["manualSl"]/["manualTp"],
+    None sinon)."""
+    manual_sl = task.get("manualSl")
+    manual_tp = task.get("manualTp")
+    if isinstance(manual_sl, (int, float)):
+        sl = manual_sl
+    if isinstance(manual_tp, (int, float)):
+        tp = manual_tp
+    return sl, tp
+
+
 def resolve_risk_amount(task, account_size):
     """Montant réellement risqué sur cette tâche, en $ — deux façons de le
     saisir à la création, mutuellement exclusives (riskType) :
@@ -101,6 +117,7 @@ def finish_sell_order(entry_price, sl, tp, candle_close, task, account_size):
     """Vérifie l'ordre SL > Entrée > TP, calcule le lot, et construit le
     résultat "matched". Partagé par Sell 2/3/4 (Sell 1 a sa propre logique
     d'entrée manuelle, donc son propre code équivalent)."""
+    sl, tp = apply_manual_override(task, sl, tp)
     if not (sl > entry_price > tp):
         return {
             "matched": False,
@@ -124,6 +141,7 @@ def finish_buy_order(entry_price, sl, tp, candle_close, task, account_size):
     """Équivalent de finish_sell_order pour un achat : vérifie SL < Entrée <
     TP (ordre inversé par rapport à la vente), calcule le lot, construit le
     résultat "matched". Partagé par Buy 2/3/4."""
+    sl, tp = apply_manual_override(task, sl, tp)
     if not (sl < entry_price < tp):
         return {
             "matched": False,

@@ -186,19 +186,21 @@ def _highest_stage_reached(close, levels, is_buy):
 # ============================================================
 
 
-def _describe_zone(close, entry, levels, is_buy):
-    """Entre quels prix se situe le close, pour le message du rapport.
-    "Dans le rouge" si le close est du mauvais côté de l'entrée (perte) —
-    peu importe le sens, rien n'a jamais été fait dans ce cas."""
-    if (is_buy and close < entry) or (not is_buy and close > entry):
-        return "position dans le rouge"
+STAGE_LABELS = {-1: "SL", 0: "PE", 25: "25%", 50: "50%", 75: "75%", 95: "95%"}
 
-    bounds = [(0, entry)] + [(pct, levels[pct]) for pct in STAGE_PCTS]
-    for (_, lo), (_, hi) in zip(bounds, bounds[1:]):
+
+def _describe_zone(close, sl, entry, levels, is_buy):
+    """Entre quels paliers (SL/PE/25%/50%/75%/95%) se situe le close, pour
+    le message du rapport — des repères plutôt que des prix bruts, plus
+    lisibles d'un coup d'œil que "compris entre 159.024 et 159.094"."""
+    bounds = [(-1, sl), (0, entry)] + [(pct, levels[pct]) for pct in STAGE_PCTS]
+    for (lo_pct, lo), (hi_pct, hi) in zip(bounds, bounds[1:]):
         low, high = (lo, hi) if is_buy else (hi, lo)
         if low <= close <= high:
-            return f"prix de close compris entre {low:.3f} et {high:.3f}"
-    return f"prix de close au-delà de {bounds[-1][1]:.3f}"
+            return f"prix entre {STAGE_LABELS[lo_pct]} et {STAGE_LABELS[hi_pct]}"
+    if (is_buy and close < sl) or (not is_buy and close > sl):
+        return "prix au-delà du SL"
+    return f"prix au-delà de {STAGE_LABELS[bounds[-1][0]]}"
 
 
 def _stage_action(target_pct):
@@ -218,10 +220,10 @@ def _stage_action(target_pct):
     return "rien n'a été fait"
 
 
-def _build_message(close, entry, levels, is_buy, target_pct):
+def _build_message(close, sl, entry, levels, is_buy, target_pct):
     """Assemble le message complet : zone + action. `target_pct` doit déjà
     être None si ce n'est pas un nouveau palier — voir _process_position."""
-    zone = _describe_zone(close, entry, levels, is_buy)
+    zone = _describe_zone(close, sl, entry, levels, is_buy)
     action = _stage_action(target_pct)
     return f"{zone}, {action}"
 
@@ -376,7 +378,7 @@ def _process_position(db, m, pos, close):
     target_pct = _highest_stage_reached(close, levels, is_buy)
     is_new_stage = target_pct is not None and target_pct > applied
 
-    message = _build_message(close, entry, levels, is_buy, target_pct if is_new_stage else None)
+    message = _build_message(close, pos.sl, entry, levels, is_buy, target_pct if is_new_stage else None)
     _log_report(db, ticket, message, int(time.time()))
     notify(f"mymt5 — suivi position {ticket}", message)
     print(f"[TRAILING] ticket {ticket} : {message}")

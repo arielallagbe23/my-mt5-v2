@@ -6,6 +6,20 @@ const COMPACT_INPUT =
 
 const RISK_PRESETS = ['0.5', '1', '1.5', '2']
 
+function SlTpButton({ label, value, onClick }) {
+  return (
+    <button
+      type="button"
+      onClick={() => onClick(value)}
+      disabled={value == null}
+      className="flex min-h-11 flex-col items-center justify-center rounded-xl bg-white/5 text-xs font-semibold text-slate-300 disabled:opacity-30"
+    >
+      {label}
+      {value != null && <span className="text-[10px] font-normal text-slate-500">{value.toFixed(3)}</span>}
+    </button>
+  )
+}
+
 export function TaskLauncher({
   scenario,
   executionTime,
@@ -14,6 +28,14 @@ export function TaskLauncher({
   onPriceConditionChange,
   supportPrice,
   onSupportPriceChange,
+  sl1Value,
+  sl2Value,
+  tp1Value,
+  tp2Value,
+  manualSl,
+  onManualSlChange,
+  manualTp,
+  onManualTpChange,
   risk,
   onRiskChange,
   riskAmount,
@@ -75,6 +97,34 @@ export function TaskLauncher({
           className={COMPACT_INPUT}
         />
       </label>
+
+      <div className="flex flex-col gap-1.5 text-xs text-slate-400">
+        <div>SL / TP (optionnel — sinon calculés automatiquement à l'exécution)</div>
+        <div className="grid grid-cols-4 gap-2">
+          <SlTpButton label="SL1" value={sl1Value} onClick={(v) => onManualSlChange(String(v))} />
+          <SlTpButton label="SL2" value={sl2Value} onClick={(v) => onManualSlChange(String(v))} />
+          <SlTpButton label="TP1" value={tp1Value} onClick={(v) => onManualTpChange(String(v))} />
+          <SlTpButton label="TP2" value={tp2Value} onClick={(v) => onManualTpChange(String(v))} />
+        </div>
+        <div className="flex gap-2">
+          <input
+            type="number"
+            inputMode="decimal"
+            placeholder="SL défini"
+            value={manualSl}
+            onChange={(event) => onManualSlChange(event.target.value)}
+            className={COMPACT_INPUT + ' flex-1'}
+          />
+          <input
+            type="number"
+            inputMode="decimal"
+            placeholder="TP défini"
+            value={manualTp}
+            onChange={(event) => onManualTpChange(event.target.value)}
+            className={COMPACT_INPUT + ' flex-1'}
+          />
+        </div>
+      </div>
 
       <label className="flex flex-col gap-1.5 text-xs text-slate-400">
         <div>Risque</div>

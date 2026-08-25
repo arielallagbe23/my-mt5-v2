@@ -148,6 +148,8 @@ export function HomePage() {
   const [histories, setHistories] = useState({})
   const [scheduledOrders, setScheduledOrders] = useState([])
   const [cancellingScheduledId, setCancellingScheduledId] = useState(null)
+  const [mistakes, setMistakes] = useState([])
+  const [resolvingMistakeId, setResolvingMistakeId] = useState(null)
 
   useEffect(() => {
     const id = setInterval(() => setNow(new Date()), 60_000)
@@ -201,7 +203,23 @@ export function HomePage() {
       )
       .catch(() => {})
     api.scheduledOrders().then(setScheduledOrders).catch(() => {})
+    api
+      .listMistakes()
+      .then((all) => setMistakes(all.filter((m) => !m.resolved)))
+      .catch(() => {})
   }, [])
+
+  async function resolveMistake(id) {
+    setResolvingMistakeId(id)
+    try {
+      await api.resolveMistake(id, true)
+      setMistakes((current) => current.filter((m) => m.id !== id))
+    } catch {
+      // ignore — reste affichée, la page Mes erreurs reste la source de vérité
+    } finally {
+      setResolvingMistakeId(null)
+    }
+  }
 
   async function cancelScheduledOrder(id) {
     setCancellingScheduledId(id)
@@ -327,6 +345,42 @@ export function HomePage() {
       </div>
 
       {error && <p className="text-sm text-red-400">{error}</p>}
+
+      {mistakes.length > 0 && (
+        <section className="mt-5 flex flex-col gap-2 rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4">
+          <p className="text-xs font-bold tracking-[0.14em] text-amber-400 uppercase">
+            Erreurs à ne pas refaire ({mistakes.length})
+          </p>
+          {mistakes.map((m) => (
+            <div key={m.id} className="flex items-start justify-between gap-2 rounded-xl bg-white/5 p-2.5">
+              <div className="flex flex-1 flex-col gap-2">
+                <p className="text-sm text-amber-100">{m.text}</p>
+                {m.images?.length > 0 && (
+                  <div className="flex gap-1.5">
+                    {m.images.slice(0, 4).map((img) => (
+                      <a key={img.url} href={api.mistakeImageUrl(m.id, img.url)} target="_blank" rel="noreferrer">
+                        <img
+                          src={api.mistakeImageUrl(m.id, img.url)}
+                          alt=""
+                          className="h-12 w-12 rounded-lg border border-amber-400/20 object-cover"
+                        />
+                      </a>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={() => resolveMistake(m.id)}
+                disabled={resolvingMistakeId === m.id}
+                className="min-h-8 shrink-0 rounded-full border border-amber-400/30 px-3 text-xs font-semibold text-amber-300 disabled:opacity-60"
+              >
+                {resolvingMistakeId === m.id ? '...' : 'Résolu'}
+              </button>
+            </div>
+          ))}
+        </section>
+      )}
 
       {reports.length > 0 && (
         <section className="mt-5 flex flex-col gap-2 rounded-2xl border border-white/10 bg-white/5 p-4">

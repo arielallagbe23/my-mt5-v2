@@ -15,6 +15,7 @@ import notifyRouter from './routes/notify.js'
 import setOrderRouter from './routes/setOrder.js'
 import settingsRouter from './routes/settings.js'
 import marketRecapRouter from './routes/marketRecap.js'
+import mistakesRouter from './routes/mistakes.js'
 import { isAllowedOrigin } from './lib/origin.js'
 
 if (!process.env.JWT_SECRET) {
@@ -23,7 +24,9 @@ if (!process.env.JWT_SECRET) {
 
 const app = express()
 
-app.use(express.json())
+// Limite relevée par rapport au défaut (100kb) : les captures d'écran de
+// trades envoyées en base64 (voir mistakes.js) dépassent largement ça.
+app.use(express.json({ limit: '15mb' }))
 app.use(cookieParser())
 app.use(
   cors({
@@ -48,6 +51,7 @@ app.use('/api/notify', notifyRouter)
 app.use('/api/set-order', setOrderRouter)
 app.use('/api/settings', settingsRouter)
 app.use('/api/market-recap', marketRecapRouter)
+app.use('/api/mistakes', mistakesRouter)
 
 app.get('/api/health', (req, res) => res.json({ ok: true }))
 

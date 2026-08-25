@@ -2,6 +2,10 @@ import { Fragment, useEffect, useState } from 'react'
 import { api } from '../../lib/api'
 import { formatDate, formatVolume, money } from './journalStats'
 
+function formatPrice(value) {
+  return typeof value === 'number' ? value.toFixed(3) : '—'
+}
+
 function formatHistoryTime(ts) {
   return typeof ts === 'number' ? new Date(ts * 1000).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' }) : '—'
 }
@@ -110,7 +114,7 @@ export function TransactionsTable({ trades, pageTrades, page, totalPages, onPrev
                       {t.type === 'Sell' ? 'SELL' : 'BUY'}
                     </td>
                     <td className="py-2 pr-2 text-slate-300">{formatVolume(t.volume)}</td>
-                    <td className="py-2 pr-2 text-slate-300">{t.priceClose}</td>
+                    <td className="py-2 pr-2 text-slate-300">{formatPrice(t.priceClose)}</td>
                     <td className={`py-2 font-semibold ${t.net >= 0 ? 'text-blue-400' : 'text-red-400'}`}>
                       {money(t.net)}
                     </td>

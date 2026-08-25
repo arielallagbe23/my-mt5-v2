@@ -25,6 +25,8 @@ function serialize(doc) {
     risk: data.risk,
     riskType: data.riskType ?? 'percent',
     riskAmount: data.riskAmount ?? null,
+    manualSl: data.manualSl ?? null,
+    manualTp: data.manualTp ?? null,
     status: data.status,
     result: data.result ?? null,
     createdAt: data.createdAt,
@@ -64,6 +66,19 @@ async function validateRiskAmountCap(body) {
   return null
 }
 
+function validateManualSlTp(body) {
+  const { manualSl, manualTp } = body ?? {}
+  for (const [label, value] of [
+    ['manualSl', manualSl],
+    ['manualTp', manualTp],
+  ]) {
+    if (value != null && (typeof value !== 'number' || !Number.isFinite(value) || value <= 0)) {
+      return `Champ ${label} invalide`
+    }
+  }
+  return null
+}
+
 function validateTaskBody(body) {
   const { scenario, fibo100, fibo0, timeframe, executionTime, priceCondition, supportPrice, risk, riskType, riskAmount } =
     body ?? {}
@@ -79,6 +94,9 @@ function validateTaskBody(body) {
   ]) {
     if (typeof value !== 'number' || !Number.isFinite(value)) return `Champ ${label} invalide`
   }
+
+  const manualError = validateManualSlTp(body)
+  if (manualError) return manualError
 
   const riskTypeError = validateRiskType(body)
   if (riskTypeError) return riskTypeError
@@ -116,6 +134,9 @@ function validateDraftBody(body) {
   ]) {
     if (value != null && (typeof value !== 'number' || !Number.isFinite(value))) return `Champ ${label} invalide`
   }
+
+  const manualError = validateManualSlTp(body)
+  if (manualError) return manualError
 
   const riskTypeError = validateRiskType(body)
   if (riskTypeError) return riskTypeError
@@ -197,6 +218,8 @@ router.post('/', requireAuth, async (req, res) => {
     risk,
     riskType,
     riskAmount,
+    manualSl,
+    manualTp,
   } = req.body
 
   const now = Date.now()
@@ -213,6 +236,8 @@ router.post('/', requireAuth, async (req, res) => {
     risk: risk ?? null,
     riskType: riskType ?? 'percent',
     riskAmount: riskAmount ?? null,
+    manualSl: manualSl ?? null,
+    manualTp: manualTp ?? null,
     status,
     result: null,
     createdAt: now,
@@ -250,6 +275,8 @@ router.patch('/:id', requireAuth, async (req, res) => {
     risk,
     riskType,
     riskAmount,
+    manualSl,
+    manualTp,
   } = merged
 
   await ref.update({
@@ -264,6 +291,8 @@ router.patch('/:id', requireAuth, async (req, res) => {
     risk: risk ?? null,
     riskType: riskType ?? 'percent',
     riskAmount: riskAmount ?? null,
+    manualSl: manualSl ?? null,
+    manualTp: manualTp ?? null,
     status,
     updatedAt: Date.now(),
   })

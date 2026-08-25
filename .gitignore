@@ -35,3 +35,4 @@ mt5-vps/*.txt
 *.njsproj
 *.sln
 *.sw?
+.env*.local

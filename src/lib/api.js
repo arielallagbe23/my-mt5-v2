@@ -72,4 +72,12 @@ export const api = {
   marketRecap: () => request('/api/market-recap'),
   requestMarketRecapRefresh: () => request('/api/market-recap/request', { method: 'POST' }),
   marketRecapRefreshStatus: () => request('/api/market-recap/request/status'),
+  listMistakes: () => request('/api/mistakes'),
+  createMistake: (text) => request('/api/mistakes', { method: 'POST', body: { text } }),
+  resolveMistake: (id, resolved) => request(`/api/mistakes/${id}`, { method: 'PATCH', body: { resolved } }),
+  deleteMistake: (id) => request(`/api/mistakes/${id}`, { method: 'DELETE' }),
+  addMistakeImage: (id, contentType, dataBase64) =>
+    request(`/api/mistakes/${id}/images`, { method: 'POST', body: { contentType, dataBase64 } }),
+  deleteMistakeImage: (id, url) => request(`/api/mistakes/${id}/images`, { method: 'DELETE', body: { url } }),
+  mistakeImageUrl: (id, url) => `${API_URL}/api/mistakes/${id}/images/view?url=${encodeURIComponent(url)}`,
 }
