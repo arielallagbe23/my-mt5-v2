@@ -19,9 +19,12 @@ function fileToBase64(file) {
 function ImageGallery({ mistakeId, images, onDelete, busy }) {
   if (!images?.length) return null
   return (
-    <div className="mt-4 flex flex-col gap-2">
+    <div className="mt-4 flex snap-x snap-mandatory gap-2 overflow-x-auto">
       {images.map((img) => (
-        <div key={img.url} className="group relative w-full overflow-hidden rounded-xl border border-white/10 bg-black/20">
+        <div
+          key={img.url}
+          className="group relative w-[85%] shrink-0 snap-start overflow-hidden rounded-xl border border-white/10 bg-black/20"
+        >
           <a href={api.mistakeImageUrl(mistakeId, img.url)} target="_blank" rel="noreferrer">
             <img src={api.mistakeImageUrl(mistakeId, img.url)} alt="" className="w-full" />
           </a>
@@ -36,6 +39,27 @@ function ImageGallery({ mistakeId, images, onDelete, busy }) {
         </div>
       ))}
     </div>
+  )
+}
+
+function AddPhotoButton({ onSelect, busy }) {
+  return (
+    <label
+      className={`inline-flex min-h-8 cursor-pointer items-center rounded-full bg-white/5 px-3 text-xs font-semibold text-slate-300 ${busy ? 'opacity-60' : ''}`}
+    >
+      + Photo
+      <input
+        type="file"
+        accept="image/png,image/jpeg,image/webp,image/gif"
+        multiple
+        disabled={busy}
+        onChange={(e) => {
+          if (e.target.files.length) onSelect(Array.from(e.target.files))
+          e.target.value = ''
+        }}
+        className="hidden"
+      />
+    </label>
   )
 }
 
@@ -90,6 +114,24 @@ export function MistakesPage() {
       setMistakes((current) => current.filter((x) => x.id !== id))
     } catch {
       load()
+    } finally {
+      setBusyId(null)
+    }
+  }
+
+  async function addImages(mistakeId, files) {
+    setBusyId(mistakeId)
+    setError('')
+    try {
+      for (const file of files) {
+        const dataBase64 = await fileToBase64(file)
+        const image = await api.addMistakeImage(mistakeId, file.type, dataBase64)
+        setMistakes((current) =>
+          current.map((m) => (m.id === mistakeId ? { ...m, images: [...(m.images ?? []), image] } : m)),
+        )
+      }
+    } catch (err) {
+      setError(err.message)
     } finally {
       setBusyId(null)
     }
@@ -166,14 +208,17 @@ export function MistakesPage() {
               <ImageGallery mistakeId={m.id} images={m.images} onDelete={(url) => removeImage(m.id, url)} busy={busyId === m.id} />
               <div className="mt-2 flex items-center justify-between gap-2">
                 <span className="text-xs text-slate-500">{formatDate(m.createdAt)}</span>
-                <button
-                  type="button"
-                  onClick={() => remove(m.id)}
-                  disabled={busyId === m.id}
-                  className="min-h-8 rounded-full border border-red-500/30 px-3 text-xs font-semibold text-red-400 disabled:opacity-60"
-                >
-                  Supprimer
-                </button>
+                <div className="flex gap-2">
+                  <AddPhotoButton onSelect={(files) => addImages(m.id, files)} busy={busyId === m.id} />
+                  <button
+                    type="button"
+                    onClick={() => remove(m.id)}
+                    disabled={busyId === m.id}
+                    className="min-h-8 rounded-full border border-red-500/30 px-3 text-xs font-semibold text-red-400 disabled:opacity-60"
+                  >
+                    Supprimer
+                  </button>
+                </div>
               </div>
             </div>
           ))}
