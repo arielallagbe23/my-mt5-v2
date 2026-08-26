@@ -19,17 +19,17 @@ function fileToBase64(file) {
 function ImageGallery({ mistakeId, images, onDelete, busy }) {
   if (!images?.length) return null
   return (
-    <div className="mt-2 grid grid-cols-3 gap-2 sm:grid-cols-4">
+    <div className="mt-4 flex flex-col gap-2">
       {images.map((img) => (
-        <div key={img.url} className="group relative aspect-square overflow-hidden rounded-xl border border-white/10 bg-black/20">
+        <div key={img.url} className="group relative w-full overflow-hidden rounded-xl border border-white/10 bg-black/20">
           <a href={api.mistakeImageUrl(mistakeId, img.url)} target="_blank" rel="noreferrer">
-            <img src={api.mistakeImageUrl(mistakeId, img.url)} alt="" className="h-full w-full object-cover" />
+            <img src={api.mistakeImageUrl(mistakeId, img.url)} alt="" className="w-full" />
           </a>
           <button
             type="button"
             onClick={() => onDelete(img.url)}
             disabled={busy}
-            className="absolute top-1 right-1 flex h-5 w-5 items-center justify-center rounded-full bg-black/70 text-xs font-bold text-white opacity-0 transition-opacity group-hover:opacity-100 disabled:opacity-100"
+            className="absolute top-1 right-1 flex h-6 w-6 items-center justify-center rounded-full bg-black/70 text-sm font-bold text-white opacity-0 transition-opacity group-hover:opacity-100 disabled:opacity-100"
           >
             ×
           </button>
@@ -39,31 +39,11 @@ function ImageGallery({ mistakeId, images, onDelete, busy }) {
   )
 }
 
-function AddPhotoButton({ onSelect, busy }) {
-  return (
-    <label
-      className={`inline-flex min-h-8 cursor-pointer items-center rounded-full bg-white/5 px-3 text-xs font-semibold text-slate-300 ${busy ? 'opacity-60' : ''}`}
-    >
-      + Photo
-      <input
-        type="file"
-        accept="image/png,image/jpeg,image/webp,image/gif"
-        multiple
-        disabled={busy}
-        onChange={(e) => {
-          if (e.target.files.length) onSelect(Array.from(e.target.files))
-          e.target.value = ''
-        }}
-        className="hidden"
-      />
-    </label>
-  )
-}
-
 export function MistakesPage() {
   const [mistakes, setMistakes] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [title, setTitle] = useState('')
   const [text, setText] = useState('')
   const [newFiles, setNewFiles] = useState([])
   const [saving, setSaving] = useState(false)
@@ -87,11 +67,12 @@ export function MistakesPage() {
     setSaving(true)
     setError('')
     try {
-      const { id } = await api.createMistake(trimmed)
+      const { id } = await api.createMistake(title.trim(), trimmed)
       for (const file of newFiles) {
         const dataBase64 = await fileToBase64(file)
         await api.addMistakeImage(id, file.type, dataBase64)
       }
+      setTitle('')
       setText('')
       setNewFiles([])
       load()
@@ -102,18 +83,6 @@ export function MistakesPage() {
     }
   }
 
-  async function toggleResolved(m) {
-    setBusyId(m.id)
-    try {
-      await api.resolveMistake(m.id, !m.resolved)
-      setMistakes((current) => current.map((x) => (x.id === m.id ? { ...x, resolved: !m.resolved } : x)))
-    } catch {
-      load()
-    } finally {
-      setBusyId(null)
-    }
-  }
-
   async function remove(id) {
     setBusyId(id)
     try {
@@ -121,24 +90,6 @@ export function MistakesPage() {
       setMistakes((current) => current.filter((x) => x.id !== id))
     } catch {
       load()
-    } finally {
-      setBusyId(null)
-    }
-  }
-
-  async function addImages(mistakeId, files) {
-    setBusyId(mistakeId)
-    setError('')
-    try {
-      for (const file of files) {
-        const dataBase64 = await fileToBase64(file)
-        const image = await api.addMistakeImage(mistakeId, file.type, dataBase64)
-        setMistakes((current) =>
-          current.map((m) => (m.id === mistakeId ? { ...m, images: [...(m.images ?? []), image] } : m)),
-        )
-      }
-    } catch (err) {
-      setError(err.message)
     } finally {
       setBusyId(null)
     }
@@ -158,18 +109,21 @@ export function MistakesPage() {
     }
   }
 
-  const active = mistakes.filter((m) => !m.resolved)
-  const resolved = mistakes.filter((m) => m.resolved)
-
   return (
     <div className={PAGE}>
-      <h1 className={PAGE_TITLE}>Mes erreurs</h1>
+      <h1 className={PAGE_TITLE}>Erreurs et succès</h1>
       <p className="text-sm text-slate-400">
-        Note ce que tu fais de mal, avec une capture du trade si besoin — ce qui n'est pas résolu s'affiche sur la
-        page d'accueil pour te le rappeler.
+        Note ce que tu fais de mal ou de bien sur un trade, avec une capture si besoin.
       </p>
 
       <div className="flex flex-col gap-2 rounded-2xl border border-white/10 bg-white/5 p-3">
+        <input
+          type="text"
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          placeholder="Titre (ex : Manque de patience)"
+          className={FIELD_INPUT}
+        />
         <textarea
           value={text}
           onChange={(e) => setText(e.target.value)}
@@ -203,75 +157,27 @@ export function MistakesPage() {
       {loading && <p className="text-sm text-slate-400">Chargement...</p>}
 
       {!loading && (
-        <>
-          <div className="flex flex-col gap-2">
-            <p className="text-xs font-bold tracking-[0.14em] text-slate-500 uppercase">
-              En cours {active.length > 0 && `(${active.length})`}
-            </p>
-            {active.length === 0 && <p className="text-sm text-slate-400">Rien en cours — bien joué.</p>}
-            {active.map((m) => (
-              <div key={m.id} className="rounded-2xl border border-white/10 bg-white/5 p-3">
-                <p className="text-sm text-white">{m.text}</p>
-                <ImageGallery mistakeId={m.id} images={m.images} onDelete={(url) => removeImage(m.id, url)} busy={busyId === m.id} />
-                <div className="mt-2 flex items-center justify-between gap-2">
-                  <span className="text-xs text-slate-500">{formatDate(m.createdAt)}</span>
-                  <div className="flex gap-2">
-                    <AddPhotoButton onSelect={(files) => addImages(m.id, files)} busy={busyId === m.id} />
-                    <button
-                      type="button"
-                      onClick={() => toggleResolved(m)}
-                      disabled={busyId === m.id}
-                      className="min-h-8 rounded-full bg-indigo-500/15 px-3 text-xs font-semibold text-indigo-300 disabled:opacity-60"
-                    >
-                      Marquer résolu
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => remove(m.id)}
-                      disabled={busyId === m.id}
-                      className="min-h-8 rounded-full border border-red-500/30 px-3 text-xs font-semibold text-red-400 disabled:opacity-60"
-                    >
-                      Supprimer
-                    </button>
-                  </div>
-                </div>
+        <div className="flex flex-col gap-2">
+          {mistakes.length === 0 && <p className="text-sm text-slate-400">Rien noté pour l'instant.</p>}
+          {mistakes.map((m) => (
+            <div key={m.id} className="rounded-2xl border border-white/10 bg-white/5 p-3">
+              {m.title && <p className="text-lg font-bold text-white">{m.title}</p>}
+              <p className="mt-2 text-sm text-white">{m.text}</p>
+              <ImageGallery mistakeId={m.id} images={m.images} onDelete={(url) => removeImage(m.id, url)} busy={busyId === m.id} />
+              <div className="mt-2 flex items-center justify-between gap-2">
+                <span className="text-xs text-slate-500">{formatDate(m.createdAt)}</span>
+                <button
+                  type="button"
+                  onClick={() => remove(m.id)}
+                  disabled={busyId === m.id}
+                  className="min-h-8 rounded-full border border-red-500/30 px-3 text-xs font-semibold text-red-400 disabled:opacity-60"
+                >
+                  Supprimer
+                </button>
               </div>
-            ))}
-          </div>
-
-          {resolved.length > 0 && (
-            <div className="mt-2 flex flex-col gap-2">
-              <p className="text-xs font-bold tracking-[0.14em] text-slate-500 uppercase">Résolues ({resolved.length})</p>
-              {resolved.map((m) => (
-                <div key={m.id} className="rounded-2xl border border-white/10 bg-white/5 p-3 opacity-60">
-                  <p className="text-sm text-slate-300 line-through">{m.text}</p>
-                  <ImageGallery mistakeId={m.id} images={m.images} onDelete={(url) => removeImage(m.id, url)} busy={busyId === m.id} />
-                  <div className="mt-2 flex items-center justify-between gap-2">
-                    <span className="text-xs text-slate-500">{formatDate(m.createdAt)}</span>
-                    <div className="flex gap-2">
-                      <button
-                        type="button"
-                        onClick={() => toggleResolved(m)}
-                        disabled={busyId === m.id}
-                        className="min-h-8 rounded-full bg-white/5 px-3 text-xs font-semibold text-slate-300 disabled:opacity-60"
-                      >
-                        Réactiver
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => remove(m.id)}
-                        disabled={busyId === m.id}
-                        className="min-h-8 rounded-full border border-red-500/30 px-3 text-xs font-semibold text-red-400 disabled:opacity-60"
-                      >
-                        Supprimer
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              ))}
             </div>
-          )}
-        </>
+          ))}
+        </div>
       )}
     </div>
   )

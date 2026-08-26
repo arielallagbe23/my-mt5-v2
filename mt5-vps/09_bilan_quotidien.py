@@ -46,8 +46,9 @@ contexte. Écris en français, dans un style direct et lisible, comme un résum�
 en 30 secondes le matin.
 
 Texte brut uniquement — pas de Markdown (pas d'astérisques pour le gras, pas de dièses
-pour les titres, pas de listes à puces). Ce texte est affiché tel quel, sans mise en
-forme."""
+pour les titres, pas de listes à puces). Ne commence PAS par un titre du type "# Résumé
+matinal..." — va directement à la première phrase de la synthèse. Sépare les paragraphes
+par une ligne vide. Ce texte est affiché tel quel, sans mise en forme."""
 
 
 def _serialize(value):

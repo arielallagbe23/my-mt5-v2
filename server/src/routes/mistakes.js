@@ -34,8 +34,8 @@ router.get('/', requireAuth, async (req, res) => {
       const data = doc.data()
       return {
         id: doc.id,
+        title: data.title ?? null,
         text: data.text,
-        resolved: Boolean(data.resolved),
         createdAt: data.createdAt,
         images: data.images ?? [],
       }
@@ -48,11 +48,12 @@ router.get('/', requireAuth, async (req, res) => {
 router.post('/', requireAuth, async (req, res) => {
   const text = (req.body?.text ?? '').trim()
   if (!text) return res.status(400).json({ error: 'Texte requis' })
+  const title = (req.body?.title ?? '').trim() || null
 
   const docRef = await db.collection('mistakes').add({
     userId: req.userId,
+    title,
     text,
-    resolved: false,
     createdAt: Date.now(),
     images: [],
   })
@@ -63,7 +64,9 @@ router.patch('/:id', requireAuth, async (req, res) => {
   const owned = await loadOwnedMistake(req, res)
   if (!owned) return
 
-  await owned.ref.update({ resolved: Boolean(req.body?.resolved) })
+  if (req.body?.title === undefined) return res.status(400).json({ error: 'Rien à mettre à jour' })
+
+  await owned.ref.update({ title: (req.body.title ?? '').trim() || null })
   res.status(204).end()
 })
 

@@ -113,7 +113,7 @@ export function TaskLauncher({
             placeholder="SL défini"
             value={manualSl}
             onChange={(event) => onManualSlChange(event.target.value)}
-            className={COMPACT_INPUT + ' flex-1'}
+            className={COMPACT_INPUT + ' min-w-0 flex-1'}
           />
           <input
             type="number"
@@ -121,7 +121,7 @@ export function TaskLauncher({
             placeholder="TP défini"
             value={manualTp}
             onChange={(event) => onManualTpChange(event.target.value)}
-            className={COMPACT_INPUT + ' flex-1'}
+            className={COMPACT_INPUT + ' min-w-0 flex-1'}
           />
         </div>
       </div>
