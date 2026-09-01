@@ -37,7 +37,7 @@ export function AccountsPage() {
           const next = { ...current }
           for (const [vpsId, info] of Object.entries(data)) {
             if (!next[vpsId]) {
-              next[vpsId] = { pseudo: info.pseudo ?? '', riskMultiplier: String(info.riskMultiplier ?? 1) }
+              next[vpsId] = { pseudo: info.pseudo ?? '' }
             }
           }
           return next
@@ -59,14 +59,8 @@ export function AccountsPage() {
     setSaveError('')
     setSaving(vpsId)
     const edit = edits[vpsId]
-    const riskMultiplier = parseFloat(edit.riskMultiplier)
-    if (!Number.isFinite(riskMultiplier) || riskMultiplier <= 0) {
-      setSaveError('Multiplicateur invalide')
-      setSaving(null)
-      return
-    }
     try {
-      await api.updateAccountSettings(vpsId, { pseudo: edit.pseudo.trim() || null, riskMultiplier })
+      await api.updateAccountSettings(vpsId, { pseudo: edit.pseudo.trim() || null })
       await load()
       setEditingId(null)
     } catch (err) {
@@ -80,7 +74,7 @@ export function AccountsPage() {
     setSaveError('')
     setEdits((current) => ({
       ...current,
-      [vpsId]: { pseudo: info.pseudo ?? '', riskMultiplier: String(info.riskMultiplier ?? 1) },
+      [vpsId]: { pseudo: info.pseudo ?? '' },
     }))
     setEditingId(null)
   }
@@ -157,8 +151,8 @@ export function AccountsPage() {
 
       <ul className="flex flex-col gap-2">
         {entries.map(([vpsId, info]) => {
-          const edit = edits[vpsId] ?? { pseudo: '', riskMultiplier: '1' }
-          const changed = edit.pseudo !== (info.pseudo ?? '') || edit.riskMultiplier !== String(info.riskMultiplier ?? 1)
+          const edit = edits[vpsId] ?? { pseudo: '' }
+          const changed = edit.pseudo !== (info.pseudo ?? '')
 
           return (
             <li key={vpsId} className="mb-4 rounded-2xl border border-white/10 bg-white/5 px-4 py-3">
@@ -172,40 +166,22 @@ export function AccountsPage() {
                 <span>
                   Taille : {typeof info.accountSize === 'number' ? info.accountSize.toLocaleString('fr-FR') : '—'}
                 </span>
-                {info.riskMultiplier !== 1 && (
-                  <span className="font-semibold text-indigo-300">Risque x{info.riskMultiplier}</span>
-                )}
               </div>
 
               <div className="mt-3 flex flex-col gap-2 border-t border-white/10 pt-3">
                 {editingId === vpsId ? (
                   <>
-                    <div className="flex gap-2">
-                      <label className="flex flex-1 flex-col gap-1 text-xs text-slate-400">
-                        Pseudo
-                        <input
-                          type="text"
-                          value={edit.pseudo}
-                          onChange={(e) => updateEdit(vpsId, 'pseudo', e.target.value)}
-                          placeholder={VPS_LABELS[vpsId] ?? vpsId}
-                          maxLength={40}
-                          className={FIELD_INPUT}
-                        />
-                      </label>
-                      <label className="flex w-28 flex-col gap-1 text-xs text-slate-400">
-                        Multiplicateur
-                        <input
-                          type="number"
-                          inputMode="decimal"
-                          min="0.1"
-                          max="5"
-                          step="0.1"
-                          value={edit.riskMultiplier}
-                          onChange={(e) => updateEdit(vpsId, 'riskMultiplier', e.target.value)}
-                          className={FIELD_INPUT}
-                        />
-                      </label>
-                    </div>
+                    <label className="flex flex-col gap-1 text-xs text-slate-400">
+                      Pseudo
+                      <input
+                        type="text"
+                        value={edit.pseudo}
+                        onChange={(e) => updateEdit(vpsId, 'pseudo', e.target.value)}
+                        placeholder={VPS_LABELS[vpsId] ?? vpsId}
+                        maxLength={40}
+                        className={FIELD_INPUT}
+                      />
+                    </label>
                     <div className="flex gap-2">
                       <button
                         type="button"

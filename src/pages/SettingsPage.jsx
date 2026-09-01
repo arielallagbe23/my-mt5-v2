@@ -5,6 +5,22 @@ import { computeGrowthPercent, computeAutoRisk } from '../lib/riskTiers'
 
 const MAX_RISK_PERCENT = 2
 
+// Raccourcis pour préremplir paliers + plafond sans les taper à la main —
+// toujours modifiables ensuite dans l'éditeur, et rien n'est enregistré
+// tant qu'on n'appuie pas sur "Enregistrer" (même flux que le reste de la
+// page). Stratégie 1 : tiers vide -> computeAutoRisk retombe direct sur
+// capRisk, donc toujours 0,5% peu importe la croissance.
+const RISK_STRATEGIES = {
+  1: { tiers: [], capRisk: '0.5' },
+  2: {
+    tiers: [
+      { threshold: '3.05', risk: '0.5' },
+      { threshold: '7.05', risk: '1' },
+    ],
+    capRisk: '2',
+  },
+}
+
 export function SettingsPage() {
   const [mode, setMode] = useState('manual')
   const [tiers, setTiers] = useState([])
@@ -37,6 +53,14 @@ export function SettingsPage() {
       })
       .catch(() => {})
   }, [])
+
+  function applyStrategy(id) {
+    const preset = RISK_STRATEGIES[id]
+    setMode('auto')
+    setTiers(preset.tiers.map((t) => ({ ...t })))
+    setCapRisk(preset.capRisk)
+    setSaved(false)
+  }
 
   function updateTier(index, field, value) {
     setTiers((current) => current.map((t, i) => (i === index ? { ...t, [field]: value } : t)))
@@ -108,6 +132,30 @@ export function SettingsPage() {
           En mode auto, le risque d'une tâche est calculé automatiquement à partir de la croissance de l'équité par
           rapport au capital de référence, au moment où tu confirmes la tâche.
         </p>
+
+        <div className="flex flex-col gap-1.5">
+          <p className="text-xs text-slate-400">Stratégies prédéfinies</p>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => applyStrategy(1)}
+              className="min-h-9 flex-1 rounded-xl border border-white/10 bg-white/5 text-xs font-semibold text-slate-300"
+            >
+              Stratégie 1
+              <br />
+              <span className="font-normal text-slate-500">0,5% fixe</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => applyStrategy(2)}
+              className="min-h-9 flex-1 rounded-xl border border-white/10 bg-white/5 text-xs font-semibold text-slate-300"
+            >
+              Stratégie 2
+              <br />
+              <span className="font-normal text-slate-500">0,5% → 1% → 2%</span>
+            </button>
+          </div>
+        </div>
 
         <div className="flex gap-3">
           <button

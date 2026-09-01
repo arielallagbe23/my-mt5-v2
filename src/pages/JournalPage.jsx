@@ -140,7 +140,7 @@ export function JournalPage() {
   const pageTrades = trades ? trades.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE) : []
 
   return (
-    <div className={PAGE}>
+    <div className={`${PAGE} lg:max-w-6xl`}>
       <JournalHeader
         tradesCount={trades?.length ?? null}
         onExportCsv={() => trades && exportCsv(trades)}
@@ -162,36 +162,54 @@ export function JournalPage() {
       )}
 
       {kpis && trades.length > 0 && (
-        <>
-          <NetPnlCard netTotal={kpis.netTotal} />
-          <KpiGrid kpis={kpis} currentMonthR={currentMonthR} />
-          <PerformanceCard
-            netTotal={quarterlyNet}
-            curve={quarterlyCurve}
-            unit={curveUnit}
-            accountSize={accountSize}
-            title={`Courbe de performance — ${currentQuarterLabel}`}
-          />
-          <ResultsBreakdownCard breakdown={breakdown} />
-          <TradingCalendarCard dailyNet={dailyNet} />
-          <BestWorstStreakCard kpis={kpis} streak={streak} todayNet={todayNet} accountSize={accountSize} />
-          <MonthlyPnlCard monthly={monthly} />
-          <TransactionsTable
-            trades={trades}
-            pageTrades={pageTrades}
-            page={page}
-            totalPages={totalPages}
-            onPrevPage={() => setPage((p) => Math.max(1, p - 1))}
-            onNextPage={() => setPage((p) => Math.min(totalPages, p + 1))}
-          />
-          <PerformanceCard
-            netTotal={kpis.netTotal}
-            curve={curve}
-            unit={curveUnit}
-            accountSize={accountSize}
-            title="Courbe de performance — globale"
-          />
-        </>
+        <div className="flex flex-col gap-3 lg:grid lg:grid-cols-12 lg:items-start lg:gap-4">
+          <div className="lg:col-span-3">
+            <NetPnlCard netTotal={kpis.netTotal} />
+          </div>
+          <div className="lg:col-span-5">
+            <KpiGrid kpis={kpis} currentMonthR={currentMonthR} />
+          </div>
+          <div className="lg:col-span-4">
+            <BestWorstStreakCard kpis={kpis} streak={streak} todayNet={todayNet} accountSize={accountSize} />
+          </div>
+          <div className="lg:col-span-8">
+            <PerformanceCard
+              netTotal={quarterlyNet}
+              curve={quarterlyCurve}
+              unit={curveUnit}
+              accountSize={accountSize}
+              title={`Courbe de performance — ${currentQuarterLabel}`}
+            />
+          </div>
+          <div className="lg:col-span-4">
+            <ResultsBreakdownCard breakdown={breakdown} />
+          </div>
+          <div className="lg:col-span-6">
+            <TradingCalendarCard dailyNet={dailyNet} />
+          </div>
+          <div className="lg:col-span-6">
+            <MonthlyPnlCard monthly={monthly} />
+          </div>
+          <div className="lg:col-span-12">
+            <TransactionsTable
+              trades={trades}
+              pageTrades={pageTrades}
+              page={page}
+              totalPages={totalPages}
+              onPrevPage={() => setPage((p) => Math.max(1, p - 1))}
+              onNextPage={() => setPage((p) => Math.min(totalPages, p + 1))}
+            />
+          </div>
+          <div className="lg:col-span-12">
+            <PerformanceCard
+              netTotal={kpis.netTotal}
+              curve={curve}
+              unit={curveUnit}
+              accountSize={accountSize}
+              title="Courbe de performance — globale"
+            />
+          </div>
+        </div>
       )}
     </div>
   )
