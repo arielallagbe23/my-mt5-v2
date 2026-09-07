@@ -9,7 +9,7 @@ import { CandleReferenceForm } from '../components/tasks/CandleReferenceForm'
 import { CandleTable } from '../components/tasks/CandleTable'
 import { FiboChart } from '../components/tasks/FiboChart'
 import { TaskLauncher } from '../components/tasks/TaskLauncher'
-import { computeGrowthPercent, computeAutoRisk } from '../lib/riskTiers'
+import { computeGrowthPercent, computeAutoRisk, RISK_STRATEGY_PRESETS } from '../lib/riskTiers'
 
 const MIN_LABEL_GAP = 4 // % minimum entre deux libellés pour éviter le chevauchement
 
@@ -41,9 +41,7 @@ export function TasksPage({ taskId } = {}) {
   const [riskAmountInput, setRiskAmountInput] = useState('')
   const [accountSize, setAccountSize] = useState(null)
   const [equity, setEquity] = useState(null)
-  const [riskMode, setRiskMode] = useState('manual')
-  const [riskTiers, setRiskTiers] = useState([])
-  const [riskCap, setRiskCap] = useState(null)
+  const [riskStrategy, setRiskStrategy] = useState('manual')
   const [taskSaving, setTaskSaving] = useState(false)
   const [taskSaveError, setTaskSaveError] = useState('')
   const [taskSavedStatus, setTaskSavedStatus] = useState(null)
@@ -143,15 +141,7 @@ export function TasksPage({ taskId } = {}) {
         const size = data.accounts?.[String(data.login)]?.account_size
         if (typeof size === 'number') setAccountSize(size)
         if (typeof data.equity === 'number') setEquity(data.equity)
-      })
-      .catch(() => {})
-
-    api
-      .riskSettings()
-      .then((settings) => {
-        setRiskMode(settings.mode)
-        setRiskTiers(settings.tiers ?? [])
-        setRiskCap(settings.capRisk ?? null)
+        setRiskStrategy(data.riskStrategy ?? 'manual')
       })
       .catch(() => {})
   }, [])
@@ -248,11 +238,13 @@ export function TasksPage({ taskId } = {}) {
     : null
 
   // En mode auto, le risque n'est jamais choisi à la main : recalculé à
-  // chaque rendu depuis l'équité live et le capital de référence, via les
-  // mêmes paliers configurés dans Paramètres — que ce soit une tâche neuve
-  // ou la reprise d'un brouillon existant (le mode est global, pas par tâche).
+  // chaque rendu depuis l'équité live et le capital de référence, via la
+  // stratégie choisie pour CE compte (Mes comptes) — que ce soit une tâche
+  // neuve ou la reprise d'un brouillon existant.
+  const riskMode = riskStrategy === 'manual' ? 'manual' : 'auto'
+  const riskPreset = RISK_STRATEGY_PRESETS[riskStrategy]
   const growthPercent = computeGrowthPercent(equity, accountSize)
-  const autoRiskPercent = riskMode === 'auto' ? computeAutoRisk(growthPercent, riskTiers, riskCap) : null
+  const autoRiskPercent = riskPreset ? computeAutoRisk(growthPercent, riskPreset.tiers, riskPreset.capRisk) : null
 
   useEffect(() => {
     if (riskMode === 'auto' && autoRiskPercent != null) {

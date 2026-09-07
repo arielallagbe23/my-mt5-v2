@@ -162,35 +162,48 @@ export function JournalPage() {
       )}
 
       {kpis && trades.length > 0 && (
-        <div className="flex flex-col gap-3 lg:grid lg:grid-cols-12 lg:items-start lg:gap-4">
-          <div className="lg:col-span-3">
-            <NetPnlCard netTotal={kpis.netTotal} />
+        <div className="flex flex-col gap-4">
+          {/* Ligne 1 : chiffre clé (1/4) + paliers R (1/2) + best/worst (1/4) */}
+          <div className="flex flex-col gap-3 lg:flex-row lg:gap-4">
+            <div className="lg:w-[calc(25%-0.667rem)]">
+              <NetPnlCard netTotal={kpis.netTotal} />
+            </div>
+            <div className="lg:w-[calc(50%-0.667rem)]">
+              <KpiGrid kpis={kpis} currentMonthR={currentMonthR} />
+            </div>
+            <div className="lg:w-[calc(25%-0.667rem)]">
+              <BestWorstStreakCard kpis={kpis} streak={streak} todayNet={todayNet} accountSize={accountSize} />
+            </div>
           </div>
-          <div className="lg:col-span-5">
-            <KpiGrid kpis={kpis} currentMonthR={currentMonthR} />
+
+          {/* Ligne 2 : courbe du trimestre (2/3, la plus mise en avant) + répartition (1/3) */}
+          <div className="flex flex-col gap-3 lg:flex-row lg:gap-4">
+            <div className="lg:w-[calc(66.667%-0.5rem)]">
+              <PerformanceCard
+                netTotal={quarterlyNet}
+                curve={quarterlyCurve}
+                unit={curveUnit}
+                accountSize={accountSize}
+                title={`Courbe de performance — ${currentQuarterLabel}`}
+              />
+            </div>
+            <div className="lg:w-[calc(33.333%-0.5rem)]">
+              <ResultsBreakdownCard breakdown={breakdown} />
+            </div>
           </div>
-          <div className="lg:col-span-4">
-            <BestWorstStreakCard kpis={kpis} streak={streak} todayNet={todayNet} accountSize={accountSize} />
+
+          {/* Ligne 3 : calendrier + P&L mensuel, même poids visuel (1/2 chacun) */}
+          <div className="flex flex-col gap-3 lg:flex-row lg:gap-4">
+            <div className="lg:w-[calc(50%-0.5rem)]">
+              <TradingCalendarCard dailyNet={dailyNet} />
+            </div>
+            <div className="lg:w-[calc(50%-0.5rem)]">
+              <MonthlyPnlCard monthly={monthly} />
+            </div>
           </div>
-          <div className="lg:col-span-8">
-            <PerformanceCard
-              netTotal={quarterlyNet}
-              curve={quarterlyCurve}
-              unit={curveUnit}
-              accountSize={accountSize}
-              title={`Courbe de performance — ${currentQuarterLabel}`}
-            />
-          </div>
-          <div className="lg:col-span-4">
-            <ResultsBreakdownCard breakdown={breakdown} />
-          </div>
-          <div className="lg:col-span-6">
-            <TradingCalendarCard dailyNet={dailyNet} />
-          </div>
-          <div className="lg:col-span-6">
-            <MonthlyPnlCard monthly={monthly} />
-          </div>
-          <div className="lg:col-span-12">
+
+          {/* Ligne 4 : tableau des transactions, pleine largeur (a besoin de place) */}
+          <div className="w-full">
             <TransactionsTable
               trades={trades}
               pageTrades={pageTrades}
@@ -200,7 +213,9 @@ export function JournalPage() {
               onNextPage={() => setPage((p) => Math.min(totalPages, p + 1))}
             />
           </div>
-          <div className="lg:col-span-12">
+
+          {/* Ligne 5 : courbe globale en clôture, pleine largeur */}
+          <div className="w-full">
             <PerformanceCard
               netTotal={kpis.netTotal}
               curve={curve}

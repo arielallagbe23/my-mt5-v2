@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { api } from '../lib/api'
 import { PAGE, PAGE_TITLE, FIELD_INPUT } from '../lib/layout'
 import { requestAndPoll, isFreshTs } from '../lib/onDemand'
+import { computeGrowthPercent, computeAutoRisk, RISK_STRATEGY_PRESETS } from '../lib/riskTiers'
 
 function formatAmount(amount, currency) {
   if (typeof amount !== 'number') return '—'
@@ -10,6 +11,12 @@ function formatAmount(amount, currency) {
 }
 
 const VPS_LABELS = { main: 'Compte principal', account2: 'Compte suppléant' }
+
+const RISK_STRATEGY_OPTIONS = [
+  { value: 'manual', label: 'Manuel' },
+  { value: 'strategy-1', label: 'Stratégie 1 (0,5% fixe)' },
+  { value: 'strategy-2', label: 'Stratégie 2 (0,5% → 1% → 2%)' },
+]
 
 export function AccountsPage() {
   const [accounts, setAccounts] = useState(null)
@@ -27,6 +34,22 @@ export function AccountsPage() {
   const [switchSending, setSwitchSending] = useState(false)
   const [switchError, setSwitchError] = useState('')
   const [switchResult, setSwitchResult] = useState(null)
+
+  const [riskStrategySavingId, setRiskStrategySavingId] = useState(null)
+  const [riskStrategyError, setRiskStrategyError] = useState('')
+
+  async function updateRiskStrategy(vpsId, value) {
+    setRiskStrategyError('')
+    setRiskStrategySavingId(vpsId)
+    try {
+      await api.updateAccountSettings(vpsId, { riskStrategy: value })
+      setAccounts((current) => ({ ...current, [vpsId]: { ...current[vpsId], riskStrategy: value } }))
+    } catch (err) {
+      setRiskStrategyError(err.message)
+    } finally {
+      setRiskStrategySavingId(null)
+    }
+  }
 
   function load() {
     return api
@@ -153,6 +176,10 @@ export function AccountsPage() {
         {entries.map(([vpsId, info]) => {
           const edit = edits[vpsId] ?? { pseudo: '' }
           const changed = edit.pseudo !== (info.pseudo ?? '')
+          const riskStrategy = info.riskStrategy ?? 'manual'
+          const preset = RISK_STRATEGY_PRESETS[riskStrategy]
+          const growthPercent = computeGrowthPercent(info.equity, info.accountSize)
+          const autoRisk = preset ? computeAutoRisk(growthPercent, preset.tiers, preset.capRisk) : null
 
           return (
             <li key={vpsId} className="mb-4 rounded-2xl border border-white/10 bg-white/5 px-4 py-3">
@@ -166,6 +193,27 @@ export function AccountsPage() {
                 <span>
                   Taille : {typeof info.accountSize === 'number' ? info.accountSize.toLocaleString('fr-FR') : '—'}
                 </span>
+              </div>
+
+              <div className="mt-3 flex flex-col gap-1.5 border-t border-white/10 pt-3">
+                <span className="text-xs text-slate-400">Stratégie de risque</span>
+                <select
+                  value={riskStrategy}
+                  onChange={(e) => updateRiskStrategy(vpsId, e.target.value)}
+                  disabled={riskStrategySavingId === vpsId}
+                  className={`${FIELD_INPUT} disabled:opacity-60`}
+                >
+                  {RISK_STRATEGY_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+                {autoRisk != null && (
+                  <span className="text-xs text-slate-500">
+                    Croissance {growthPercent?.toFixed(2)}% → risque actuel : <span className="font-semibold text-white">{autoRisk}%</span>
+                  </span>
+                )}
               </div>
 
               <div className="mt-3 flex flex-col gap-2 border-t border-white/10 pt-3">
@@ -217,6 +265,7 @@ export function AccountsPage() {
       </ul>
 
       {saveError && <p className="text-sm text-red-400">{saveError}</p>}
+      {riskStrategyError && <p className="text-sm text-red-400">{riskStrategyError}</p>}
 
       <div className="mt-4 flex flex-col gap-3 rounded-2xl border border-white/10 bg-white/5 p-4">
         <div>

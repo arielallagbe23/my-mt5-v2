@@ -18,6 +18,21 @@ export const DEFAULT_RISK_TIERS = [
 ]
 export const DEFAULT_CAP_RISK = 2
 
+// Stratégies nommées, choisies par compte (Mes comptes) via un select — pas
+// d'éditeur de paliers à la main, juste ces deux préréglages. "manual" (pas
+// dans cette map) veut dire : pas de calcul auto, le risque est saisi à la
+// main sur la tâche, comme avant l'existence de ce système.
+export const RISK_STRATEGY_PRESETS = {
+  'strategy-1': { tiers: [], capRisk: 0.5 },
+  'strategy-2': {
+    tiers: [
+      { threshold: 3.05, risk: 0.5 },
+      { threshold: 7.05, risk: 1 },
+    ],
+    capRisk: 2,
+  },
+}
+
 export function computeGrowthPercent(equity, accountSize) {
   if (typeof equity !== 'number' || !accountSize) return null
   return ((equity - accountSize) / accountSize) * 100

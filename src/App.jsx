@@ -10,7 +10,6 @@ import { TasksListPage } from './pages/TasksListPage'
 import { SetOrderPage } from './pages/SetOrderPage'
 import { JournalPage } from './pages/JournalPage'
 import { MistakesPage } from './pages/MistakesPage'
-import { SettingsPage } from './pages/SettingsPage'
 import { Navbar } from './components/Navbar'
 import { SAFE_AREA_SCREEN } from './lib/layout'
 
@@ -61,7 +60,6 @@ function App() {
         {page === 'setOrder' && <SetOrderPage />}
         {page === 'journal' && <JournalPage />}
         {page === 'mistakes' && <MistakesPage />}
-        {page === 'settings' && <SettingsPage />}
       </main>
     </div>
   )
