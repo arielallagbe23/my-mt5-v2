@@ -71,11 +71,12 @@ export const api = {
   requestMarketRecapRefresh: () => request('/api/market-recap/request', { method: 'POST' }),
   marketRecapRefreshStatus: () => request('/api/market-recap/request/status'),
   listMistakes: () => request('/api/mistakes'),
-  createMistake: (title, text) => request('/api/mistakes', { method: 'POST', body: { title, text } }),
-  renameMistake: (id, title) => request(`/api/mistakes/${id}`, { method: 'PATCH', body: { title } }),
+  createMistake: (payload) => request('/api/mistakes', { method: 'POST', body: payload }),
+  updateMistake: (id, payload) => request(`/api/mistakes/${id}`, { method: 'PATCH', body: payload }),
   deleteMistake: (id) => request(`/api/mistakes/${id}`, { method: 'DELETE' }),
   addMistakeImage: (id, contentType, dataBase64) =>
     request(`/api/mistakes/${id}/images`, { method: 'POST', body: { contentType, dataBase64 } }),
   deleteMistakeImage: (id, url) => request(`/api/mistakes/${id}/images`, { method: 'DELETE', body: { url } }),
+  resizeMistakeImage: (id, url, width) => request(`/api/mistakes/${id}/images`, { method: 'PATCH', body: { url, width } }),
   mistakeImageUrl: (id, url) => `${API_URL}/api/mistakes/${id}/images/view?url=${encodeURIComponent(url)}`,
 }

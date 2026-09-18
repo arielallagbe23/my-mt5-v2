@@ -90,13 +90,13 @@ export function TransactionsTable({ trades, pageTrades, page, totalPages, onPrev
         <span className="text-xs text-slate-500">{trades.length} au total</span>
       </div>
       <div className="overflow-x-auto">
-        <table className="w-full text-left text-xs">
+        <table className="w-full text-left text-[10px]">
           <thead>
             <tr className="text-slate-500">
-              <th className="pb-2 pr-2 font-normal">Date</th>
-              <th className="pb-2 pr-2 font-normal">Type</th>
-              <th className="pb-2 pr-2 font-normal">Vol.</th>
-              <th className="pb-2 pr-2 font-normal">Prix</th>
+              <th className="pb-2 pr-1.5 font-normal">Date</th>
+              <th className="pb-2 pr-1.5 font-normal">Type</th>
+              <th className="pb-2 pr-1.5 font-normal">Vol.</th>
+              <th className="pb-2 pr-1.5 font-normal">Prix</th>
               <th className="pb-2 font-normal">P&amp;L</th>
             </tr>
           </thead>
@@ -109,13 +109,15 @@ export function TransactionsTable({ trades, pageTrades, page, totalPages, onPrev
                     onClick={() => setExpandedTicket(expanded ? null : t.positionId)}
                     className="cursor-pointer border-t border-white/5"
                   >
-                    <td className="py-2 pr-2 whitespace-nowrap text-slate-400">{formatDate(t.closeTime)}</td>
-                    <td className={`py-2 pr-2 font-semibold ${t.type === 'Sell' ? 'text-red-400' : 'text-blue-400'}`}>
+                    <td className="py-2 pr-1.5 whitespace-nowrap text-slate-400">{formatDate(t.closeTime)}</td>
+                    <td
+                      className={`py-2 pr-1.5 whitespace-nowrap font-semibold ${t.type === 'Sell' ? 'text-red-400' : 'text-blue-400'}`}
+                    >
                       {t.type === 'Sell' ? 'SELL' : 'BUY'}
                     </td>
-                    <td className="py-2 pr-2 text-slate-300">{formatVolume(t.volume)}</td>
-                    <td className="py-2 pr-2 text-slate-300">{formatPrice(t.priceClose)}</td>
-                    <td className={`py-2 font-semibold ${t.net >= 0 ? 'text-blue-400' : 'text-red-400'}`}>
+                    <td className="py-2 pr-1.5 whitespace-nowrap text-slate-300">{formatVolume(t.volume)}</td>
+                    <td className="py-2 pr-1.5 whitespace-nowrap text-slate-300">{formatPrice(t.priceClose)}</td>
+                    <td className={`py-2 whitespace-nowrap font-semibold ${t.net >= 0 ? 'text-blue-400' : 'text-red-400'}`}>
                       {money(t.net)}
                     </td>
                   </tr>

@@ -16,7 +16,17 @@ const RISK_STRATEGY_OPTIONS = [
   { value: 'manual', label: 'Manuel' },
   { value: 'strategy-1', label: 'Stratégie 1 (0,5% fixe)' },
   { value: 'strategy-2', label: 'Stratégie 2 (0,5% → 1% → 2%)' },
+  { value: 'strategy-3', label: 'Stratégie 3 (0,5% → 1% → 2% → 3%)' },
 ]
+
+const RISK_STRATEGY_DESCRIPTIONS = {
+  manual: 'Le risque est saisi à la main sur chaque tâche, aucun calcul automatique.',
+  'strategy-1': '0,5% de risque fixe, quelle que soit la croissance de l\'équité.',
+  'strategy-2':
+    '0,5% jusqu\'à 3,05% de croissance, puis 1% jusqu\'à 7,05%, puis 2% au-delà — redescend tout seul si l\'équité redescend, sans mémoire.',
+  'strategy-3':
+    '0,5% jusqu\'à 2,05% de croissance, puis 1% jusqu\'à 3,05%, puis 2% jusqu\'à 4,05%, puis 3% au-delà — redescend tout seul si l\'équité redescend, sans mémoire.',
+}
 
 export function AccountsPage() {
   const [accounts, setAccounts] = useState(null)
@@ -60,7 +70,7 @@ export function AccountsPage() {
           const next = { ...current }
           for (const [vpsId, info] of Object.entries(data)) {
             if (!next[vpsId]) {
-              next[vpsId] = { pseudo: info.pseudo ?? '' }
+              next[vpsId] = { pseudo: info.pseudo ?? '', associate: info.associate ?? '' }
             }
           }
           return next
@@ -83,7 +93,10 @@ export function AccountsPage() {
     setSaving(vpsId)
     const edit = edits[vpsId]
     try {
-      await api.updateAccountSettings(vpsId, { pseudo: edit.pseudo.trim() || null })
+      await api.updateAccountSettings(vpsId, {
+        pseudo: edit.pseudo.trim() || null,
+        associate: edit.associate.trim() || null,
+      })
       await load()
       setEditingId(null)
     } catch (err) {
@@ -97,7 +110,7 @@ export function AccountsPage() {
     setSaveError('')
     setEdits((current) => ({
       ...current,
-      [vpsId]: { pseudo: info.pseudo ?? '' },
+      [vpsId]: { pseudo: info.pseudo ?? '', associate: info.associate ?? '' },
     }))
     setEditingId(null)
   }
@@ -163,7 +176,7 @@ export function AccountsPage() {
   const entries = accounts ? Object.entries(accounts) : []
 
   return (
-    <div className={PAGE}>
+    <div className={`${PAGE} lg:max-w-5xl`}>
       <h1 className={PAGE_TITLE}>Mes comptes</h1>
 
       {loading && <p className="text-sm text-slate-400">Chargement...</p>}
@@ -172,17 +185,20 @@ export function AccountsPage() {
         <p className="text-sm text-slate-400">Aucun compte configuré.</p>
       )}
 
-      <ul className="flex flex-col gap-2">
+      <ul className="flex flex-col gap-2 lg:flex-row lg:flex-wrap lg:gap-4">
         {entries.map(([vpsId, info]) => {
-          const edit = edits[vpsId] ?? { pseudo: '' }
-          const changed = edit.pseudo !== (info.pseudo ?? '')
+          const edit = edits[vpsId] ?? { pseudo: '', associate: '' }
+          const changed = edit.pseudo !== (info.pseudo ?? '') || edit.associate !== (info.associate ?? '')
           const riskStrategy = info.riskStrategy ?? 'manual'
           const preset = RISK_STRATEGY_PRESETS[riskStrategy]
           const growthPercent = computeGrowthPercent(info.equity, info.accountSize)
           const autoRisk = preset ? computeAutoRisk(growthPercent, preset.tiers, preset.capRisk) : null
 
           return (
-            <li key={vpsId} className="mb-4 rounded-2xl border border-white/10 bg-white/5 px-4 py-3">
+            <li
+              key={vpsId}
+              className="mb-4 w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 lg:mb-0 lg:w-[calc(50%-0.5rem)]"
+            >
               <div className="flex items-center gap-2 text-sm text-slate-400">
                 <span className={`h-2 w-2 shrink-0 rounded-full ${info.online ? 'bg-green-500' : 'bg-slate-600'}`} />
                 <span>{info.pseudo || VPS_LABELS[vpsId] || vpsId}</span>
@@ -193,6 +209,7 @@ export function AccountsPage() {
                 <span>
                   Taille : {typeof info.accountSize === 'number' ? info.accountSize.toLocaleString('fr-FR') : '—'}
                 </span>
+                {info.associate && <span>Associé : {info.associate}</span>}
               </div>
 
               <div className="mt-3 flex flex-col gap-1.5 border-t border-white/10 pt-3">
@@ -209,6 +226,7 @@ export function AccountsPage() {
                     </option>
                   ))}
                 </select>
+                <span className="text-xs text-slate-500">{RISK_STRATEGY_DESCRIPTIONS[riskStrategy]}</span>
                 {autoRisk != null && (
                   <span className="text-xs text-slate-500">
                     Croissance {growthPercent?.toFixed(2)}% → risque actuel : <span className="font-semibold text-white">{autoRisk}%</span>
@@ -226,6 +244,17 @@ export function AccountsPage() {
                         value={edit.pseudo}
                         onChange={(e) => updateEdit(vpsId, 'pseudo', e.target.value)}
                         placeholder={VPS_LABELS[vpsId] ?? vpsId}
+                        maxLength={40}
+                        className={FIELD_INPUT}
+                      />
+                    </label>
+                    <label className="flex flex-col gap-1 text-xs text-slate-400">
+                      Associé
+                      <input
+                        type="text"
+                        value={edit.associate}
+                        onChange={(e) => updateEdit(vpsId, 'associate', e.target.value)}
+                        placeholder="Nom de l'associé"
                         maxLength={40}
                         className={FIELD_INPUT}
                       />
@@ -267,7 +296,7 @@ export function AccountsPage() {
       {saveError && <p className="text-sm text-red-400">{saveError}</p>}
       {riskStrategyError && <p className="text-sm text-red-400">{riskStrategyError}</p>}
 
-      <div className="mt-4 flex flex-col gap-3 rounded-2xl border border-white/10 bg-white/5 p-4">
+      <div className="mt-4 flex flex-col gap-3 rounded-2xl border border-white/10 bg-white/5 p-4 lg:max-w-md">
         <div>
           <p className="text-xs font-bold tracking-[0.14em] text-slate-500 uppercase">Changer de compte</p>
           <p className="mt-1 text-xs text-slate-400">

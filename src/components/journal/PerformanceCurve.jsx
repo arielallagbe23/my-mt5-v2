@@ -23,7 +23,7 @@ export function PerformanceCurve({ curve, unit }) {
 
   return (
     <div className="flex gap-2">
-      <div className="relative h-32 w-11 shrink-0 font-mono text-xs text-slate-500">
+      <div className="relative h-48 w-11 shrink-0 font-mono text-xs text-slate-500">
         {max > 0 && (
           <span className="absolute left-0 -translate-y-1/2" style={{ top: `${yFor(max)}%` }}>
             {formatAxisValue(max, unit)}
@@ -38,7 +38,7 @@ export function PerformanceCurve({ curve, unit }) {
           </span>
         )}
       </div>
-      <div className="relative h-32 flex-1">
+      <div className="relative h-48 flex-1">
         <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="h-full w-full overflow-visible">
           <defs>
             <linearGradient id="performanceGradient" x1="0" y1="0" x2="0" y2="1">

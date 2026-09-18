@@ -979,12 +979,12 @@ export function HomePage() {
                           return (
                             <div
                               key={index}
-                              className={`flex items-center gap-2 rounded-lg px-2 py-1 text-xs ${
+                              className={`grid grid-cols-[auto_auto_auto_1fr] items-center gap-2 rounded-lg px-2 py-1 text-xs ${
                                 today ? "bg-indigo-500/10" : ""
                               }`}
                             >
                               <span
-                                className={`rounded-full px-2 py-0.5 font-semibold ${
+                                className={`rounded-full px-2 py-0.5 text-center font-semibold ${
                                   evt.impact === "High"
                                     ? "bg-red-500/15 text-red-300"
                                     : "bg-amber-500/15 text-amber-300"
@@ -993,7 +993,7 @@ export function HomePage() {
                                 {evt.devise}
                               </span>
                               <ImpactDots impact={evt.impact} />
-                              <span className="text-slate-500">
+                              <span className="whitespace-nowrap text-slate-500">
                                 {formatEventDate(evt.date)}
                               </span>
                               <span

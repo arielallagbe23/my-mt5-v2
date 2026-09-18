@@ -2,7 +2,7 @@ import { money, pct, formatR } from './journalStats'
 
 export function KpiGrid({ kpis, currentMonthR }) {
   return (
-    <div className="grid grid-cols-2 gap-3">
+    <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
       <div className="rounded-2xl border border-white/10 bg-white/5 p-3">
         <p className="text-xs text-slate-400 uppercase">R global</p>
         <p className={`text-xl font-bold ${kpis.rTotal >= 0 ? 'text-blue-400' : 'text-red-400'}`}>
@@ -16,13 +16,6 @@ export function KpiGrid({ kpis, currentMonthR }) {
           {formatR(currentMonthR)}
         </p>
         <p className="text-xs text-slate-500">performance du mois en cours</p>
-      </div>
-      <div className="col-span-2 rounded-2xl border border-white/10 bg-white/5 p-3">
-        <p className="text-xs text-slate-400 uppercase">Expectancy</p>
-        <p className={`text-xl font-bold ${kpis.expectancy >= 0 ? 'text-blue-400' : 'text-red-400'}`}>
-          {money(kpis.expectancy)}
-        </p>
-        <p className="text-xs text-slate-500">gain moyen par trade, gagnant ou perdant</p>
       </div>
       <div className="rounded-2xl border border-white/10 bg-white/5 p-3">
         <p className="text-xs text-slate-400 uppercase">Win rate</p>
@@ -39,6 +32,13 @@ export function KpiGrid({ kpis, currentMonthR }) {
         <p className="text-xs text-slate-500">
           {kpis.profitFactor === null ? '—' : kpis.profitFactor >= 1 ? 'favorable' : 'défavorable'}
         </p>
+      </div>
+      <div className="col-span-2 rounded-2xl border border-white/10 bg-white/5 p-3">
+        <p className="text-xs text-slate-400 uppercase">Expectancy</p>
+        <p className={`text-xl font-bold ${kpis.expectancy >= 0 ? 'text-blue-400' : 'text-red-400'}`}>
+          {money(kpis.expectancy)}
+        </p>
+        <p className="text-xs text-slate-500">gain moyen par trade, gagnant ou perdant</p>
       </div>
       <div className="rounded-2xl border border-white/10 bg-white/5 p-3">
         <p className="text-xs text-slate-400 uppercase">Gain moyen</p>

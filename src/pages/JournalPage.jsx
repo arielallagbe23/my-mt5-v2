@@ -140,7 +140,7 @@ export function JournalPage() {
   const pageTrades = trades ? trades.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE) : []
 
   return (
-    <div className={`${PAGE} lg:max-w-6xl`}>
+    <div className={`${PAGE} lg:max-w-6xl -mt-3`}>
       <JournalHeader
         tradesCount={trades?.length ?? null}
         onExportCsv={() => trades && exportCsv(trades)}
@@ -163,16 +163,14 @@ export function JournalPage() {
 
       {kpis && trades.length > 0 && (
         <div className="flex flex-col gap-4">
-          {/* Ligne 1 : chiffre clé (1/4) + paliers R (1/2) + best/worst (1/4) */}
+          {/* Ligne 1 : chiffre clé + best/worst empilés (1/4, même hauteur que la grille) + paliers R (3/4) */}
           <div className="flex flex-col gap-3 lg:flex-row lg:gap-4">
-            <div className="lg:w-[calc(25%-0.667rem)]">
+            <div className="flex flex-col gap-3 lg:w-[calc(25%-0.75rem)]">
               <NetPnlCard netTotal={kpis.netTotal} />
-            </div>
-            <div className="lg:w-[calc(50%-0.667rem)]">
-              <KpiGrid kpis={kpis} currentMonthR={currentMonthR} />
-            </div>
-            <div className="lg:w-[calc(25%-0.667rem)]">
               <BestWorstStreakCard kpis={kpis} streak={streak} todayNet={todayNet} accountSize={accountSize} />
+            </div>
+            <div className="lg:w-[calc(75%-0.75rem)]">
+              <KpiGrid kpis={kpis} currentMonthR={currentMonthR} />
             </div>
           </div>
 
