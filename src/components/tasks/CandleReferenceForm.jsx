@@ -10,7 +10,7 @@ export function CandleReferenceForm({
   error,
 }) {
   return (
-    <div className="flex flex-col gap-2 rounded-2xl border border-white/10 bg-white/5 p-3">
+    <div className="flex min-w-0 flex-col gap-2 rounded-2xl border border-white/10 bg-white/5 p-3">
       <p className="text-xs font-bold tracking-[0.14em] text-slate-500 uppercase">Bougie de référence</p>
 
       <div className="mb-2 flex gap-2">
@@ -32,7 +32,7 @@ export function CandleReferenceForm({
         type="datetime-local"
         value={dateTime}
         onChange={(event) => onDateTimeChange(event.target.value)}
-        className={FIELD_INPUT}
+        className={`${FIELD_INPUT} w-full min-w-0`}
       />
 
       <button

@@ -3,6 +3,7 @@ import { api } from '../lib/api'
 import { PAGE, PAGE_TITLE, FIELD_INPUT } from '../lib/layout'
 import { PLAN_OPTIONS, EXIT_OPTIONS, EMOTION_OPTIONS, findOption } from '../components/mistakes/mistakeOptions'
 import { MistakesStats } from '../components/mistakes/MistakesStats'
+import { ImageCropModal } from '../components/mistakes/ImageCropModal'
 
 function formatDate(ts) {
   if (typeof ts !== 'number') return '—'
@@ -64,18 +65,27 @@ const IMAGE_SIZE_MAX = 480
 const IMAGE_SIZE_STEP = 40
 const IMAGE_SIZE_DEFAULT = 200
 
-function ImageGallery({ mistakeId, images, onDelete, onView, onResize, busy }) {
+function CropIcon() {
+  return (
+    <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 shrink-0" fill="none" stroke="currentColor" strokeWidth="2">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M6 2v14a2 2 0 0 0 2 2h14" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M18 22V8a2 2 0 0 0-2-2H2" />
+    </svg>
+  )
+}
+
+function ImageGallery({ mistakeId, images, onDelete, onView, onResize, onCrop, busy }) {
   if (!images?.length) return null
 
   return (
-    <div className="mt-4 flex flex-wrap gap-2">
+    <div className="mt-4 flex snap-x snap-mandatory gap-2 overflow-x-auto pb-1">
       {images.map((img) => {
         const size = img.width ?? IMAGE_SIZE_DEFAULT
         return (
           <div
             key={img.url}
             style={{ width: size }}
-            className="group relative shrink-0 overflow-hidden rounded-xl border border-white/10 bg-black/20"
+            className="group relative shrink-0 snap-start overflow-hidden rounded-xl border border-white/10 bg-black/20"
           >
             <button type="button" onClick={() => onView(api.mistakeImageUrl(mistakeId, img.url))} className="block h-full w-full">
               <img src={api.mistakeImageUrl(mistakeId, img.url)} alt="" className="h-full w-full object-cover" />
@@ -100,14 +110,26 @@ function ImageGallery({ mistakeId, images, onDelete, onView, onResize, busy }) {
                 +
               </button>
             </div>
-            <button
-              type="button"
-              onClick={() => onDelete(img.url)}
-              disabled={busy}
-              className="absolute top-1 right-1 flex h-6 w-6 items-center justify-center rounded-full bg-black/70 text-sm font-bold text-white opacity-0 transition-opacity group-hover:opacity-100 disabled:opacity-100"
-            >
-              ×
-            </button>
+            <div className="absolute top-1 right-1 flex gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+              <button
+                type="button"
+                onClick={() => onCrop(img.url)}
+                disabled={busy}
+                aria-label="Rogner l'image"
+                className="flex h-6 w-6 items-center justify-center rounded-full bg-black/70 text-white disabled:opacity-40"
+              >
+                <CropIcon />
+              </button>
+              <button
+                type="button"
+                onClick={() => onDelete(img.url)}
+                disabled={busy}
+                aria-label="Supprimer l'image"
+                className="flex h-6 w-6 items-center justify-center rounded-full bg-black/70 text-sm font-bold text-white disabled:opacity-100"
+              >
+                ×
+              </button>
+            </div>
           </div>
         )
       })}
@@ -189,6 +211,8 @@ export function MistakesPage() {
   const [editSaving, setEditSaving] = useState(false)
   const [editError, setEditError] = useState('')
   const [lightboxUrl, setLightboxUrl] = useState(null)
+  const [cropTarget, setCropTarget] = useState(null)
+  const [cropSaving, setCropSaving] = useState(false)
 
   useEffect(() => {
     if (!lightboxUrl) return
@@ -335,6 +359,20 @@ export function MistakesPage() {
     }
   }
 
+  // Le rognage remplace la photo : on uploade la version rognée comme une
+  // nouvelle image puis on supprime l'originale, plutôt que d'éditer les
+  // octets en place côté serveur (pas d'endpoint pour ça).
+  async function confirmCrop(blob) {
+    if (!cropTarget) return
+    const { mistakeId, url } = cropTarget
+    setCropSaving(true)
+    const file = new File([blob], 'cropped.png', { type: 'image/png' })
+    await addImages(mistakeId, [file])
+    await removeImage(mistakeId, url)
+    setCropSaving(false)
+    setCropTarget(null)
+  }
+
   async function resizeImage(mistakeId, url, width) {
     setMistakes((current) =>
       current.map((m) =>
@@ -440,6 +478,7 @@ export function MistakesPage() {
           onDelete={(url) => removeImage(m.id, url)}
           onView={setLightboxUrl}
           onResize={(url, width) => resizeImage(m.id, url, width)}
+          onCrop={(url) => setCropTarget({ mistakeId: m.id, url })}
           busy={busyId === m.id}
         />
         <div className="mt-auto flex items-center justify-between gap-2 pt-2">
@@ -625,7 +664,7 @@ export function MistakesPage() {
       {view === 'list' && loading && <p className="text-sm text-slate-400">Chargement...</p>}
 
       {view === 'list' && !loading && (
-        <div className="flex flex-col gap-2 lg:grid lg:grid-cols-2 lg:gap-4">
+        <div className="flex flex-col gap-2 lg:grid lg:grid-cols-3 lg:gap-4">
           {mistakes.length === 0 && <p className="text-sm text-slate-400">Rien noté pour l'instant.</p>}
           {(showForm ? mistakes.slice(1) : mistakes).map(renderMistakeCard)}
         </div>
@@ -651,6 +690,15 @@ export function MistakesPage() {
             className="max-h-full max-w-full rounded-xl object-contain"
           />
         </div>
+      )}
+
+      {cropTarget && (
+        <ImageCropModal
+          src={api.mistakeImageUrl(cropTarget.mistakeId, cropTarget.url)}
+          saving={cropSaving}
+          onCancel={() => setCropTarget(null)}
+          onConfirm={confirmCrop}
+        />
       )}
     </div>
   )

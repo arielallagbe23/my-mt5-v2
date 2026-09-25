@@ -1,10 +1,10 @@
 const COMPACT_INPUT =
-  'min-h-9 rounded-xl border border-white/10 bg-white/5 px-3 text-sm text-white ' +
+  'min-h-9 w-full min-w-0 rounded-xl border border-white/10 bg-white/5 px-3 text-sm text-white ' +
   'focus:outline-2 focus:outline-indigo-500 focus:outline-offset-1'
 
 export function FiboInputs({ fibo100, fibo0, onFibo100Change, onFibo0Change, reversed = false }) {
   const field100 = (
-    <label key="100" className="flex flex-col gap-1.5 text-xs text-slate-400">
+    <label key="100" className="flex min-w-0 flex-col gap-1.5 text-xs text-slate-400">
       <div>Niveau 100%</div>
       <input
         type="number"
@@ -17,7 +17,7 @@ export function FiboInputs({ fibo100, fibo0, onFibo100Change, onFibo0Change, rev
   )
 
   const field0 = (
-    <label key="0" className="flex flex-col gap-1.5 text-xs text-slate-400">
+    <label key="0" className="flex min-w-0 flex-col gap-1.5 text-xs text-slate-400">
       <div>Niveau 0%</div>
       <input
         type="number"
@@ -30,7 +30,7 @@ export function FiboInputs({ fibo100, fibo0, onFibo100Change, onFibo0Change, rev
   )
 
   return (
-    <div className="flex flex-col gap-3 rounded-2xl border border-white/10 bg-white/5 p-3">
+    <div className="flex min-w-0 flex-col gap-3 rounded-2xl border border-white/10 bg-white/5 p-3 pb-8">
       <p className="text-sm text-slate-500">Niveaux de Fibo</p>
       {reversed ? [field0, field100] : [field100, field0]}
     </div>

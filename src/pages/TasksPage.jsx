@@ -397,7 +397,7 @@ export function TasksPage({ taskId } = {}) {
   }
 
   return (
-    <div className={PAGE}>
+    <div className={`${PAGE} lg:max-w-5xl`}>
       <div className="flex items-center gap-2">
         <div className="text-sm font-bold text-white">USDJPY</div>
         {priceLoading && <span className="text-sm text-slate-400">Récupération du prix...</span>}
@@ -406,27 +406,39 @@ export function TasksPage({ taskId } = {}) {
 
       <ScenarioToggle scenario={scenario} onToggle={toggleScenario} />
 
-      <FiboInputs
-        fibo100={fibo100}
-        fibo0={fibo0}
-        onFibo100Change={setFibo100}
-        onFibo0Change={setFibo0}
-        reversed={scenario === 'sell'}
-      />
+      <div className="flex flex-col gap-3 lg:flex-row lg:gap-4">
+        <div className="lg:min-w-0 lg:w-[calc(50%-0.5rem)]">
+          <FiboInputs
+            fibo100={fibo100}
+            fibo0={fibo0}
+            onFibo100Change={setFibo100}
+            onFibo0Change={setFibo0}
+            reversed={scenario === 'sell'}
+          />
+        </div>
+        <div className="lg:min-w-0 lg:w-[calc(50%-0.5rem)]">
+          <CandleReferenceForm
+            timeframe={timeframe}
+            onTimeframeChange={setTimeframe}
+            dateTime={candleDateTime}
+            onDateTimeChange={setCandleDateTime}
+            onSubmit={fetchCandleClose}
+            loading={candleLoading}
+            error={candleError}
+          />
+        </div>
+      </div>
 
-      <CandleReferenceForm
-        timeframe={timeframe}
-        onTimeframeChange={setTimeframe}
-        dateTime={candleDateTime}
-        onDateTimeChange={setCandleDateTime}
-        onSubmit={fetchCandleClose}
-        loading={candleLoading}
-        error={candleError}
-      />
-
-      <CandleTable candle={candle} />
-
-      <FiboChart linePositions={linePositions} labelPositions={labelPositions} highlightZone={highlightZone} />
+      <div className="flex flex-col gap-3 lg:flex-row lg:gap-4">
+        {candle && (
+          <div className="lg:min-w-0 lg:w-[calc(33.333%-0.5rem)]">
+            <CandleTable candle={candle} />
+          </div>
+        )}
+        <div className={`lg:min-w-0 ${candle ? 'lg:w-[calc(66.667%-0.5rem)]' : 'lg:w-full'}`}>
+          <FiboChart linePositions={linePositions} labelPositions={labelPositions} highlightZone={highlightZone} />
+        </div>
+      </div>
 
       {fibo236Bounds && (
         <div className="flex justify-center gap-4 text-sm text-slate-400">
