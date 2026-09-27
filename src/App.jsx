@@ -49,7 +49,7 @@ function App() {
   }
 
   return (
-    <div className="flex min-h-dvh flex-col bg-linear-to-b from-slate-950 via-slate-900 to-slate-950">
+    <div className="flex min-h-dvh flex-col bg-black">
       <Navbar page={page} onNavigate={navigate} />
       <main className="flex-1 pt-6 pr-[max(1.25rem,env(safe-area-inset-right))] pb-[max(1.5rem,env(safe-area-inset-bottom))] pl-[max(1.25rem,env(safe-area-inset-left))]">
         {page === 'home' && <HomePage />}

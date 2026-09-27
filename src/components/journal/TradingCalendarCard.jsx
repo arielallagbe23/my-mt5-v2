@@ -22,7 +22,7 @@ export function TradingCalendarCard({ dailyNet }) {
   const monthLabel = shown.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' })
 
   return (
-    <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+    <div className="rounded-sm border border-white/10 bg-white/5 p-4">
       <div className="mb-3 flex items-center justify-between">
         <button
           type="button"
@@ -63,7 +63,7 @@ export function TradingCalendarCard({ dailyNet }) {
               className={`flex aspect-square flex-col items-center justify-center rounded-lg text-xs ${
                 hasTrade
                   ? net > 0
-                    ? 'bg-blue-500/20 text-blue-300'
+                    ? 'bg-emerald-500/20 text-emerald-300'
                     : 'bg-red-500/20 text-red-300'
                   : 'text-slate-500'
               }`}

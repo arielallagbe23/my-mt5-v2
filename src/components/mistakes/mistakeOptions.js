@@ -4,11 +4,11 @@ export const PLAN_OPTIONS = [
   { value: 'no', label: 'Non', tone: 'bg-red-500/15 text-red-300', bar: 'bg-red-400' },
 ]
 export const EXIT_OPTIONS = [
-  { value: 'sl', label: 'SL touché', tone: 'bg-indigo-500/15 text-indigo-300', bar: 'bg-indigo-400' },
-  { value: 'tp', label: 'TP atteint', tone: 'bg-indigo-500/15 text-indigo-300', bar: 'bg-indigo-400' },
-  { value: 'manual_fear', label: 'Sortie manuelle (peur)', tone: 'bg-indigo-500/15 text-indigo-300', bar: 'bg-indigo-400' },
-  { value: 'manual_plan', label: 'Sortie manuelle (plan)', tone: 'bg-indigo-500/15 text-indigo-300', bar: 'bg-indigo-400' },
-  { value: 'other', label: 'Autre', tone: 'bg-indigo-500/15 text-indigo-300', bar: 'bg-indigo-400' },
+  { value: 'sl', label: 'SL touché', tone: 'bg-amber-500/15 text-amber-300', bar: 'bg-amber-400' },
+  { value: 'tp', label: 'TP atteint', tone: 'bg-amber-500/15 text-amber-300', bar: 'bg-amber-400' },
+  { value: 'manual_fear', label: 'Sortie manuelle (peur)', tone: 'bg-amber-500/15 text-amber-300', bar: 'bg-amber-400' },
+  { value: 'manual_plan', label: 'Sortie manuelle (plan)', tone: 'bg-amber-500/15 text-amber-300', bar: 'bg-amber-400' },
+  { value: 'other', label: 'Autre', tone: 'bg-amber-500/15 text-amber-300', bar: 'bg-amber-400' },
 ]
 export const EMOTION_OPTIONS = [
   { value: 'calm', label: 'Calme', tone: 'bg-purple-500/15 text-purple-300', bar: 'bg-purple-400' },

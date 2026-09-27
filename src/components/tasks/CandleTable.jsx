@@ -4,7 +4,7 @@ export function CandleTable({ candle }) {
   if (!candle) return null
 
   return (
-    <div className="rounded-2xl border border-white/10 bg-white/5 p-3">
+    <div className="rounded-sm border border-white/10 bg-white/5 p-3">
       <table className="w-full text-xs">
         <tbody>
           {[

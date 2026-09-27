@@ -10,7 +10,7 @@ export function CandleReferenceForm({
   error,
 }) {
   return (
-    <div className="flex min-w-0 flex-col gap-2 rounded-2xl border border-white/10 bg-white/5 p-3">
+    <div className="flex min-w-0 flex-col gap-2 rounded-sm border border-white/10 bg-white/5 p-3">
       <p className="text-xs font-bold tracking-[0.14em] text-slate-500 uppercase">Bougie de référence</p>
 
       <div className="mb-2 flex gap-2">
@@ -19,8 +19,8 @@ export function CandleReferenceForm({
             key={tf}
             type="button"
             onClick={() => onTimeframeChange(tf)}
-            className={`min-h-9 flex-1 rounded-xl text-sm font-semibold transition-colors ${
-              timeframe === tf ? 'bg-indigo-600 text-white' : 'bg-indigo-500/15 text-indigo-300'
+            className={`min-h-9 flex-1 rounded-sm text-sm font-semibold transition-colors ${
+              timeframe === tf ? 'bg-amber-600 text-white' : 'bg-amber-500/15 text-amber-300'
             }`}
           >
             {tf}
@@ -39,7 +39,7 @@ export function CandleReferenceForm({
         type="button"
         onClick={onSubmit}
         disabled={loading}
-        className="my-2 min-h-10 rounded-xl bg-indigo-600 text-sm font-semibold text-white disabled:opacity-60"
+        className="my-2 min-h-10 rounded-sm bg-amber-600 text-sm font-semibold text-white disabled:opacity-60"
       >
         {loading ? 'Récupération...' : 'Récupérer la bougie'}
       </button>

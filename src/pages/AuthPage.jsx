@@ -45,7 +45,7 @@ export function AuthPage() {
   return (
     <main className={SAFE_AREA_SCREEN}>
       <form className={`flex flex-col gap-4 ${CARD}`} onSubmit={handleSubmit}>
-        <p className="text-xs font-bold tracking-[0.24em] text-indigo-400 uppercase">{eyebrow}</p>
+        <p className="text-xs font-bold tracking-[0.24em] text-amber-400 uppercase">{eyebrow}</p>
         <h1 className="text-2xl font-bold text-white sm:text-3xl">{title}</h1>
 
         <label className="flex flex-col gap-1.5 text-sm text-slate-400">
@@ -79,7 +79,7 @@ export function AuthPage() {
         {info && <p className="text-sm text-green-400">{info}</p>}
 
         <button
-          className="min-h-12 rounded-full bg-indigo-600 font-semibold text-white disabled:opacity-60"
+          className="min-h-12 rounded-full bg-amber-600 font-semibold text-white disabled:opacity-60"
           type="submit"
           disabled={submitting}
         >
@@ -91,7 +91,7 @@ export function AuthPage() {
         {mode === 'login' && (
           <button
             type="button"
-            className="min-h-11 text-center text-sm font-medium text-indigo-400"
+            className="min-h-11 text-center text-sm font-medium text-amber-400"
             onClick={() => switchMode('forgot')}
           >
             Mot de passe oublié ?
@@ -100,7 +100,7 @@ export function AuthPage() {
 
         <button
           type="button"
-          className="min-h-11 text-center text-sm font-medium text-indigo-400"
+          className="min-h-11 text-center text-sm font-medium text-amber-400"
           onClick={() => switchMode(mode === 'signup' ? 'login' : mode === 'forgot' ? 'login' : 'signup')}
         >
           {mode === 'signup'

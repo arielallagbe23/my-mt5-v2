@@ -110,7 +110,7 @@ export function ProfilePage() {
         <p className="mt-1 wrap-break-word font-medium text-white">{user.email}</p>
       </div>
 
-      <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3">
+      <div className="rounded-sm border border-white/10 bg-white/5 px-4 py-3">
         <div className="flex items-center gap-2 text-sm text-slate-400">
           <span
             className={`h-2 w-2 shrink-0 rounded-full ${status?.online ? 'bg-green-500' : 'bg-slate-600'}`}
@@ -127,7 +127,7 @@ export function ProfilePage() {
       </div>
 
       {isPushSupported() && (
-        <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3">
+        <div className="rounded-sm border border-white/10 bg-white/5 px-4 py-3">
           <p className="text-sm font-semibold text-white">Notifications</p>
           <p className="mt-1 text-sm text-slate-400">
             Reçois une notification sur ce téléphone quand une tâche s'exécute.
@@ -138,7 +138,7 @@ export function ProfilePage() {
             onClick={togglePush}
             disabled={pushLoading}
             className={`mt-3 min-h-10 rounded-full px-5 text-sm font-semibold disabled:opacity-60 ${
-              pushEnabled ? 'bg-white/10 text-slate-300' : 'bg-indigo-600 text-white'
+              pushEnabled ? 'bg-white/10 text-slate-300' : 'bg-amber-600 text-white'
             }`}
           >
             {pushLoading ? '...' : pushEnabled ? 'Désactiver les notifications' : 'Activer les notifications'}
@@ -146,7 +146,7 @@ export function ProfilePage() {
         </div>
       )}
 
-      <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3">
+      <div className="rounded-sm border border-white/10 bg-white/5 px-4 py-3">
         <p className="text-sm font-semibold text-white">Alertes de clôture</p>
         <p className="mt-1 text-sm text-slate-400">
           Notification ~10 min avant la clôture d'une bougie USDJPY, sur les timeframes activés.
@@ -162,7 +162,7 @@ export function ProfilePage() {
               type="button"
               onClick={() => toggleAlertTimeframe(key)}
               className={`min-h-10 rounded-full px-5 text-sm font-semibold ${
-                alertSettings[key] ? 'bg-indigo-600 text-white' : 'bg-white/10 text-slate-300'
+                alertSettings[key] ? 'bg-amber-600 text-white' : 'bg-white/10 text-slate-300'
               }`}
             >
               {label}
@@ -191,7 +191,7 @@ export function ProfilePage() {
         <button
           type="submit"
           disabled={saving}
-          className="min-h-11 self-start rounded-full bg-indigo-600 px-5 font-semibold text-white disabled:opacity-60"
+          className="min-h-11 self-start rounded-full bg-amber-600 px-5 font-semibold text-white disabled:opacity-60"
         >
           {saving ? 'Enregistrement...' : 'Enregistrer'}
         </button>

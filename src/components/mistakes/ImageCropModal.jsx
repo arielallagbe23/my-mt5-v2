@@ -167,14 +167,14 @@ export function ImageCropModal({ src, onCancel, onConfirm, saving }) {
             {rect && (
               <div
                 onPointerDown={(e) => startDrag(e, 'move')}
-                className="absolute cursor-move touch-none border-2 border-indigo-400 bg-indigo-400/10"
+                className="absolute cursor-move touch-none border-2 border-amber-400 bg-amber-400/10"
                 style={{ left: rect.x, top: rect.y, width: rect.w, height: rect.h }}
               >
                 {HANDLES.map((h) => (
                   <div
                     key={h}
                     onPointerDown={(e) => startDrag(e, h)}
-                    className={`absolute h-3.5 w-3.5 touch-none rounded-full border border-white bg-indigo-500 ${
+                    className={`absolute h-3.5 w-3.5 touch-none rounded-full border border-white bg-amber-500 ${
                       h.includes('n') ? '-top-1.5' : '-bottom-1.5'
                     } ${h.includes('w') ? '-left-1.5 cursor-nwse-resize' : '-right-1.5 cursor-nesw-resize'}`}
                   />
@@ -189,7 +189,7 @@ export function ImageCropModal({ src, onCancel, onConfirm, saving }) {
           type="button"
           onClick={onCancel}
           disabled={saving}
-          className="min-h-10 rounded-xl border border-white/10 bg-white/5 px-4 text-sm font-semibold text-slate-300 disabled:opacity-60"
+          className="min-h-10 rounded-sm border border-white/10 bg-white/5 px-4 text-sm font-semibold text-slate-300 disabled:opacity-60"
         >
           Annuler
         </button>
@@ -197,7 +197,7 @@ export function ImageCropModal({ src, onCancel, onConfirm, saving }) {
           type="button"
           onClick={handleConfirm}
           disabled={saving || !rect}
-          className="min-h-10 rounded-xl bg-indigo-600 px-4 text-sm font-semibold text-white disabled:opacity-60"
+          className="min-h-10 rounded-sm bg-amber-600 px-4 text-sm font-semibold text-white disabled:opacity-60"
         >
           {saving ? '...' : 'Rogner'}
         </button>

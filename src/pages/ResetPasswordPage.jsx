@@ -33,11 +33,11 @@ export function ResetPasswordPage({ token }) {
     return (
       <main className={SAFE_AREA_SCREEN}>
         <div className={`flex flex-col gap-4 ${CARD}`}>
-          <p className="text-xs font-bold tracking-[0.24em] text-indigo-400 uppercase">Réinitialisation</p>
+          <p className="text-xs font-bold tracking-[0.24em] text-amber-400 uppercase">Réinitialisation</p>
           <h1 className="text-2xl font-bold text-white sm:text-3xl">Mot de passe mis à jour</h1>
           <p className="text-sm text-green-400">Tu peux maintenant te connecter avec ton nouveau mot de passe.</p>
           <button
-            className="min-h-12 rounded-full bg-indigo-600 font-semibold text-white"
+            className="min-h-12 rounded-full bg-amber-600 font-semibold text-white"
             type="button"
             onClick={() => window.location.assign('/')}
           >
@@ -51,7 +51,7 @@ export function ResetPasswordPage({ token }) {
   return (
     <main className={SAFE_AREA_SCREEN}>
       <form className={`flex flex-col gap-4 ${CARD}`} onSubmit={handleSubmit}>
-        <p className="text-xs font-bold tracking-[0.24em] text-indigo-400 uppercase">Réinitialisation</p>
+        <p className="text-xs font-bold tracking-[0.24em] text-amber-400 uppercase">Réinitialisation</p>
         <h1 className="text-2xl font-bold text-white sm:text-3xl">Choisis un nouveau mot de passe</h1>
 
         <label className="flex flex-col gap-1.5 text-sm text-slate-400">
@@ -83,7 +83,7 @@ export function ResetPasswordPage({ token }) {
         {error && <p className="text-sm text-red-400">{error}</p>}
 
         <button
-          className="min-h-12 rounded-full bg-indigo-600 font-semibold text-white disabled:opacity-60"
+          className="min-h-12 rounded-full bg-amber-600 font-semibold text-white disabled:opacity-60"
           type="submit"
           disabled={submitting}
         >

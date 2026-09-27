@@ -13,12 +13,12 @@ export function Navbar({ page, onNavigate }) {
   }
 
   return (
-    <header className="sticky top-0 z-10 border-b border-white/10 bg-slate-950/80 pt-[max(0.75rem,env(safe-area-inset-top))] pr-[max(1.25rem,env(safe-area-inset-right))] pl-[max(1.25rem,env(safe-area-inset-left))] backdrop-blur-xl">
+    <header className="sticky top-0 z-10 border-b border-white/10 bg-black pt-[max(0.75rem,env(safe-area-inset-top))] pr-[max(1.25rem,env(safe-area-inset-right))] pl-[max(1.25rem,env(safe-area-inset-left))]">
       <div className="flex h-14 items-center justify-between">
       <button
         type="button"
         onClick={() => go('home')}
-        className="text-2xl font-bold text-violet-400 hover:text-violet-300"
+        className="text-2xl font-bold text-amber-400 hover:text-amber-300"
       >
         MyMt5
       </button>
@@ -43,7 +43,7 @@ export function Navbar({ page, onNavigate }) {
                 onClick={() => setOpen(false)}
                 className="fixed inset-0 z-10 cursor-default"
               />
-              <div className="absolute right-0 z-20 mt-2 w-56 rounded-2xl border border-white/10 bg-slate-900 p-2 shadow-2xl shadow-black/40">
+              <div className="absolute right-0 z-20 mt-2 w-56 rounded-sm border border-white/10 bg-slate-900 p-2 shadow-2xl shadow-black/40">
                 {[
                   { key: 'profile', label: 'Profil' },
                   { key: 'accounts', label: 'Mes comptes' },
@@ -57,8 +57,8 @@ export function Navbar({ page, onNavigate }) {
                     key={item.key}
                     type="button"
                     onClick={() => go(item.key)}
-                    className={`min-h-11 w-full rounded-xl px-3 text-left text-sm font-semibold hover:bg-white/10 ${
-                      page === item.key ? 'text-indigo-400' : 'text-white'
+                    className={`min-h-11 w-full rounded-sm px-3 text-left text-sm font-semibold hover:bg-white/10 ${
+                      page === item.key ? 'text-amber-400' : 'text-white'
                     }`}
                   >
                     {item.label}
@@ -67,7 +67,7 @@ export function Navbar({ page, onNavigate }) {
                 <button
                   type="button"
                   onClick={logout}
-                  className="min-h-11 w-full rounded-xl px-3 text-left text-sm font-semibold text-white hover:bg-white/10"
+                  className="min-h-11 w-full rounded-sm px-3 text-left text-sm font-semibold text-white hover:bg-white/10"
                 >
                   Se déconnecter
                 </button>

@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react'
 
 const COMPACT_INPUT =
-  'min-h-9 rounded-xl border border-white/10 bg-white/5 px-3 text-sm text-white ' +
-  'focus:outline-2 focus:outline-indigo-500 focus:outline-offset-1'
+  'min-h-9 rounded-sm border border-white/10 bg-white/5 px-3 text-sm text-white ' +
+  'focus:outline-2 focus:outline-amber-500 focus:outline-offset-1'
 
 const RISK_PRESETS = ['0.5', '1', '1.5', '2']
 
@@ -12,7 +12,7 @@ function SlTpButton({ label, value, onClick }) {
       type="button"
       onClick={() => onClick(value)}
       disabled={value == null}
-      className="flex min-h-11 flex-col items-center justify-center rounded-xl bg-white/5 text-xs font-semibold text-slate-300 disabled:opacity-30"
+      className="flex min-h-11 flex-col items-center justify-center rounded-sm bg-white/5 text-xs font-semibold text-slate-300 disabled:opacity-30"
     >
       {label}
       {value != null && <span className="text-[10px] font-normal text-slate-500">{value.toFixed(3)}</span>}
@@ -61,7 +61,7 @@ export function TaskLauncher({
   }, [risk])
 
   return (
-    <div className="flex flex-col gap-5 rounded-2xl border border-white/10 bg-white/5 p-4">
+    <div className="flex flex-col gap-5 rounded-sm border border-white/10 bg-white/5 p-4">
       <p className="text-xs font-bold tracking-[0.14em] text-slate-500 uppercase">Démarrer une tâche</p>
 
       <label className="flex flex-col gap-1.5 text-xs text-slate-400">
@@ -129,7 +129,7 @@ export function TaskLauncher({
       <label className="flex flex-col gap-1.5 text-xs text-slate-400">
         <div>Risque</div>
         {riskMode === 'auto' ? (
-          <div className="rounded-xl border border-indigo-500/30 bg-indigo-500/10 p-2">
+          <div className="rounded-sm border border-amber-500/30 bg-amber-500/10 p-2">
             <p className="text-sm font-semibold text-white">{risk !== '' ? `${risk}%` : '—'} (auto)</p>
             <p className="mt-0.5 text-xs text-slate-400">
               {typeof growthPercent === 'number'
@@ -143,8 +143,8 @@ export function TaskLauncher({
               <button
                 type="button"
                 onClick={() => onRiskUnitChange('percent')}
-                className={`min-h-8 flex-1 rounded-xl text-xs font-semibold transition-colors ${
-                  riskUnit === 'percent' ? 'bg-indigo-600 text-white' : 'bg-white/5 text-slate-400'
+                className={`min-h-8 flex-1 rounded-sm text-xs font-semibold transition-colors ${
+                  riskUnit === 'percent' ? 'bg-amber-600 text-white' : 'bg-white/5 text-slate-400'
                 }`}
               >
                 % du capital
@@ -152,8 +152,8 @@ export function TaskLauncher({
               <button
                 type="button"
                 onClick={() => onRiskUnitChange('amount')}
-                className={`min-h-8 flex-1 rounded-xl text-xs font-semibold transition-colors ${
-                  riskUnit === 'amount' ? 'bg-indigo-600 text-white' : 'bg-white/5 text-slate-400'
+                className={`min-h-8 flex-1 rounded-sm text-xs font-semibold transition-colors ${
+                  riskUnit === 'amount' ? 'bg-amber-600 text-white' : 'bg-white/5 text-slate-400'
                 }`}
               >
                 Montant fixe ($)
@@ -182,8 +182,8 @@ export function TaskLauncher({
                         onRiskChange(preset)
                         setCustomRisk(false)
                       }}
-                      className={`min-h-9 flex-1 rounded-xl text-sm font-semibold transition-colors ${
-                        !customRisk && risk === preset ? 'bg-indigo-600 text-white' : 'bg-indigo-500/15 text-indigo-300'
+                      className={`min-h-9 flex-1 rounded-sm text-sm font-semibold transition-colors ${
+                        !customRisk && risk === preset ? 'bg-amber-600 text-white' : 'bg-amber-500/15 text-amber-300'
                       }`}
                     >
                       {preset}%
@@ -192,8 +192,8 @@ export function TaskLauncher({
                   <button
                     type="button"
                     onClick={() => setCustomRisk(true)}
-                    className={`min-h-9 flex-1 rounded-xl text-sm font-semibold transition-colors ${
-                      customRisk ? 'bg-indigo-600 text-white' : 'bg-indigo-500/15 text-indigo-300'
+                    className={`min-h-9 flex-1 rounded-sm text-sm font-semibold transition-colors ${
+                      customRisk ? 'bg-amber-600 text-white' : 'bg-amber-500/15 text-amber-300'
                     }`}
                   >
                     Autre
@@ -228,7 +228,7 @@ export function TaskLauncher({
           type="button"
           onClick={onSaveDraft}
           disabled={saving}
-          className="min-h-14 flex-1 rounded-xl border border-white/10 bg-white/5 text-base font-semibold text-slate-300 disabled:opacity-60"
+          className="min-h-14 flex-1 rounded-sm border border-white/10 bg-white/5 text-base font-semibold text-slate-300 disabled:opacity-60"
         >
           {saving ? '...' : 'Enregistrer comme brouillon'}
         </button>
@@ -236,24 +236,24 @@ export function TaskLauncher({
           type="button"
           onClick={onFinalize}
           disabled={saving}
-          className="min-h-14 flex-1 rounded-xl bg-indigo-600 text-base font-semibold text-white disabled:opacity-60"
+          className="min-h-14 flex-1 rounded-sm bg-amber-600 text-base font-semibold text-white disabled:opacity-60"
         >
           {saving ? '...' : 'Confirmer la tâche'}
         </button>
       </div>
 
       {saveError && (
-        <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-center text-sm text-red-400">
+        <div className="rounded-sm border border-red-500/30 bg-red-500/10 p-3 text-center text-sm text-red-400">
           {saveError}
         </div>
       )}
       {savedStatus === 'draft' && (
-        <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-center text-sm text-amber-400">
+        <div className="rounded-sm border border-amber-500/30 bg-amber-500/10 p-3 text-center text-sm text-amber-400">
           Brouillon enregistré — tu peux revenir le terminer plus tard.
         </div>
       )}
       {savedStatus === 'pending' && (
-        <div className="rounded-xl border border-green-500/30 bg-green-500/10 p-3 text-center text-sm text-green-400">
+        <div className="rounded-sm border border-green-500/30 bg-green-500/10 p-3 text-center text-sm text-green-400">
           Tâche confirmée — elle s'exécutera automatiquement à l'heure prévue.
         </div>
       )}

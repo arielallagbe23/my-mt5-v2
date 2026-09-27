@@ -226,8 +226,8 @@ export function SetOrderPage() {
         <button
           type="button"
           onClick={() => setOrderKind('market')}
-          className={`min-h-10 flex-1 rounded-xl text-sm font-semibold transition-colors ${
-            orderKind === 'market' ? 'bg-indigo-600 text-white' : 'bg-indigo-500/15 text-indigo-300'
+          className={`min-h-10 flex-1 rounded-sm text-sm font-semibold transition-colors ${
+            orderKind === 'market' ? 'bg-amber-600 text-white' : 'bg-amber-500/15 text-amber-300'
           }`}
         >
           Marché
@@ -235,15 +235,15 @@ export function SetOrderPage() {
         <button
           type="button"
           onClick={() => setOrderKind('pending')}
-          className={`min-h-10 flex-1 rounded-xl text-sm font-semibold transition-colors ${
-            orderKind === 'pending' ? 'bg-indigo-600 text-white' : 'bg-indigo-500/15 text-indigo-300'
+          className={`min-h-10 flex-1 rounded-sm text-sm font-semibold transition-colors ${
+            orderKind === 'pending' ? 'bg-amber-600 text-white' : 'bg-amber-500/15 text-amber-300'
           }`}
         >
           {side === 'buy' ? 'Buy Limit' : 'Sell Limit'}
         </button>
       </div>
 
-      <div className="flex flex-col gap-3 rounded-2xl border border-white/10 bg-white/5 p-3">
+      <div className="flex flex-col gap-3 rounded-sm border border-white/10 bg-white/5 p-3">
         {orderKind === 'pending' ? (
           <label className="flex flex-col gap-1.5 text-xs text-slate-400">
             <div>Prix d'entrée (PE)</div>
@@ -277,8 +277,8 @@ export function SetOrderPage() {
             <button
               type="button"
               onClick={() => setRiskUnit('percent')}
-              className={`min-h-8 flex-1 rounded-xl text-xs font-semibold transition-colors ${
-                riskUnit === 'percent' ? 'bg-indigo-600 text-white' : 'bg-white/5 text-slate-400'
+              className={`min-h-8 flex-1 rounded-sm text-xs font-semibold transition-colors ${
+                riskUnit === 'percent' ? 'bg-amber-600 text-white' : 'bg-white/5 text-slate-400'
               }`}
             >
               % du capital
@@ -286,8 +286,8 @@ export function SetOrderPage() {
             <button
               type="button"
               onClick={() => setRiskUnit('amount')}
-              className={`min-h-8 flex-1 rounded-xl text-xs font-semibold transition-colors ${
-                riskUnit === 'amount' ? 'bg-indigo-600 text-white' : 'bg-white/5 text-slate-400'
+              className={`min-h-8 flex-1 rounded-sm text-xs font-semibold transition-colors ${
+                riskUnit === 'amount' ? 'bg-amber-600 text-white' : 'bg-white/5 text-slate-400'
               }`}
             >
               Montant fixe ($)
@@ -316,8 +316,8 @@ export function SetOrderPage() {
                       setRisk(preset)
                       setCustomRisk(false)
                     }}
-                    className={`min-h-9 flex-1 rounded-xl text-sm font-semibold transition-colors ${
-                      !customRisk && risk === preset ? 'bg-indigo-600 text-white' : 'bg-indigo-500/15 text-indigo-300'
+                    className={`min-h-9 flex-1 rounded-sm text-sm font-semibold transition-colors ${
+                      !customRisk && risk === preset ? 'bg-amber-600 text-white' : 'bg-amber-500/15 text-amber-300'
                     }`}
                   >
                     {preset}%
@@ -326,8 +326,8 @@ export function SetOrderPage() {
                 <button
                   type="button"
                   onClick={() => setCustomRisk(true)}
-                  className={`min-h-9 flex-1 rounded-xl text-sm font-semibold transition-colors ${
-                    customRisk ? 'bg-indigo-600 text-white' : 'bg-indigo-500/15 text-indigo-300'
+                  className={`min-h-9 flex-1 rounded-sm text-sm font-semibold transition-colors ${
+                    customRisk ? 'bg-amber-600 text-white' : 'bg-amber-500/15 text-amber-300'
                   }`}
                 >
                   Autre
@@ -368,8 +368,8 @@ export function SetOrderPage() {
             <button
               type="button"
               onClick={() => setMode('now')}
-              className={`min-h-8 flex-1 rounded-xl text-xs font-semibold transition-colors ${
-                mode === 'now' ? 'bg-indigo-600 text-white' : 'bg-white/5 text-slate-400'
+              className={`min-h-8 flex-1 rounded-sm text-xs font-semibold transition-colors ${
+                mode === 'now' ? 'bg-amber-600 text-white' : 'bg-white/5 text-slate-400'
               }`}
             >
               Maintenant
@@ -377,8 +377,8 @@ export function SetOrderPage() {
             <button
               type="button"
               onClick={() => setMode('scheduled')}
-              className={`min-h-8 flex-1 rounded-xl text-xs font-semibold transition-colors ${
-                mode === 'scheduled' ? 'bg-indigo-600 text-white' : 'bg-white/5 text-slate-400'
+              className={`min-h-8 flex-1 rounded-sm text-xs font-semibold transition-colors ${
+                mode === 'scheduled' ? 'bg-amber-600 text-white' : 'bg-white/5 text-slate-400'
               }`}
             >
               Programmé
@@ -405,15 +405,15 @@ export function SetOrderPage() {
         <button
           type="button"
           onClick={handleReviewClick}
-          className="min-h-10 rounded-xl bg-indigo-600 text-sm font-semibold text-white"
+          className="min-h-10 rounded-sm bg-amber-600 text-sm font-semibold text-white"
         >
           {mode === 'scheduled' ? 'Programmer' : 'Envoyer'}
         </button>
       </div>
 
       {confirming && (
-        <div className="flex flex-col gap-2 rounded-2xl border border-indigo-500/30 bg-indigo-500/10 p-3">
-          <p className="text-xs font-bold tracking-[0.14em] text-indigo-300 uppercase">
+        <div className="flex flex-col gap-2 rounded-sm border border-amber-500/30 bg-amber-500/10 p-3">
+          <p className="text-xs font-bold tracking-[0.14em] text-amber-300 uppercase">
             {mode === 'scheduled' ? "Confirme la programmation" : "Confirme l'envoi"}
           </p>
           <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-slate-300">
@@ -455,7 +455,7 @@ export function SetOrderPage() {
               type="button"
               onClick={() => setConfirming(false)}
               disabled={sending}
-              className="min-h-10 flex-1 rounded-xl border border-white/10 bg-white/5 text-sm font-semibold text-slate-300 disabled:opacity-60"
+              className="min-h-10 flex-1 rounded-sm border border-white/10 bg-white/5 text-sm font-semibold text-slate-300 disabled:opacity-60"
             >
               Annuler
             </button>
@@ -463,7 +463,7 @@ export function SetOrderPage() {
               type="button"
               onClick={handleConfirmSend}
               disabled={sending}
-              className="min-h-10 flex-1 rounded-xl bg-indigo-600 text-sm font-semibold text-white disabled:opacity-60"
+              className="min-h-10 flex-1 rounded-sm bg-amber-600 text-sm font-semibold text-white disabled:opacity-60"
             >
               {sending ? '...' : mode === 'scheduled' ? 'Confirmer la programmation' : "Confirmer l'envoi"}
             </button>
@@ -473,8 +473,8 @@ export function SetOrderPage() {
 
       {sendResult && (
         <div
-          className={`rounded-2xl border p-3 text-sm ${
-            sendResult.success ? 'border-blue-500/30 bg-blue-500/10 text-blue-400' : 'border-red-500/30 bg-red-500/10 text-red-400'
+          className={`rounded-sm border p-3 text-sm ${
+            sendResult.success ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-400' : 'border-red-500/30 bg-red-500/10 text-red-400'
           }`}
         >
           {sendResult.success
@@ -486,7 +486,7 @@ export function SetOrderPage() {
       )}
 
       {scheduleSuccess && (
-        <div className="rounded-2xl border border-green-500/30 bg-green-500/10 p-3 text-sm text-green-400">
+        <div className="rounded-sm border border-green-500/30 bg-green-500/10 p-3 text-sm text-green-400">
           Ordre programmé pour {formatExecutionTime(executionTime)} — il s'exécutera automatiquement, avec réessai en
           cas d'échec temporaire.
         </div>
@@ -498,7 +498,7 @@ export function SetOrderPage() {
           {scheduledOrders.map((order) => (
             <div
               key={order.id}
-              className="flex items-center justify-between gap-3 rounded-2xl border border-white/10 bg-white/5 p-3 text-sm"
+              className="flex items-center justify-between gap-3 rounded-sm border border-white/10 bg-white/5 p-3 text-sm"
             >
               <div>
                 <p className="font-semibold text-white">
@@ -514,7 +514,7 @@ export function SetOrderPage() {
                 type="button"
                 onClick={() => handleCancelScheduled(order.id)}
                 disabled={cancellingId === order.id}
-                className="min-h-8 rounded-xl border border-red-500/30 bg-red-500/10 px-3 text-xs font-semibold text-red-400 disabled:opacity-60"
+                className="min-h-8 rounded-sm border border-red-500/30 bg-red-500/10 px-3 text-xs font-semibold text-red-400 disabled:opacity-60"
               >
                 {cancellingId === order.id ? '...' : 'Annuler'}
               </button>

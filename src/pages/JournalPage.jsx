@@ -153,7 +153,7 @@ export function JournalPage() {
       />
 
       {error && <p className="text-sm text-red-400">{error}</p>}
-      {importResult && <p className="text-sm text-blue-400">{importResult}</p>}
+      {importResult && <p className="text-sm text-emerald-400">{importResult}</p>}
       {loading && <p className="text-sm text-slate-400">Chargement...</p>}
       {!loading && trades && trades.length === 0 && (
         <p className="text-sm text-slate-400">

@@ -10,7 +10,7 @@ import {
 
 function BreakdownCard({ title, rows }) {
   return (
-    <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+    <div className="rounded-sm border border-white/10 bg-white/5 p-4">
       <p className="mb-3 text-xs font-bold tracking-[0.14em] text-slate-400 uppercase">{title}</p>
       {rows.every((row) => row.count === 0) ? (
         <p className="text-sm text-slate-500">Pas encore de donnée.</p>
@@ -38,7 +38,7 @@ function BreakdownCard({ title, rows }) {
 function CorrelationSentence({ children }) {
   return (
     <li className="flex gap-2.5 text-sm text-slate-200">
-      <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-indigo-400" />
+      <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-amber-400" />
       <span>{children}</span>
     </li>
   )
@@ -50,7 +50,7 @@ function CorrelationsCard({ mistakes }) {
   const hasInsights = planBroken.length > 0 || fearExits.length > 0
 
   return (
-    <div className="rounded-2xl border border-indigo-500/20 bg-indigo-500/5 p-4">
+    <div className="rounded-sm border border-amber-500/20 bg-amber-500/5 p-4">
       <p className="mb-3 text-xs font-bold tracking-[0.14em] text-slate-400 uppercase">Corrélations à surveiller</p>
       {!hasInsights ? (
         <p className="text-sm text-slate-500">Pas encore assez de cas répétés pour dégager une tendance fiable.</p>
@@ -81,7 +81,7 @@ function WeeklyTrendCard({ mistakes }) {
   const allZero = weekly.every((w) => w.count === 0)
 
   return (
-    <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+    <div className="rounded-sm border border-white/10 bg-white/5 p-4">
       <p className="text-xs font-bold tracking-[0.14em] text-slate-400 uppercase">Évolution dans le temps</p>
       <p className="mt-1 mb-3 text-xs text-slate-500">
         Trades « plan non respecté » par semaine, 8 dernières semaines
@@ -111,7 +111,7 @@ function WeeklyTrendCard({ mistakes }) {
 export function MistakesStats({ mistakes }) {
   if (mistakes.length < MIN_ENTRIES_FOR_STATS) {
     return (
-      <div className="rounded-2xl border border-white/10 bg-white/5 p-6 text-center">
+      <div className="rounded-sm border border-white/10 bg-white/5 p-6 text-center">
         <p className="text-sm text-slate-400">
           Continue à remplir ton journal pour débloquer les statistiques ({mistakes.length}/{MIN_ENTRIES_FOR_STATS}{' '}
           entrées).

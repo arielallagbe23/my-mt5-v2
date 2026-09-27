@@ -119,7 +119,7 @@ const SENTIMENT_STYLES = {
 };
 
 const TREND_STYLES = {
-  haussière: "bg-blue-500/15 text-blue-300",
+  haussière: "bg-emerald-500/15 text-emerald-300",
   baissière: "bg-red-500/15 text-red-300",
   range: "bg-slate-500/15 text-slate-300",
 };
@@ -131,14 +131,14 @@ const CONFIRMATION_STYLES = {
 };
 
 const SETUP_STYLES = {
-  achat: "bg-blue-500/15 text-blue-300",
+  achat: "bg-emerald-500/15 text-emerald-300",
   vente: "bg-red-500/15 text-red-300",
   aucun: "bg-slate-500/15 text-slate-300",
 };
 
 const CORRELATION_STYLES = {
-  "forte positive": "bg-blue-500/15 text-blue-300",
-  positive: "bg-blue-500/15 text-blue-300",
+  "forte positive": "bg-emerald-500/15 text-emerald-300",
+  positive: "bg-emerald-500/15 text-emerald-300",
   faible: "bg-slate-500/15 text-slate-300",
   négative: "bg-red-500/15 text-red-300",
   "forte négative": "bg-red-500/15 text-red-300",
@@ -404,7 +404,7 @@ export function HomePage() {
           type="button"
           onClick={load}
           disabled={loading}
-          className="min-h-9 shrink-0 rounded-full bg-indigo-500/15 px-4 text-sm font-semibold text-indigo-300 disabled:opacity-60"
+          className="min-h-9 shrink-0 rounded-full bg-amber-500/15 px-4 text-sm font-semibold text-amber-300 disabled:opacity-60"
         >
           {loading ? "Actualisation..." : "Actualiser"}
         </button>
@@ -414,14 +414,14 @@ export function HomePage() {
 
       <div className="flex flex-col gap-3 lg:grid lg:grid-cols-12 lg:gap-2">
         {reports.length > 0 && (
-          <section className="mt-5 lg:mt-0 flex flex-col gap-2 rounded-2xl border border-white/10 bg-white/5 p-4 lg:col-span-12">
+          <section className="mt-5 lg:mt-0 flex flex-col gap-2 rounded-sm border border-white/10 bg-white/5 p-4 lg:col-span-12">
             <p className="text-xs font-bold tracking-[0.14em] text-slate-500 uppercase">
               Tâches non exécutées ({reports.length})
             </p>
             {reports.map((r) => (
               <div
                 key={r.id}
-                className="rounded-2xl border border-white/10 bg-white/5 p-3"
+                className="rounded-sm border border-white/10 bg-white/5 p-3"
               >
                 <div className="flex items-start justify-between gap-2">
                   <div>
@@ -447,7 +447,7 @@ export function HomePage() {
           </section>
         )}
 
-        <section className="mt-5 lg:mt-0 flex flex-col gap-2 rounded-2xl border border-white/10 bg-white/5 p-4 lg:col-span-4">
+        <section className="mt-5 lg:mt-0 flex flex-col gap-2 rounded-sm border border-white/10 bg-white/5 p-4 lg:col-span-4">
           <p className="text-xs font-bold tracking-[0.14em] text-slate-500 uppercase">
             Tâches à venir{" "}
             {upcomingTasks.length > 0 && `(${upcomingTasks.length})`}
@@ -458,7 +458,7 @@ export function HomePage() {
           {upcomingTasks.map((t) => (
             <div
               key={t.id}
-              className="rounded-2xl border border-white/10 bg-white/5 p-3"
+              className="rounded-sm border border-white/10 bg-white/5 p-3"
             >
               <div className="flex items-center justify-between gap-2">
                 <span
@@ -466,7 +466,7 @@ export function HomePage() {
                     t.scenario === "sell"
                       ? "bg-red-500/15 text-red-300"
                       : t.scenario === "buy"
-                        ? "bg-blue-500/15 text-blue-300"
+                        ? "bg-emerald-500/15 text-emerald-300"
                         : "bg-white/10 text-slate-300"
                   }`}
                 >
@@ -481,7 +481,7 @@ export function HomePage() {
                 </span>
               </div>
               <div className="mt-2 grid grid-cols-3 gap-2">
-                <div className="flex flex-col items-center gap-0.5 rounded-xl bg-white/5 p-2 text-center">
+                <div className="flex flex-col items-center gap-0.5 rounded-sm bg-white/5 p-2 text-center">
                   <span className="text-[10px] font-semibold tracking-wide text-slate-500 uppercase">
                     Timeframe
                   </span>
@@ -489,7 +489,7 @@ export function HomePage() {
                     {t.timeframe ?? "—"}
                   </span>
                 </div>
-                <div className="flex flex-col items-center gap-0.5 rounded-xl bg-white/5 p-2 text-center">
+                <div className="flex flex-col items-center gap-0.5 rounded-sm bg-white/5 p-2 text-center">
                   <span className="text-[10px] font-semibold tracking-wide text-slate-500 uppercase">
                     Risque
                   </span>
@@ -497,7 +497,7 @@ export function HomePage() {
                     {t.risk != null ? `${t.risk}%` : "—"}
                   </span>
                 </div>
-                <div className="flex flex-col items-center gap-0.5 rounded-xl bg-white/5 p-2 text-center">
+                <div className="flex flex-col items-center gap-0.5 rounded-sm bg-white/5 p-2 text-center">
                   <span className="text-[10px] font-semibold tracking-wide text-slate-500 uppercase">
                     Statut
                   </span>
@@ -510,7 +510,7 @@ export function HomePage() {
           ))}
         </section>
 
-        <section className="mt-5 lg:mt-0 flex flex-col gap-2 rounded-2xl border border-white/10 bg-white/5 p-4 lg:col-span-4">
+        <section className="mt-5 lg:mt-0 flex flex-col gap-2 rounded-sm border border-white/10 bg-white/5 p-4 lg:col-span-4">
           <p className="text-xs font-bold tracking-[0.14em] text-slate-500 uppercase">
             Positions ouvertes
           </p>
@@ -526,14 +526,14 @@ export function HomePage() {
             return (
               <div
                 key={p.ticket}
-                className="rounded-2xl border border-white/10 bg-white/5 p-3"
+                className="rounded-sm border border-white/10 bg-white/5 p-3"
               >
                 <div className="flex items-center justify-between gap-2">
                   <span
                     className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
                       p.type === "Sell"
                         ? "bg-red-500/15 text-red-300"
-                        : "bg-blue-500/15 text-blue-300"
+                        : "bg-emerald-500/15 text-emerald-300"
                     }`}
                   >
                     {p.type}
@@ -541,7 +541,7 @@ export function HomePage() {
                   <span
                     className={`text-sm font-semibold ${
                       typeof p.profit === "number" && p.profit >= 0
-                        ? "text-blue-400"
+                        ? "text-emerald-400"
                         : "text-red-400"
                     }`}
                   >
@@ -549,7 +549,7 @@ export function HomePage() {
                   </span>
                 </div>
                 <div className="mt-2 grid grid-cols-3 gap-2">
-                  <div className="flex flex-col items-center gap-0.5 rounded-xl bg-white/5 p-2 text-center">
+                  <div className="flex flex-col items-center gap-0.5 rounded-sm bg-white/5 p-2 text-center">
                     <span className="text-[10px] font-semibold tracking-wide text-slate-500 uppercase">
                       Entrée
                     </span>
@@ -557,7 +557,7 @@ export function HomePage() {
                       {formatPrice(p.priceOpen)}
                     </span>
                   </div>
-                  <div className="flex flex-col items-center gap-0.5 rounded-xl bg-white/5 p-2 text-center">
+                  <div className="flex flex-col items-center gap-0.5 rounded-sm bg-white/5 p-2 text-center">
                     <span className="text-[10px] font-semibold tracking-wide text-slate-500 uppercase">
                       Actuel
                     </span>
@@ -565,7 +565,7 @@ export function HomePage() {
                       {formatPrice(p.priceCurrent)}
                     </span>
                   </div>
-                  <div className="flex flex-col items-center gap-0.5 rounded-xl bg-white/5 p-2 text-center">
+                  <div className="flex flex-col items-center gap-0.5 rounded-sm bg-white/5 p-2 text-center">
                     <span className="text-[10px] font-semibold tracking-wide text-slate-500 uppercase">
                       Volume
                     </span>
@@ -575,7 +575,7 @@ export function HomePage() {
                   </div>
                 </div>
                 {slStage && (
-                  <p className="mt-2 text-xs font-semibold text-indigo-300">
+                  <p className="mt-2 text-xs font-semibold text-amber-300">
                     Actuellement {slStage}
                   </p>
                 )}
@@ -597,7 +597,7 @@ export function HomePage() {
                                 key={`${h.ts}-${i}`}
                                 className={
                                   isSlMove
-                                    ? `text-indigo-300${isLast ? " font-semibold" : ""}`
+                                    ? `text-amber-300${isLast ? " font-semibold" : ""}`
                                     : "text-slate-400"
                                 }
                               >
@@ -631,7 +631,7 @@ export function HomePage() {
                         type="button"
                         onClick={() => activateMonitoring(p.ticket)}
                         disabled={activatingTicket === p.ticket}
-                        className="min-h-8 shrink-0 rounded-full bg-indigo-500/15 px-3 text-xs font-semibold text-indigo-300 disabled:opacity-60"
+                        className="min-h-8 shrink-0 rounded-full bg-amber-500/15 px-3 text-xs font-semibold text-amber-300 disabled:opacity-60"
                       >
                         {activatingTicket === p.ticket
                           ? "Activation..."
@@ -641,7 +641,7 @@ export function HomePage() {
                   )}
 
                   {confirmCloseTicket === p.ticket ? (
-                    <div className="flex flex-col gap-2 rounded-xl border border-red-500/30 bg-red-500/10 p-2.5">
+                    <div className="flex flex-col gap-2 rounded-sm border border-red-500/30 bg-red-500/10 p-2.5">
                       <p className="text-xs text-red-300">
                         Fermer cette position au prix du marché maintenant ?
                         Irréversible.
@@ -688,7 +688,7 @@ export function HomePage() {
           })}
         </section>
 
-        <section className="mt-5 lg:mt-0 flex flex-col gap-2 rounded-2xl border border-white/10 bg-white/5 p-4 lg:col-span-4">
+        <section className="mt-5 lg:mt-0 flex flex-col gap-2 rounded-sm border border-white/10 bg-white/5 p-4 lg:col-span-4">
           <p className="text-xs font-bold tracking-[0.14em] text-slate-500 uppercase">
             Ordres différés
           </p>
@@ -701,14 +701,14 @@ export function HomePage() {
           {orders.map((o) => (
             <div
               key={o.ticket}
-              className="rounded-2xl border border-white/10 bg-white/5 p-3"
+              className="rounded-sm border border-white/10 bg-white/5 p-3"
             >
               <div className="flex items-center justify-between gap-2">
                 <span
                   className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
                     o.type?.includes("Sell")
                       ? "bg-red-500/15 text-red-300"
-                      : "bg-blue-500/15 text-blue-300"
+                      : "bg-emerald-500/15 text-emerald-300"
                   }`}
                 >
                   {o.type}
@@ -716,7 +716,7 @@ export function HomePage() {
                 <span className="text-xs text-slate-400">{o.symbol}</span>
               </div>
               <div className="mt-2 grid grid-cols-3 gap-2">
-                <div className="flex flex-col items-center gap-0.5 rounded-xl bg-white/5 p-2 text-center">
+                <div className="flex flex-col items-center gap-0.5 rounded-sm bg-white/5 p-2 text-center">
                   <span className="text-[10px] font-semibold tracking-wide text-slate-500 uppercase">
                     Prix
                   </span>
@@ -724,7 +724,7 @@ export function HomePage() {
                     {formatPrice(o.price)}
                   </span>
                 </div>
-                <div className="flex flex-col items-center gap-0.5 rounded-xl bg-white/5 p-2 text-center">
+                <div className="flex flex-col items-center gap-0.5 rounded-sm bg-white/5 p-2 text-center">
                   <span className="text-[10px] font-semibold tracking-wide text-slate-500 uppercase">
                     SL
                   </span>
@@ -732,7 +732,7 @@ export function HomePage() {
                     {formatPrice(o.sl)}
                   </span>
                 </div>
-                <div className="flex flex-col items-center gap-0.5 rounded-xl bg-white/5 p-2 text-center">
+                <div className="flex flex-col items-center gap-0.5 rounded-sm bg-white/5 p-2 text-center">
                   <span className="text-[10px] font-semibold tracking-wide text-slate-500 uppercase">
                     TP
                   </span>
@@ -745,7 +745,7 @@ export function HomePage() {
           ))}
         </section>
 
-        <section className="mt-5 lg:mt-0 flex flex-col gap-2 rounded-2xl border border-white/10 bg-white/5 p-4 lg:col-span-12">
+        <section className="mt-5 lg:mt-0 flex flex-col gap-2 rounded-sm border border-white/10 bg-white/5 p-4 lg:col-span-12">
           <p className="text-xs font-bold tracking-[0.14em] text-slate-500 uppercase">
             Ordres programmés{" "}
             {scheduledOrders.length > 0 && `(${scheduledOrders.length})`}
@@ -756,14 +756,14 @@ export function HomePage() {
           {scheduledOrders.map((o) => (
             <div
               key={o.id}
-              className="rounded-2xl border border-white/10 bg-white/5 p-3"
+              className="rounded-sm border border-white/10 bg-white/5 p-3"
             >
               <div className="flex items-center justify-between gap-2">
                 <span
                   className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
                     o.side === "sell"
                       ? "bg-red-500/15 text-red-300"
-                      : "bg-blue-500/15 text-blue-300"
+                      : "bg-emerald-500/15 text-emerald-300"
                   }`}
                 >
                   {o.side === "sell" ? "Vendre" : "Acheter"} ·{" "}
@@ -774,7 +774,7 @@ export function HomePage() {
                 </span>
               </div>
               <div className="mt-2 grid grid-cols-3 gap-2">
-                <div className="flex flex-col items-center gap-0.5 rounded-xl bg-white/5 p-2 text-center">
+                <div className="flex flex-col items-center gap-0.5 rounded-sm bg-white/5 p-2 text-center">
                   <span className="text-[10px] font-semibold tracking-wide text-slate-500 uppercase">
                     SL
                   </span>
@@ -782,7 +782,7 @@ export function HomePage() {
                     {formatPrice(o.sl)}
                   </span>
                 </div>
-                <div className="flex flex-col items-center gap-0.5 rounded-xl bg-white/5 p-2 text-center">
+                <div className="flex flex-col items-center gap-0.5 rounded-sm bg-white/5 p-2 text-center">
                   <span className="text-[10px] font-semibold tracking-wide text-slate-500 uppercase">
                     TP
                   </span>
@@ -790,7 +790,7 @@ export function HomePage() {
                     {o.tp != null ? formatPrice(o.tp) : "—"}
                   </span>
                 </div>
-                <div className="flex flex-col items-center gap-0.5 rounded-xl bg-white/5 p-2 text-center">
+                <div className="flex flex-col items-center gap-0.5 rounded-sm bg-white/5 p-2 text-center">
                   <span className="text-[10px] font-semibold tracking-wide text-slate-500 uppercase">
                     Risque
                   </span>
@@ -813,7 +813,7 @@ export function HomePage() {
           ))}
         </section>
 
-        <section className="mt-5 lg:mt-0 flex flex-col gap-1 rounded-2xl border border-white/10 bg-white/5 p-4 lg:col-span-12 space-y-1">
+        <section className="mt-5 lg:mt-0 flex flex-col gap-1 rounded-sm border border-white/10 bg-white/5 p-4 lg:col-span-12 space-y-1">
           <div className="flex items-center justify-between gap-3">
             <p className="text-xs font-bold tracking-[0.14em] text-slate-500 uppercase">
               Market recap
@@ -831,7 +831,7 @@ export function HomePage() {
             <p className="text-xs text-red-400">{recapRefreshError}</p>
           )}
           <div className="flex flex-col gap-2 lg:flex-row">
-            <div className="w-full rounded-2xl border border-white/10 bg-white/5 p-4 lg:w-[calc(33.333%-0.333rem)] space-y-4">
+            <div className="w-full rounded-sm border border-white/10 bg-white/5 p-4 lg:w-[calc(33.333%-0.333rem)] space-y-4">
               <p className="text-sm font-semibold text-white">
                 Différentiel de taux Fed/BoJ
               </p>
@@ -843,7 +843,7 @@ export function HomePage() {
               {fedBoj && (
                 <>
                   <div className="grid grid-cols-2 gap-2">
-                    <div className="rounded-xl border border-white/10 bg-white/5 p-2.5">
+                    <div className="rounded-sm border border-white/10 bg-white/5 p-2.5">
                       <p className="text-xs text-slate-400">Taux Fed</p>
                       <p className="text-sm font-semibold text-white">
                         {fedBoj.fed_funds_rate?.valeur != null
@@ -854,7 +854,7 @@ export function HomePage() {
                         {fedBoj.fed_funds_rate?.date ?? "—"}
                       </p>
                     </div>
-                    <div className="rounded-xl border border-white/10 bg-white/5 p-2.5">
+                    <div className="rounded-sm border border-white/10 bg-white/5 p-2.5">
                       <p className="text-xs text-slate-400">
                         Rendement 10 ans US
                       </p>
@@ -887,7 +887,7 @@ export function HomePage() {
                 </>
               )}
             </div>
-            <div className="w-full rounded-2xl border border-white/10 bg-white/5 p-4 lg:w-[calc(33.333%-0.333rem)]">
+            <div className="w-full rounded-sm border border-white/10 bg-white/5 p-4 lg:w-[calc(33.333%-0.333rem)]">
               <div className="flex items-center justify-between gap-2 space-y-4">
                 <p className="text-sm font-semibold text-white">
                   Risque d'intervention BoJ/MoF
@@ -911,7 +911,7 @@ export function HomePage() {
               {interventionRisk && (
                 <>
                   <div className="grid grid-cols-2 gap-2">
-                    <div className="rounded-xl border border-white/10 bg-white/5 p-2.5">
+                    <div className="rounded-sm border border-white/10 bg-white/5 p-2.5">
                       <p className="text-xs text-slate-400">Prix actuel</p>
                       <p className="text-sm font-semibold text-white">
                         {formatPrice(interventionRisk.prix_actuel)}
@@ -921,7 +921,7 @@ export function HomePage() {
                         {formatPrice(interventionRisk.seuil_vigilance)}
                       </p>
                     </div>
-                    <div className="rounded-xl border border-white/10 bg-white/5 p-2.5">
+                    <div className="rounded-sm border border-white/10 bg-white/5 p-2.5">
                       <p className="text-xs text-slate-400">
                         Variation 5 jours
                       </p>
@@ -960,7 +960,7 @@ export function HomePage() {
                 </>
               )}
             </div>
-            <div className="w-full rounded-2xl border border-white/10 bg-white/5 p-4 lg:w-[calc(33.333%-0.333rem)] space-y-4">
+            <div className="w-full rounded-sm border border-white/10 bg-white/5 p-4 lg:w-[calc(33.333%-0.333rem)] space-y-4">
               <p className="text-sm font-semibold text-white">
                 Calendrier économique
               </p>
@@ -980,7 +980,7 @@ export function HomePage() {
                             <div
                               key={index}
                               className={`grid grid-cols-[auto_auto_auto_1fr] items-center gap-2 rounded-lg px-2 py-1 text-xs ${
-                                today ? "bg-indigo-500/10" : ""
+                                today ? "bg-amber-500/10" : ""
                               }`}
                             >
                               <span
@@ -1024,7 +1024,7 @@ export function HomePage() {
           </div>
 
           <div className="flex flex-col gap-2 lg:flex-row">
-            <div className="w-full rounded-2xl border border-white/10 bg-white/5 p-4 lg:w-[calc(28.571%-0.375rem)] space-y-4">
+            <div className="w-full rounded-sm border border-white/10 bg-white/5 p-4 lg:w-[calc(28.571%-0.375rem)] space-y-4">
               <div className="flex items-center justify-between gap-2">
                 <p className="text-sm font-semibold text-white">
                   Sentiment risk-on/risk-off
@@ -1048,13 +1048,13 @@ export function HomePage() {
               {riskSentiment && (
                 <>
                   <div className="grid grid-cols-2 gap-2">
-                    <div className="rounded-xl border border-white/10 bg-white/5 p-2.5">
+                    <div className="rounded-sm border border-white/10 bg-white/5 p-2.5">
                       <p className="text-xs text-slate-400">VIX</p>
                       <p className="text-sm font-semibold text-white">
                         {riskSentiment.vix}
                       </p>
                     </div>
-                    <div className="rounded-xl border border-white/10 bg-white/5 p-2.5">
+                    <div className="rounded-sm border border-white/10 bg-white/5 p-2.5">
                       <p className="text-xs text-slate-400">S&amp;P 500 (5j)</p>
                       <p className="text-sm font-semibold text-white">
                         {riskSentiment.sp500_variation_5j_pct >= 0 ? "+" : ""}
@@ -1069,7 +1069,7 @@ export function HomePage() {
               )}
             </div>
 
-            <div className="w-full rounded-2xl border border-white/10 bg-white/5 p-4 lg:w-[calc(28.571%-0.375rem)] space-y-4">
+            <div className="w-full rounded-sm border border-white/10 bg-white/5 p-4 lg:w-[calc(28.571%-0.375rem)] space-y-4">
               <div className="flex items-center justify-between gap-2">
                 <p className="text-sm font-semibold text-white">Structure D1</p>
                 {structureD1 && (
@@ -1090,26 +1090,26 @@ export function HomePage() {
               {structureD1 && (
                 <>
                   <div className="grid grid-cols-2 gap-2">
-                    <div className="rounded-xl border border-white/10 bg-white/5 p-2.5">
+                    <div className="rounded-sm border border-white/10 bg-white/5 p-2.5">
                       <p className="text-xs text-slate-400">Support (30j)</p>
                       <p className="text-sm font-semibold text-white">
                         {formatPrice(structureD1.support)}
                       </p>
                     </div>
-                    <div className="rounded-xl border border-white/10 bg-white/5 p-2.5">
+                    <div className="rounded-sm border border-white/10 bg-white/5 p-2.5">
                       <p className="text-xs text-slate-400">Résistance (30j)</p>
                       <p className="text-sm font-semibold text-white">
                         {formatPrice(structureD1.resistance)}
                       </p>
                     </div>
-                    <div className="rounded-xl border border-white/10 bg-white/5 p-2.5">
+                    <div className="rounded-sm border border-white/10 bg-white/5 p-2.5">
                       <p className="text-xs text-slate-400">MM20 / MM50</p>
                       <p className="text-sm font-semibold text-white">
                         {formatPrice(structureD1.sma20)} /{" "}
                         {formatPrice(structureD1.sma50)}
                       </p>
                     </div>
-                    <div className="rounded-xl border border-white/10 bg-white/5 p-2.5">
+                    <div className="rounded-sm border border-white/10 bg-white/5 p-2.5">
                       <p className="text-xs text-slate-400">Dernière bougie</p>
                       <p className="text-sm font-semibold text-white capitalize">
                         {structureD1.biais_derniere_bougie}
@@ -1123,7 +1123,7 @@ export function HomePage() {
               )}
             </div>
 
-            <div className="w-full rounded-2xl border border-white/10 bg-white/5 p-4 lg:w-[calc(28.571%-0.375rem)] space-y-4">
+            <div className="w-full rounded-sm border border-white/10 bg-white/5 p-4 lg:w-[calc(28.571%-0.375rem)] space-y-4">
               <div className="flex items-center justify-between gap-2">
                 <p className="text-sm font-semibold text-white">H4 vs D1</p>
                 {confirmationH4 && (
@@ -1145,13 +1145,13 @@ export function HomePage() {
               {confirmationH4 && (
                 <>
                   <div className="grid grid-cols-2 gap-2">
-                    <div className="rounded-xl border border-white/10 bg-white/5 p-2.5">
+                    <div className="rounded-sm border border-white/10 bg-white/5 p-2.5">
                       <p className="text-xs text-slate-400">Tendance D1</p>
                       <p className="text-sm font-semibold text-white capitalize">
                         {confirmationH4.tendance_d1}
                       </p>
                     </div>
-                    <div className="rounded-xl border border-white/10 bg-white/5 p-2.5">
+                    <div className="rounded-sm border border-white/10 bg-white/5 p-2.5">
                       <p className="text-xs text-slate-400">Tendance H4</p>
                       <p className="text-sm font-semibold text-white capitalize">
                         {confirmationH4.tendance_h4}
@@ -1165,13 +1165,13 @@ export function HomePage() {
               )}
             </div>
 
-            <div className="w-full rounded-2xl border border-white/10 bg-white/5 p-4 lg:w-[calc(14.286%-0.375rem)]">
+            <div className="w-full rounded-sm border border-white/10 bg-white/5 p-4 lg:w-[calc(14.286%-0.375rem)]">
               <div className="flex flex-col items-start gap-1.5">
                 <p className="text-sm font-semibold text-white">
                   Session active
                 </p>
                 {activeSessions.length > 1 && (
-                  <span className="rounded-full bg-blue-500/15 px-2 py-0.5 text-xs font-semibold text-blue-300">
+                  <span className="rounded-full bg-emerald-500/15 px-2 py-0.5 text-xs font-semibold text-emerald-300">
                     Chevauchement
                   </span>
                 )}
@@ -1185,7 +1185,7 @@ export function HomePage() {
                   {activeSessions.map((session) => (
                     <span
                       key={session}
-                      className="rounded-full bg-indigo-500/15 px-2 py-0.5 text-xs font-semibold text-indigo-300"
+                      className="rounded-full bg-amber-500/15 px-2 py-0.5 text-xs font-semibold text-amber-300"
                     >
                       {session}
                     </span>
@@ -1204,7 +1204,7 @@ export function HomePage() {
           </div>
 
           <div className="flex flex-col gap-2 lg:flex-row">
-            <div className="w-full rounded-2xl border border-white/10 bg-white/5 p-4 lg:w-[calc(25%-0.333rem)]">
+            <div className="w-full rounded-sm border border-white/10 bg-white/5 p-4 lg:w-[calc(25%-0.333rem)]">
               <div className="flex items-center justify-between gap-2 space-y-2">
                 <p className="text-sm font-semibold text-white">
                   Setup d'entrée H1
@@ -1227,25 +1227,25 @@ export function HomePage() {
               {setupH1 && (
                 <>
                   <div className="grid grid-cols-2 gap-2">
-                    <div className="rounded-xl border border-white/10 bg-white/5 p-2.5">
+                    <div className="rounded-sm border border-white/10 bg-white/5 p-2.5">
                       <p className="text-xs text-slate-400">Tendance H1</p>
                       <p className="text-sm font-semibold text-white capitalize">
                         {setupH1.tendance_h1}
                       </p>
                     </div>
-                    <div className="rounded-xl border border-white/10 bg-white/5 p-2.5">
+                    <div className="rounded-sm border border-white/10 bg-white/5 p-2.5">
                       <p className="text-xs text-slate-400">RSI H1</p>
                       <p className="text-sm font-semibold text-white">
                         {setupH1.rsi_h1}
                       </p>
                     </div>
-                    <div className="rounded-xl border border-white/10 bg-white/5 p-2.5">
+                    <div className="rounded-sm border border-white/10 bg-white/5 p-2.5">
                       <p className="text-xs text-slate-400">MM20 H1</p>
                       <p className="text-sm font-semibold text-white">
                         {formatPrice(setupH1.mm20_h1)}
                       </p>
                     </div>
-                    <div className="rounded-xl border border-white/10 bg-white/5 p-2.5">
+                    <div className="rounded-sm border border-white/10 bg-white/5 p-2.5">
                       <p className="text-xs text-slate-400">Pullback MM20</p>
                       <p className="text-sm font-semibold text-white">
                         {setupH1.pullback_mm20 ? "Oui" : "Non"}
@@ -1259,18 +1259,18 @@ export function HomePage() {
               )}
             </div>
 
-            <div className="w-full rounded-2xl border border-white/10 bg-white/5 p-4 lg:w-[calc(25%-0.333rem)] space-y-2">
+            <div className="w-full rounded-sm border border-white/10 bg-white/5 p-4 lg:w-[calc(25%-0.333rem)] space-y-2">
               <p className="text-sm font-semibold text-white">
                 Exposition &amp; corrélation
               </p>
               <div className="grid grid-cols-2 gap-2">
-                <div className="rounded-xl border border-white/10 bg-white/5 p-2.5">
+                <div className="rounded-sm border border-white/10 bg-white/5 p-2.5">
                   <p className="text-xs text-slate-400">Positions ouvertes</p>
                   <p className="text-sm font-semibold text-white">
                     {positions.length}
                   </p>
                 </div>
-                <div className="rounded-xl border border-white/10 bg-white/5 p-2.5">
+                <div className="rounded-sm border border-white/10 bg-white/5 p-2.5">
                   <p className="text-xs text-slate-400">Volume net</p>
                   <p className="text-sm font-semibold text-white">
                     {netVolume > 0 ? "+" : ""}
@@ -1278,15 +1278,15 @@ export function HomePage() {
                     {Math.abs(netVolume) > 1 ? "s" : ""}
                   </p>
                 </div>
-                <div className="rounded-xl border border-white/10 bg-white/5 p-2.5">
+                <div className="rounded-sm border border-white/10 bg-white/5 p-2.5">
                   <p className="text-xs text-slate-400">P&amp;L flottant</p>
                   <p
-                    className={`text-sm font-semibold ${totalFloatingPnl >= 0 ? "text-blue-400" : "text-red-400"}`}
+                    className={`text-sm font-semibold ${totalFloatingPnl >= 0 ? "text-emerald-400" : "text-red-400"}`}
                   >
                     {totalFloatingPnl.toFixed(2)}
                   </p>
                 </div>
-                <div className="rounded-xl border border-white/10 bg-white/5 p-2.5">
+                <div className="rounded-sm border border-white/10 bg-white/5 p-2.5">
                   <p className="text-xs text-slate-400">
                     Corrélation 10 ans US
                   </p>
@@ -1313,8 +1313,8 @@ export function HomePage() {
             </div>
 
             {bilanQuotidien && (
-              <div className="w-full rounded-2xl border border-white/10 bg-white/5 p-4 lg:w-[calc(50%-0.333rem)]">
-                <p className="mb-3 rounded-xl font-bold">Bilan</p>
+              <div className="w-full rounded-sm border border-white/10 bg-white/5 p-4 lg:w-[calc(50%-0.333rem)]">
+                <p className="mb-3 rounded-sm font-bold">Bilan</p>
                 <div className="flex flex-col gap-3">
                   {synthesisParagraphs(bilanQuotidien.synthese).map(
                     (paragraph, index) => (

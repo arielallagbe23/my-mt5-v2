@@ -13,13 +13,13 @@ export function MonthlyBars({ monthly }) {
   const maxAbs = Math.max(...monthly.map(([, v]) => Math.abs(v)), 1)
 
   return (
-    <div className="h-full overflow-x-auto">
+    <div className="h-40 overflow-x-auto lg:h-full">
       <div className="flex h-full items-end gap-2" style={{ width: monthly.length * (BAR_WIDTH + 8) }}>
         {monthly.map(([key, value]) => (
           <div key={key} className="flex h-full shrink-0 flex-col items-center gap-1" style={{ width: BAR_WIDTH }}>
             <div className="flex w-full flex-1 items-end">
               <div
-                className={`w-full rounded-t ${value >= 0 ? 'bg-blue-500' : 'bg-red-500'}`}
+                className={`w-full rounded-t ${value >= 0 ? 'bg-emerald-500' : 'bg-red-500'}`}
                 style={{ height: `${Math.max(2, (Math.abs(value) / maxAbs) * 100)}%` }}
               />
             </div>

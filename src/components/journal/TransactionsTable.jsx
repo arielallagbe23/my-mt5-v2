@@ -70,7 +70,7 @@ function TradeRecap({ ticket, reason, comment }) {
         history?.map((h, i) => {
           const isSlMove = h.message?.includes('SL est passé')
           return (
-            <p key={`${h.ts}-${i}`} className={isSlMove ? 'text-indigo-300' : 'text-slate-400'}>
+            <p key={`${h.ts}-${i}`} className={isSlMove ? 'text-amber-300' : 'text-slate-400'}>
               <span className="text-slate-500">{formatHistoryTime(h.ts)}</span> — {h.message}
             </p>
           )
@@ -84,7 +84,7 @@ export function TransactionsTable({ trades, pageTrades, page, totalPages, onPrev
   const [expandedTicket, setExpandedTicket] = useState(null)
 
   return (
-    <div className="rounded-2xl border border-white/10 bg-white/5 p-3">
+    <div className="rounded-sm border border-white/10 bg-white/5 p-3">
       <div className="mb-2 flex items-center justify-between">
         <p className="text-xs font-bold tracking-[0.14em] text-slate-400 uppercase">Transactions</p>
         <span className="text-xs text-slate-500">{trades.length} au total</span>
@@ -111,13 +111,13 @@ export function TransactionsTable({ trades, pageTrades, page, totalPages, onPrev
                   >
                     <td className="py-2 pr-1.5 whitespace-nowrap text-slate-400">{formatDate(t.closeTime)}</td>
                     <td
-                      className={`py-2 pr-1.5 whitespace-nowrap font-semibold ${t.type === 'Sell' ? 'text-red-400' : 'text-blue-400'}`}
+                      className={`py-2 pr-1.5 whitespace-nowrap font-semibold ${t.type === 'Sell' ? 'text-red-400' : 'text-emerald-400'}`}
                     >
                       {t.type === 'Sell' ? 'SELL' : 'BUY'}
                     </td>
                     <td className="py-2 pr-1.5 whitespace-nowrap text-slate-300">{formatVolume(t.volume)}</td>
                     <td className="py-2 pr-1.5 whitespace-nowrap text-slate-300">{formatPrice(t.priceClose)}</td>
-                    <td className={`py-2 whitespace-nowrap font-semibold ${t.net >= 0 ? 'text-blue-400' : 'text-red-400'}`}>
+                    <td className={`py-2 whitespace-nowrap font-semibold ${t.net >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
                       {money(t.net)}
                     </td>
                   </tr>

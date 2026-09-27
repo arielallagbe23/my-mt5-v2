@@ -37,7 +37,7 @@ function scenarioBadgeClass(scenario) {
   return scenario === 'sell'
     ? 'bg-red-500/15 text-red-300'
     : scenario === 'buy'
-      ? 'bg-blue-500/15 text-blue-300'
+      ? 'bg-emerald-500/15 text-emerald-300'
       : 'bg-white/10 text-slate-300'
 }
 
@@ -88,7 +88,9 @@ export function TasksListPage({ onEditTask }) {
   }
 
   const pendingTasks = tasks?.filter((t) => !EXECUTED_STATUSES.has(t.status)) ?? []
-  const historyTasks = tasks?.filter((t) => EXECUTED_STATUSES.has(t.status)) ?? []
+  const historyTasks = (tasks?.filter((t) => EXECUTED_STATUSES.has(t.status)) ?? [])
+    .slice()
+    .sort((a, b) => new Date(b.executionTime) - new Date(a.executionTime))
 
   const pageCount = Math.max(1, Math.ceil(historyTasks.length / HISTORY_PAGE_SIZE))
   const safePage = Math.min(historyPage, pageCount - 1)
@@ -107,7 +109,7 @@ export function TasksListPage({ onEditTask }) {
       {!loading && !error && pendingTasks.length > 0 && (
         <ul className="flex flex-col gap-2">
           {pendingTasks.map((task) => (
-            <li key={task.id} className="rounded-2xl border border-white/10 bg-white/5 p-3">
+            <li key={task.id} className="rounded-sm border border-white/10 bg-white/5 p-3">
               <div className="flex items-center justify-between gap-2">
                 <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${scenarioBadgeClass(task.scenario)}`}>
                   {scenarioLabel(task.scenario)}
@@ -138,7 +140,7 @@ export function TasksListPage({ onEditTask }) {
                 <button
                   type="button"
                   onClick={() => onEditTask?.(task.id)}
-                  className="min-h-9 flex-1 rounded-xl bg-indigo-500/15 text-sm font-semibold text-indigo-300"
+                  className="min-h-9 flex-1 rounded-sm bg-amber-500/15 text-sm font-semibold text-amber-300"
                 >
                   {task.status === 'draft' ? 'Continuer' : 'Modifier'}
                 </button>
@@ -146,7 +148,7 @@ export function TasksListPage({ onEditTask }) {
                   type="button"
                   onClick={() => handleDelete(task)}
                   disabled={deletingId === task.id}
-                  className="min-h-9 flex-1 rounded-xl bg-red-500/15 text-sm font-semibold text-red-300 disabled:opacity-60"
+                  className="min-h-9 flex-1 rounded-sm bg-red-500/15 text-sm font-semibold text-red-300 disabled:opacity-60"
                 >
                   {deletingId === task.id ? 'Suppression...' : 'Supprimer'}
                 </button>
@@ -160,7 +162,7 @@ export function TasksListPage({ onEditTask }) {
         <div className="mt-5 flex flex-col gap-2">
           <p className="text-xs font-bold tracking-[0.14em] text-slate-500 uppercase">Historique</p>
 
-          <ul className="overflow-hidden rounded-2xl border border-white/10 bg-white/5">
+          <ul className="overflow-hidden rounded-sm border border-white/10 bg-white/5">
             {historyPageItems.map((task, index) => {
               const isOpen = expandedId === task.id
               return (

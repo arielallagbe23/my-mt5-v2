@@ -49,7 +49,7 @@ function ChoiceGroup({ label, options, value, onChange, disabled }) {
             disabled={disabled}
             onClick={() => onChange(value === opt.value ? null : opt.value)}
             className={`min-h-8 rounded-full px-3 text-xs font-semibold transition-colors disabled:opacity-60 ${
-              value === opt.value ? 'bg-indigo-600 text-white' : 'bg-white/5 text-slate-300'
+              value === opt.value ? 'bg-amber-600 text-white' : 'bg-white/5 text-slate-300'
             }`}
           >
             {opt.label}
@@ -85,7 +85,7 @@ function ImageGallery({ mistakeId, images, onDelete, onView, onResize, onCrop, b
           <div
             key={img.url}
             style={{ width: size }}
-            className="group relative shrink-0 snap-start overflow-hidden rounded-xl border border-white/10 bg-black/20"
+            className="group relative shrink-0 snap-start overflow-hidden rounded-sm border border-white/10 bg-black/20"
           >
             <button type="button" onClick={() => onView(api.mistakeImageUrl(mistakeId, img.url))} className="block h-full w-full">
               <img src={api.mistakeImageUrl(mistakeId, img.url)} alt="" className="h-full w-full object-cover" />
@@ -390,7 +390,7 @@ export function MistakesPage() {
 
   function renderMistakeCard(m) {
     return (
-      <div key={m.id} className="flex h-full flex-col rounded-2xl border border-white/10 bg-white/5 p-3">
+      <div key={m.id} className="flex h-full flex-col rounded-sm border border-white/10 bg-white/5 p-3">
         {editingId === m.id ? (
           <div
             className="flex flex-col gap-3"
@@ -498,7 +498,7 @@ export function MistakesPage() {
                   type="button"
                   onClick={() => saveEdit(m.id)}
                   disabled={editSaving || !editDrafts[m.id]?.description?.trim()}
-                  className="min-h-8 rounded-full bg-indigo-500/15 px-3 text-xs font-semibold text-indigo-300 disabled:opacity-60"
+                  className="min-h-8 rounded-full bg-amber-500/15 px-3 text-xs font-semibold text-amber-300 disabled:opacity-60"
                 >
                   {editSaving ? '...' : 'Enregistrer'}
                 </button>
@@ -546,7 +546,7 @@ export function MistakesPage() {
           type="button"
           onClick={() => setView('list')}
           className={`min-h-9 rounded-full px-4 text-sm font-semibold ${
-            view === 'list' ? 'bg-indigo-600 text-white' : 'bg-white/5 text-slate-300'
+            view === 'list' ? 'bg-amber-600 text-white' : 'bg-white/5 text-slate-300'
           }`}
         >
           Journal
@@ -555,7 +555,7 @@ export function MistakesPage() {
           type="button"
           onClick={() => setView('stats')}
           className={`min-h-9 rounded-full px-4 text-sm font-semibold ${
-            view === 'stats' ? 'bg-indigo-600 text-white' : 'bg-white/5 text-slate-300'
+            view === 'stats' ? 'bg-amber-600 text-white' : 'bg-white/5 text-slate-300'
           }`}
         >
           Stats
@@ -568,7 +568,7 @@ export function MistakesPage() {
         <button
           type="button"
           onClick={() => setShowForm(true)}
-          className="min-h-10 self-start rounded-xl bg-indigo-600 px-4 text-sm font-semibold text-white"
+          className="min-h-10 self-start rounded-sm bg-amber-600 px-4 text-sm font-semibold text-white"
         >
           + Ajouter un article
         </button>
@@ -577,7 +577,7 @@ export function MistakesPage() {
       {view === 'list' && showForm && (
       <div className="flex flex-col gap-3 lg:flex-row lg:gap-4">
         <div
-          className="flex flex-col gap-3 rounded-2xl border border-white/10 bg-white/5 p-3 lg:w-1/2"
+          className="flex flex-col gap-3 rounded-sm border border-white/10 bg-white/5 p-3 lg:w-1/2"
           onPaste={(e) => {
             const pasted = imagesFromClipboard(e)
             if (pasted.length) setNewFiles((current) => [...current, ...pasted])
@@ -640,7 +640,7 @@ export function MistakesPage() {
                 type="button"
                 onClick={() => setShowForm(false)}
                 disabled={saving}
-                className="min-h-10 rounded-xl border border-white/10 bg-white/5 px-4 text-sm font-semibold text-slate-300 disabled:opacity-60"
+                className="min-h-10 rounded-sm border border-white/10 bg-white/5 px-4 text-sm font-semibold text-slate-300 disabled:opacity-60"
               >
                 Annuler
               </button>
@@ -648,7 +648,7 @@ export function MistakesPage() {
                 type="button"
                 onClick={handleAdd}
                 disabled={saving || !description.trim()}
-                className="min-h-10 rounded-xl bg-indigo-600 px-4 text-sm font-semibold text-white disabled:opacity-60"
+                className="min-h-10 rounded-sm bg-amber-600 px-4 text-sm font-semibold text-white disabled:opacity-60"
               >
                 {saving ? '...' : 'Ajouter'}
               </button>
@@ -687,7 +687,7 @@ export function MistakesPage() {
             src={lightboxUrl}
             alt=""
             onClick={(e) => e.stopPropagation()}
-            className="max-h-full max-w-full rounded-xl object-contain"
+            className="max-h-full max-w-full rounded-sm object-contain"
           />
         </div>
       )}
