@@ -11,6 +11,7 @@ import { SetOrderPage } from './pages/SetOrderPage'
 import { OrdersPage } from './pages/OrdersPage'
 import { JournalPage } from './pages/JournalPage'
 import { MistakesPage } from './pages/MistakesPage'
+import { AssigneesPage } from './pages/AssigneesPage'
 import { Navbar } from './components/Navbar'
 import { SAFE_AREA_SCREEN } from './lib/layout'
 
@@ -62,6 +63,7 @@ function App() {
         {page === 'orders' && <OrdersPage />}
         {page === 'journal' && <JournalPage />}
         {page === 'mistakes' && <MistakesPage />}
+        {page === 'assignees' && <AssigneesPage />}
       </main>
     </div>
   )

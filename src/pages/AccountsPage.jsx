@@ -17,6 +17,8 @@ const RISK_STRATEGY_OPTIONS = [
   { value: 'strategy-1', label: 'Stratégie 1 (0,5% fixe)' },
   { value: 'strategy-2', label: 'Stratégie 2 (0,5% → 1% → 2%)' },
   { value: 'strategy-3', label: 'Stratégie 3 (0,5% → 1% → 2% → 3%)' },
+  { value: 'strategy-4', label: 'Stratégie 4 (0,5% → 1%)' },
+  { value: 'strategy-5', label: 'Stratégie 5 (1% fixe)' },
 ]
 
 const RISK_STRATEGY_DESCRIPTIONS = {
@@ -26,12 +28,16 @@ const RISK_STRATEGY_DESCRIPTIONS = {
     '0,5% jusqu\'à 3,05% de croissance, puis 1% jusqu\'à 7,05%, puis 2% au-delà — redescend tout seul si l\'équité redescend, sans mémoire.',
   'strategy-3':
     '0,5% jusqu\'à 2,05% de croissance, puis 1% jusqu\'à 3,05%, puis 2% jusqu\'à 4,05%, puis 3% au-delà — redescend tout seul si l\'équité redescend, sans mémoire.',
+  'strategy-4':
+    '0,5% jusqu\'à 1,05% de croissance, puis 1% au-delà — redescend tout seul si l\'équité redescend, sans mémoire.',
+  'strategy-5': '1% de risque fixe, quelle que soit la croissance de l\'équité.',
 }
 
 export function AccountsPage() {
   const [accounts, setAccounts] = useState(null)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(true)
+  const [assignees, setAssignees] = useState([])
   const [edits, setEdits] = useState({})
   const [saving, setSaving] = useState(null)
   const [saveError, setSaveError] = useState('')
@@ -70,7 +76,7 @@ export function AccountsPage() {
           const next = { ...current }
           for (const [vpsId, info] of Object.entries(data)) {
             if (!next[vpsId]) {
-              next[vpsId] = { pseudo: info.pseudo ?? '', associate: info.associate ?? '' }
+              next[vpsId] = { pseudo: info.pseudo ?? '', associate: info.associate ?? '', assigneeId: info.assigneeId ?? '' }
             }
           }
           return next
@@ -82,6 +88,10 @@ export function AccountsPage() {
 
   useEffect(() => {
     load()
+    api
+      .listAssignees()
+      .then(setAssignees)
+      .catch(() => {})
   }, [])
 
   function updateEdit(vpsId, field, value) {
@@ -96,6 +106,7 @@ export function AccountsPage() {
       await api.updateAccountSettings(vpsId, {
         pseudo: edit.pseudo.trim() || null,
         associate: edit.associate.trim() || null,
+        assigneeId: edit.assigneeId || null,
       })
       await load()
       setEditingId(null)
@@ -110,7 +121,7 @@ export function AccountsPage() {
     setSaveError('')
     setEdits((current) => ({
       ...current,
-      [vpsId]: { pseudo: info.pseudo ?? '', associate: info.associate ?? '' },
+      [vpsId]: { pseudo: info.pseudo ?? '', associate: info.associate ?? '', assigneeId: info.assigneeId ?? '' },
     }))
     setEditingId(null)
   }
@@ -187,8 +198,12 @@ export function AccountsPage() {
 
       <ul className="flex flex-col gap-2 lg:flex-row lg:flex-wrap lg:gap-4">
         {entries.map(([vpsId, info]) => {
-          const edit = edits[vpsId] ?? { pseudo: '', associate: '' }
-          const changed = edit.pseudo !== (info.pseudo ?? '') || edit.associate !== (info.associate ?? '')
+          const edit = edits[vpsId] ?? { pseudo: '', associate: '', assigneeId: '' }
+          const changed =
+            edit.pseudo !== (info.pseudo ?? '') ||
+            edit.associate !== (info.associate ?? '') ||
+            edit.assigneeId !== (info.assigneeId ?? '')
+          const assignedPseudo = info.assigneeId ? assignees.find((a) => a.id === info.assigneeId)?.pseudo : null
           const riskStrategy = info.riskStrategy ?? 'manual'
           const preset = RISK_STRATEGY_PRESETS[riskStrategy]
           const growthPercent = computeGrowthPercent(info.equity, info.accountSize)
@@ -209,7 +224,7 @@ export function AccountsPage() {
                 <span>
                   Taille : {typeof info.accountSize === 'number' ? info.accountSize.toLocaleString('fr-FR') : '—'}
                 </span>
-                {info.associate && <span>Associé : {info.associate}</span>}
+                {assignedPseudo && <span>Assigné : {assignedPseudo}</span>}
               </div>
 
               <div className="mt-3 flex flex-col gap-1.5 border-t border-white/10 pt-3">
@@ -249,15 +264,19 @@ export function AccountsPage() {
                       />
                     </label>
                     <label className="flex flex-col gap-1 text-xs text-slate-400">
-                      Associé
-                      <input
-                        type="text"
-                        value={edit.associate}
-                        onChange={(e) => updateEdit(vpsId, 'associate', e.target.value)}
-                        placeholder="Nom de l'associé"
-                        maxLength={40}
+                      Assigné
+                      <select
+                        value={edit.assigneeId}
+                        onChange={(e) => updateEdit(vpsId, 'assigneeId', e.target.value)}
                         className={FIELD_INPUT}
-                      />
+                      >
+                        <option value="">— Aucun —</option>
+                        {assignees.map((a) => (
+                          <option key={a.id} value={a.id}>
+                            {a.pseudo}
+                          </option>
+                        ))}
+                      </select>
                     </label>
                     <div className="flex gap-2">
                       <button

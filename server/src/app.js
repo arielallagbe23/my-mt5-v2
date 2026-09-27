@@ -16,6 +16,7 @@ import setOrderRouter from './routes/setOrder.js'
 import settingsRouter from './routes/settings.js'
 import marketRecapRouter from './routes/marketRecap.js'
 import mistakesRouter from './routes/mistakes.js'
+import assigneesRouter from './routes/assignees.js'
 import { isAllowedOrigin } from './lib/origin.js'
 
 if (!process.env.JWT_SECRET) {
@@ -52,6 +53,7 @@ app.use('/api/set-order', setOrderRouter)
 app.use('/api/settings', settingsRouter)
 app.use('/api/market-recap', marketRecapRouter)
 app.use('/api/mistakes', mistakesRouter)
+app.use('/api/assignees', assigneesRouter)
 
 app.get('/api/health', (req, res) => res.json({ ok: true }))
 

@@ -53,6 +53,7 @@ export function Navbar({ page, onNavigate }) {
                   { key: 'orders', label: 'Mes ordres' },
                   { key: 'journal', label: 'PNL' },
                   { key: 'mistakes', label: 'Journal de trading' },
+                  { key: 'assignees', label: 'Assignés' },
                 ].map((item) => (
                   <button
                     key={item.key}

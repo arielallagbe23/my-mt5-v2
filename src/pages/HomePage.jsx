@@ -436,7 +436,7 @@ export function HomePage() {
                       {fedBoj.recent_headlines.map((headline, index) => (
                         <p
                           key={index}
-                          className="text-justify text-xs text-slate-300"
+                          className="text-justify text-sm leading-relaxed text-slate-300"
                         >
                           {headline}
                         </p>

@@ -81,4 +81,8 @@ export const api = {
   deleteMistakeImage: (id, url) => request(`/api/mistakes/${id}/images`, { method: 'DELETE', body: { url } }),
   resizeMistakeImage: (id, url, width) => request(`/api/mistakes/${id}/images`, { method: 'PATCH', body: { url, width } }),
   mistakeImageUrl: (id, url) => `${API_URL}/api/mistakes/${id}/images/view?url=${encodeURIComponent(url)}`,
+  listAssignees: () => request('/api/assignees'),
+  createAssignee: (pseudo) => request('/api/assignees', { method: 'POST', body: { pseudo } }),
+  updateAssignee: (id, pseudo) => request(`/api/assignees/${id}`, { method: 'PATCH', body: { pseudo } }),
+  deleteAssignee: (id) => request(`/api/assignees/${id}`, { method: 'DELETE' }),
 }

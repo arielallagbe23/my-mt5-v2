@@ -83,6 +83,7 @@ router.get('/all', requireAuth, async (req, res) => {
       accountSize: login != null ? ((data.accounts ?? {})[String(login)]?.account_size ?? null) : null,
       pseudo: settings?.pseudo ?? null,
       associate: settings?.associate ?? null,
+      assigneeId: settings?.assigneeId ?? null,
       riskStrategy: settings?.riskStrategy ?? 'manual',
     }
   }
@@ -91,14 +92,14 @@ router.get('/all', requireAuth, async (req, res) => {
 
 const MAX_PSEUDO_LENGTH = 40
 const MAX_ASSOCIATE_LENGTH = 40
-const RISK_STRATEGIES = new Set(['manual', 'strategy-1', 'strategy-2', 'strategy-3'])
+const RISK_STRATEGIES = new Set(['manual', 'strategy-1', 'strategy-2', 'strategy-3', 'strategy-4', 'strategy-5'])
 
 // Pseudo, associé et/ou stratégie de risque d'un compte — édités
 // indépendamment depuis la page "Mes comptes" (merge:true : un PATCH
 // { riskStrategy } ne doit jamais effacer le pseudo/associé déjà
 // enregistrés, et inversement).
 router.patch('/:vpsId/settings', requireAuth, async (req, res) => {
-  const { pseudo, associate, riskStrategy } = req.body ?? {}
+  const { pseudo, associate, assigneeId, riskStrategy } = req.body ?? {}
 
   if (pseudo !== undefined && pseudo != null && (typeof pseudo !== 'string' || pseudo.length > MAX_PSEUDO_LENGTH)) {
     return res.status(400).json({ error: `Pseudo invalide (max ${MAX_PSEUDO_LENGTH} caractères)` })
@@ -110,6 +111,9 @@ router.patch('/:vpsId/settings', requireAuth, async (req, res) => {
   ) {
     return res.status(400).json({ error: `Associé invalide (max ${MAX_ASSOCIATE_LENGTH} caractères)` })
   }
+  if (assigneeId !== undefined && assigneeId != null && typeof assigneeId !== 'string') {
+    return res.status(400).json({ error: 'Assigné invalide' })
+  }
   if (riskStrategy !== undefined && !RISK_STRATEGIES.has(riskStrategy)) {
     return res.status(400).json({ error: 'Stratégie de risque invalide' })
   }
@@ -117,6 +121,7 @@ router.patch('/:vpsId/settings', requireAuth, async (req, res) => {
   const updates = { updatedAt: Date.now() }
   if (pseudo !== undefined) updates.pseudo = pseudo?.trim() || null
   if (associate !== undefined) updates.associate = associate?.trim() || null
+  if (assigneeId !== undefined) updates.assigneeId = assigneeId || null
   if (riskStrategy !== undefined) updates.riskStrategy = riskStrategy
 
   await db.collection('account_settings').doc(req.params.vpsId).set(updates, { merge: true })
