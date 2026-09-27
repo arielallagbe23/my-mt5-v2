@@ -47,6 +47,27 @@ def compute_lot_size(risk_amount, entry_price, sl_price, current_price):
     return max(0.01, round(lots, 2))
 
 
+def invert_lot_size(lot, entry_price, sl_price, current_price):
+    """Inverse de compute_lot_size : combien un lot déjà posé risque
+    actuellement (en devise du compte), à distance(entry, sl) et prix
+    courant donnés. Sert à retrouver le risque alloué à un ordre existant
+    sans avoir besoin de connaître son risk% d'origine (ni le prix live au
+    moment du placement, perdu depuis) — voir _handle_adjust_order_request
+    (on_demand.py) : on utilise le MÊME current_price des deux côtés
+    (inversion puis recalcul), donc le buffer et la conversion de devise
+    s'annulent correctement, peu importe le prix live réel au moment du
+    placement d'origine.
+
+    Retourne None si une donnée manque (lot/distance/current_price nul ou 0).
+    """
+    distance = abs(entry_price - sl_price)
+    if not lot or not distance or not current_price:
+        return None
+
+    risk_per_lot = (distance * CONTRACT_SIZE) / current_price
+    return (lot / (1 - FEE_BUFFER)) * risk_per_lot
+
+
 def fibo_price(hi, lo, level):
     """Prix correspondant à un niveau de retracement Fibonacci entre `lo` (0%) et
     `hi` (100%). Ex: level=0.236 -> prix à 23,6% en remontant de lo vers hi. Les

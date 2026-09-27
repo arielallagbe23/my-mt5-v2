@@ -109,6 +109,39 @@ router.get('/close/result', requireAuth, async (req, res) => {
   res.json(doc.data())
 })
 
+// Ajuste un ordre différé déjà placé (prix d'entrée, SL, TP) — le VPS
+// l'annule et en replace un nouveau avec un lot recalculé pour préserver le
+// risque déjà alloué (voir _handle_adjust_order_request, on_demand.py).
+router.post('/:ticket/adjust', requireAuth, async (req, res) => {
+  const ticket = Number(req.params.ticket)
+  if (!Number.isInteger(ticket)) {
+    return res.status(400).json({ error: 'Ticket invalide' })
+  }
+
+  const { entry, sl, tp } = req.body ?? {}
+  if (!Number.isFinite(entry) || !Number.isFinite(sl)) {
+    return res.status(400).json({ error: 'Entrée et SL requis' })
+  }
+
+  await db.collection('commands').doc('adjust_order_request').set({
+    status: 'pending',
+    ticket,
+    entry,
+    sl,
+    tp: Number.isFinite(tp) ? tp : null,
+    ts: Date.now(),
+  })
+  res.status(202).json({ requested: true })
+})
+
+router.get('/adjust/result', requireAuth, async (req, res) => {
+  const doc = await db.collection('adjust_order_results').doc('main').get()
+  if (!doc.exists) {
+    return res.status(503).json({ error: 'Indisponible' })
+  }
+  res.json(doc.data())
+})
+
 // Historique de suivi (trailing stop + rapport) d'une position, écrit par
 // trailing_stop.py à chaque nouvelle bougie H1/H4 (mt5-vps/trailing_levels/
 // {ticket}/history) — les 20 derniers messages, du plus ancien au plus

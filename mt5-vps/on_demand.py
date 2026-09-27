@@ -20,7 +20,7 @@ import crypto_utils
 from config import DRY_RUN, MAGIC, MAX_RISK_PERCENT, PRICE_SYMBOL, VPS_ID
 from mt5_client import ensure_mt5
 from notify import notify
-from scenario_shared import compute_lot_size
+from scenario_shared import compute_lot_size, invert_lot_size
 from tasks import _account_size
 from trades import handle_trades_sync_request
 
@@ -402,6 +402,119 @@ def _handle_close_position_request(db, doc):
     _publish_close_position_result(db, result)
 
 
+def _publish_adjust_order_result(db, result):
+    db.collection("adjust_order_results").document("main").set({**result, "ts": int(time.time())})
+
+
+def _handle_adjust_order_request(db, doc):
+    """Ajuste un ordre différé (Buy/Sell Limit) déjà placé, sans jamais
+    modifier le risque déjà alloué — commands/adjust_order_request
+    { ticket, entry, sl, tp }.
+
+    MT5 (ce broker) ne permet pas de changer le prix d'entrée d'un ordre en
+    attente en le modifiant en place : on l'annule (TRADE_ACTION_REMOVE) puis
+    on en replace un nouveau (TRADE_ACTION_PENDING) avec les mêmes SL/TP (ou
+    ceux fournis) et un lot recalculé. Le risque alloué est retrouvé en
+    inversant compute_lot_size sur le lot/entrée/SL ACTUELS de l'ordre
+    (invert_lot_size), au prix courant — puis recalculé à la nouvelle
+    entrée/SL avec ce même prix courant, donc la conversion de devise et le
+    FEE_BUFFER s'annulent des deux côtés : le risque réel ne bouge pas,
+    quels que soient l'entrée/SL choisis."""
+    ref = doc.reference
+    data = doc.to_dict()
+    ticket = data.get("ticket")
+    new_entry = data.get("entry")
+    new_sl = data.get("sl")
+    new_tp = data.get("tp")
+    result = {"ticket": ticket, "success": False}
+
+    m = ensure_mt5()
+    if m is None:
+        result["error"] = "MT5 indisponible"
+        ref.update({"status": "done"})
+        _publish_adjust_order_result(db, result)
+        return
+
+    orders = m.orders_get(ticket=ticket) or ()
+    if not orders:
+        result["error"] = "Ordre introuvable (déjà déclenché ou annulé ?)"
+        ref.update({"status": "done"})
+        _publish_adjust_order_result(db, result)
+        return
+    order = orders[0]
+
+    tick = m.symbol_info_tick(order.symbol)
+    if tick is None:
+        result["error"] = "Prix indisponible"
+        ref.update({"status": "done"})
+        _publish_adjust_order_result(db, result)
+        return
+
+    risk_amount = invert_lot_size(order.volume, order.price_open, order.sl, tick.bid)
+    lot = compute_lot_size(risk_amount, new_entry, new_sl, tick.bid)
+    if lot is None:
+        result["error"] = "Lot incalculable (vérifie le nouveau SL)"
+        ref.update({"status": "done"})
+        _publish_adjust_order_result(db, result)
+        return
+    result["lot"] = lot
+
+    if DRY_RUN:
+        result["success"] = True
+        result["dryRun"] = True
+        notify(
+            "mymt5 — [DRY-RUN] Ajustement ordre différé",
+            f"ticket {ticket} -> entrée {new_entry} lot {lot}",
+        )
+        ref.update({"status": "done"})
+        _publish_adjust_order_result(db, result)
+        print(f"[ADJUST_ORDER] (dry-run) ticket {ticket} -> entrée {new_entry} lot {lot}")
+        return
+
+    # Marqué "done" AVANT l'envoi réel — même principe que les autres
+    # handlers on-demand : si le process plantait entre les deux
+    # order_send() et cette écriture, la commande resterait "pending" et
+    # serait reprise au tour suivant, ce qui annulerait/replacerait en double.
+    ref.update({"status": "done"})
+
+    cancel_res = m.order_send({"action": m.TRADE_ACTION_REMOVE, "order": ticket})
+    if cancel_res is None or cancel_res.retcode != m.TRADE_RETCODE_DONE:
+        error = str(m.last_error()) if cancel_res is None else cancel_res.comment
+        result["error"] = f"Annulation de l'ancien ordre échouée : {error}"
+        notify("mymt5 — échec ajustement ordre", result["error"])
+        print(f"[ADJUST_ORDER] échec annulation ticket {ticket} : {error}")
+        _publish_adjust_order_result(db, result)
+        return
+
+    new_res = m.order_send({
+        "action": m.TRADE_ACTION_PENDING,
+        "symbol": order.symbol,
+        "volume": float(lot),
+        "type": order.type,
+        "price": float(new_entry),
+        "sl": float(new_sl),
+        "tp": float(new_tp) if isinstance(new_tp, (int, float)) else 0.0,
+        "deviation": 20,
+        "magic": MAGIC,
+        "comment": "adjust-order",
+        "type_time": m.ORDER_TIME_GTC,
+        "type_filling": m.ORDER_FILLING_RETURN,
+    })
+
+    if new_res is None or new_res.retcode != m.TRADE_RETCODE_DONE:
+        error = str(m.last_error()) if new_res is None else new_res.comment
+        result["error"] = f"Ancien ordre annulé mais le nouveau a échoué : {error}"
+        notify("mymt5 — échec ajustement ordre (nouvel ordre)", result["error"])
+        print(f"[ADJUST_ORDER] annulé ticket {ticket} mais replacement échoué : {error}")
+    else:
+        result["success"] = True
+        result["newTicket"] = new_res.order
+        notify("mymt5 — ordre différé ajusté", f"ticket {ticket} -> {new_res.order} @ {new_entry} lot {lot}")
+        print(f"[ADJUST_ORDER] ticket {ticket} -> {new_res.order} @ {new_entry} lot {lot}")
+
+    _publish_adjust_order_result(db, result)
+
+
 def _publish_switch_account_result(db, result):
     db.collection("switch_account_results").document("main").set({**result, "ts": int(time.time())})
 
@@ -496,6 +609,7 @@ HANDLERS = {
     "trades_sync_request": handle_trades_sync_request,
     "set_order_request": _handle_set_order_request,
     "close_position_request": _handle_close_position_request,
+    "adjust_order_request": _handle_adjust_order_request,
     "market_recap_request": _handle_market_recap_request,
     "switch_account_request": _handle_switch_account_request,
 }

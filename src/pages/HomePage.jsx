@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { api } from "../lib/api";
 import { PAGE, PAGE_TITLE } from "../lib/layout";
 import { requestAndPoll, isFreshTs } from "../lib/onDemand";
+import { formatExecutionTime } from "../lib/positions";
 
 function greeting() {
   const hour = new Date().getHours();
@@ -12,23 +13,6 @@ function greeting() {
 
 function formatPrice(value) {
   return typeof value === "number" ? value.toFixed(3) : "—";
-}
-
-function formatHistoryTime(ts) {
-  return typeof ts === "number"
-    ? new Date(ts * 1000).toLocaleTimeString("fr-FR", {
-        hour: "2-digit",
-        minute: "2-digit",
-      })
-    : "—";
-}
-
-function formatExecutionTime(value) {
-  if (!value) return "—";
-  return new Date(value).toLocaleString("fr-FR", {
-    dateStyle: "short",
-    timeStyle: "short",
-  });
 }
 
 // Créneaux standard des sessions FX en heure UTC — pur calcul horaire, aucune
@@ -149,28 +133,6 @@ const CORRELATION_STYLES = {
 // propre rapport dans la liste des tâches, pas besoin de la garder ici.
 const UPCOMING_STATUSES = new Set(["draft", "pending"]);
 
-// Le trailing stop côté VPS ne déplace jamais le SL ailleurs qu'à ces 3
-// paliers précis (entrée + 0/25/50% de la distance entrée→TP — voir
-// SL_STAGES dans mt5-vps/positions.py). On retrouve le palier actuel en
-// comparant le SL courant à ces mêmes niveaux, sans rien demander au VPS.
-const SL_STAGES = [
-  { pct: 50, label: "SL à 50%" },
-  { pct: 25, label: "SL à 25%" },
-  { pct: 0, label: "SL à BE" },
-];
-const SL_STAGE_TOLERANCE_PCT = 2; // marge pour l'arrondi/spread
-
-function slStageLabel(p) {
-  if (!p.sl || !p.tp || typeof p.priceOpen !== "number") return null;
-  const totalDistance = p.tp - p.priceOpen;
-  if (!totalDistance) return null;
-  const progress = ((p.sl - p.priceOpen) / totalDistance) * 100;
-  return (
-    SL_STAGES.find((s) => Math.abs(progress - s.pct) <= SL_STAGE_TOLERANCE_PCT)
-      ?.label ?? null
-  );
-}
-
 export function HomePage() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -180,15 +142,7 @@ export function HomePage() {
   const [marketRecap, setMarketRecap] = useState({});
   const [recapRefreshing, setRecapRefreshing] = useState(false);
   const [recapRefreshError, setRecapRefreshError] = useState("");
-  const [monitoringTimeframes, setMonitoringTimeframes] = useState({});
-  const [activatingTicket, setActivatingTicket] = useState(null);
-  const [confirmCloseTicket, setConfirmCloseTicket] = useState(null);
-  const [closingTicket, setClosingTicket] = useState(null);
-  const [closeError, setCloseError] = useState("");
   const [now, setNow] = useState(() => new Date());
-  const [histories, setHistories] = useState({});
-  const [scheduledOrders, setScheduledOrders] = useState([]);
-  const [cancellingScheduledId, setCancellingScheduledId] = useState(null);
 
   useEffect(() => {
     const id = setInterval(() => setNow(new Date()), 60_000);
@@ -219,27 +173,6 @@ export function HomePage() {
       .catch(() => {});
   }
 
-  // Historique de suivi (trailing stop + rapport) par position, une seule
-  // requête par ticket suivi — pas la peine de la relire à chaque poll de
-  // "load()", juste quand la liste des positions suivies change.
-  useEffect(() => {
-    const trackedTickets = (data?.positions ?? [])
-      .filter((p) => p.managedTimeframe)
-      .map((p) => p.ticket);
-    trackedTickets.forEach((ticket) => {
-      api
-        .trailingHistory(ticket)
-        .then((result) =>
-          setHistories((current) => ({
-            ...current,
-            [ticket]: result.history ?? [],
-          })),
-        )
-        .catch(() => {});
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [data?.positions?.map((p) => p.ticket).join(",")]);
-
   useEffect(() => {
     load();
     api
@@ -258,26 +191,7 @@ export function HomePage() {
         ),
       )
       .catch(() => {});
-    api
-      .scheduledOrders()
-      .then(setScheduledOrders)
-      .catch(() => {});
   }, []);
-
-  async function cancelScheduledOrder(id) {
-    setCancellingScheduledId(id);
-    try {
-      await api.cancelScheduledOrder(id);
-      setScheduledOrders((current) => current.filter((o) => o.id !== id));
-    } catch {
-      api
-        .scheduledOrders()
-        .then(setScheduledOrders)
-        .catch(() => {});
-    } finally {
-      setCancellingScheduledId(null);
-    }
-  }
 
   async function archiveReport(id) {
     setReports((current) => current.filter((r) => r.id !== id));
@@ -319,50 +233,6 @@ export function HomePage() {
     setRecapRefreshing(false);
   }
 
-  function setMonitoringTimeframe(ticket, timeframe) {
-    setMonitoringTimeframes((current) => ({ ...current, [ticket]: timeframe }));
-  }
-
-  async function activateMonitoring(ticket) {
-    const timeframe = monitoringTimeframes[ticket] ?? "H1";
-    setActivatingTicket(ticket);
-    try {
-      await api.activatePositionMonitoring(ticket, timeframe);
-      load();
-    } catch {
-      setError("Impossible d'activer le suivi pour cette position");
-    } finally {
-      setActivatingTicket(null);
-    }
-  }
-
-  async function closePosition(ticket) {
-    setCloseError("");
-    setClosingTicket(ticket);
-    try {
-      const result = await requestAndPoll({
-        request: () => api.requestClosePosition(ticket),
-        fetch: () => api.closePositionResult(),
-        isFresh: isFreshTs,
-      });
-      if (!result) {
-        setCloseError(
-          "VPS indisponible — impossible de confirmer la fermeture.",
-        );
-        return;
-      }
-      if (!result.success) {
-        setCloseError(result.error ?? "Échec de la fermeture.");
-        return;
-      }
-      setConfirmCloseTicket(null);
-      load();
-    } finally {
-      setClosingTicket(null);
-    }
-  }
-
-  const orders = data?.orders ?? [];
   const positions = data?.positions ?? [];
   const fedBoj = marketRecap["01_taux_fed_boj"];
   const calendarEco = marketRecap["02_calendrier_eco"];
@@ -382,12 +252,7 @@ export function HomePage() {
     (sum, p) => sum + (typeof p.profit === "number" ? p.profit : 0),
     0,
   );
-  const activityCount =
-    upcomingTasks.length +
-    positions.length +
-    orders.length +
-    reports.length +
-    scheduledOrders.length;
+  const activityCount = upcomingTasks.length + positions.length + reports.length;
 
   return (
     <div className={`${PAGE} lg:max-w-max`}>
@@ -506,309 +371,6 @@ export function HomePage() {
                   </span>
                 </div>
               </div>
-            </div>
-          ))}
-        </section>
-
-        <section className="mt-5 lg:mt-0 flex flex-col gap-2 rounded-sm border border-white/10 bg-white/5 p-4 lg:col-span-4">
-          <p className="text-xs font-bold tracking-[0.14em] text-slate-500 uppercase">
-            Positions ouvertes
-          </p>
-          {loading && !data && (
-            <p className="text-sm text-slate-400">Chargement...</p>
-          )}
-          {!loading && positions.length === 0 && (
-            <p className="text-sm text-slate-400">Aucune position ouverte.</p>
-          )}
-
-          {positions.map((p) => {
-            const slStage = slStageLabel(p);
-            return (
-              <div
-                key={p.ticket}
-                className="rounded-sm border border-white/10 bg-white/5 p-3"
-              >
-                <div className="flex items-center justify-between gap-2">
-                  <span
-                    className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
-                      p.type === "Sell"
-                        ? "bg-red-500/15 text-red-300"
-                        : "bg-emerald-500/15 text-emerald-300"
-                    }`}
-                  >
-                    {p.type}
-                  </span>
-                  <span
-                    className={`text-sm font-semibold ${
-                      typeof p.profit === "number" && p.profit >= 0
-                        ? "text-emerald-400"
-                        : "text-red-400"
-                    }`}
-                  >
-                    {typeof p.profit === "number" ? p.profit.toFixed(2) : "—"}
-                  </span>
-                </div>
-                <div className="mt-2 grid grid-cols-3 gap-2">
-                  <div className="flex flex-col items-center gap-0.5 rounded-sm bg-white/5 p-2 text-center">
-                    <span className="text-[10px] font-semibold tracking-wide text-slate-500 uppercase">
-                      Entrée
-                    </span>
-                    <span className="text-sm font-semibold text-white">
-                      {formatPrice(p.priceOpen)}
-                    </span>
-                  </div>
-                  <div className="flex flex-col items-center gap-0.5 rounded-sm bg-white/5 p-2 text-center">
-                    <span className="text-[10px] font-semibold tracking-wide text-slate-500 uppercase">
-                      Actuel
-                    </span>
-                    <span className="text-sm font-semibold text-white">
-                      {formatPrice(p.priceCurrent)}
-                    </span>
-                  </div>
-                  <div className="flex flex-col items-center gap-0.5 rounded-sm bg-white/5 p-2 text-center">
-                    <span className="text-[10px] font-semibold tracking-wide text-slate-500 uppercase">
-                      Volume
-                    </span>
-                    <span className="text-sm font-semibold text-white">
-                      {p.volume}
-                    </span>
-                  </div>
-                </div>
-                {slStage && (
-                  <p className="mt-2 text-xs font-semibold text-amber-300">
-                    Actuellement {slStage}
-                  </p>
-                )}
-                <div className="mt-3 flex flex-col gap-2 border-t border-white/10 pt-3">
-                  {p.managedTimeframe ? (
-                    <>
-                      <p className="text-center text-xs font-semibold text-green-400">
-                        Suivi actif ({p.managedTimeframe}) — trailing stop +
-                        rapport de position
-                      </p>
-                      {histories[p.ticket]?.length > 0 && (
-                        <div className="flex flex-col gap-3 text-xs">
-                          {histories[p.ticket].map((h, i) => {
-                            const isLast = i === histories[p.ticket].length - 1;
-                            const isSlMove =
-                              h.message?.includes("SL est passé");
-                            return (
-                              <p
-                                key={`${h.ts}-${i}`}
-                                className={
-                                  isSlMove
-                                    ? `text-amber-300${isLast ? " font-semibold" : ""}`
-                                    : "text-slate-400"
-                                }
-                              >
-                                <span className="text-slate-500">
-                                  {formatHistoryTime(h.ts)}
-                                </span>{" "}
-                                — {h.message}
-                              </p>
-                            );
-                          })}
-                        </div>
-                      )}
-                    </>
-                  ) : (
-                    <div className="flex items-center gap-2">
-                      <p className="flex-1 text-xs text-red-400">
-                        Suivi inactif — trailing stop et rapport ne
-                        s'appliqueront pas
-                      </p>
-                      <select
-                        value={monitoringTimeframes[p.ticket] ?? "H1"}
-                        onChange={(e) =>
-                          setMonitoringTimeframe(p.ticket, e.target.value)
-                        }
-                        className="min-h-8 rounded-full border border-white/10 bg-white/5 px-2 text-xs text-white"
-                      >
-                        <option value="H1">H1</option>
-                        <option value="H4">H4</option>
-                      </select>
-                      <button
-                        type="button"
-                        onClick={() => activateMonitoring(p.ticket)}
-                        disabled={activatingTicket === p.ticket}
-                        className="min-h-8 shrink-0 rounded-full bg-amber-500/15 px-3 text-xs font-semibold text-amber-300 disabled:opacity-60"
-                      >
-                        {activatingTicket === p.ticket
-                          ? "Activation..."
-                          : "Activer"}
-                      </button>
-                    </div>
-                  )}
-
-                  {confirmCloseTicket === p.ticket ? (
-                    <div className="flex flex-col gap-2 rounded-sm border border-red-500/30 bg-red-500/10 p-2.5">
-                      <p className="text-xs text-red-300">
-                        Fermer cette position au prix du marché maintenant ?
-                        Irréversible.
-                      </p>
-                      {closeError && (
-                        <p className="text-xs text-red-400">{closeError}</p>
-                      )}
-                      <div className="flex gap-2">
-                        <button
-                          type="button"
-                          onClick={() => setConfirmCloseTicket(null)}
-                          disabled={closingTicket === p.ticket}
-                          className="min-h-8 flex-1 rounded-full border border-white/10 bg-white/5 text-xs font-semibold text-slate-300 disabled:opacity-60"
-                        >
-                          Annuler
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => closePosition(p.ticket)}
-                          disabled={closingTicket === p.ticket}
-                          className="min-h-8 flex-1 rounded-full bg-red-600 text-xs font-semibold text-white disabled:opacity-60"
-                        >
-                          {closingTicket === p.ticket
-                            ? "Fermeture..."
-                            : "Confirmer la fermeture"}
-                        </button>
-                      </div>
-                    </div>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setCloseError("");
-                        setConfirmCloseTicket(p.ticket);
-                      }}
-                      className="min-h-8 self-start rounded-full border border-red-500/30 px-3 text-xs font-semibold text-red-400"
-                    >
-                      Fermer en urgence
-                    </button>
-                  )}
-                </div>
-              </div>
-            );
-          })}
-        </section>
-
-        <section className="mt-5 lg:mt-0 flex flex-col gap-2 rounded-sm border border-white/10 bg-white/5 p-4 lg:col-span-4">
-          <p className="text-xs font-bold tracking-[0.14em] text-slate-500 uppercase">
-            Ordres différés
-          </p>
-          {loading && !data && (
-            <p className="text-sm text-slate-400">Chargement...</p>
-          )}
-          {!loading && orders.length === 0 && (
-            <p className="text-sm text-slate-400">Aucun ordre en attente.</p>
-          )}
-          {orders.map((o) => (
-            <div
-              key={o.ticket}
-              className="rounded-sm border border-white/10 bg-white/5 p-3"
-            >
-              <div className="flex items-center justify-between gap-2">
-                <span
-                  className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
-                    o.type?.includes("Sell")
-                      ? "bg-red-500/15 text-red-300"
-                      : "bg-emerald-500/15 text-emerald-300"
-                  }`}
-                >
-                  {o.type}
-                </span>
-                <span className="text-xs text-slate-400">{o.symbol}</span>
-              </div>
-              <div className="mt-2 grid grid-cols-3 gap-2">
-                <div className="flex flex-col items-center gap-0.5 rounded-sm bg-white/5 p-2 text-center">
-                  <span className="text-[10px] font-semibold tracking-wide text-slate-500 uppercase">
-                    Prix
-                  </span>
-                  <span className="text-sm font-semibold text-white">
-                    {formatPrice(o.price)}
-                  </span>
-                </div>
-                <div className="flex flex-col items-center gap-0.5 rounded-sm bg-white/5 p-2 text-center">
-                  <span className="text-[10px] font-semibold tracking-wide text-slate-500 uppercase">
-                    SL
-                  </span>
-                  <span className="text-sm font-semibold text-white">
-                    {formatPrice(o.sl)}
-                  </span>
-                </div>
-                <div className="flex flex-col items-center gap-0.5 rounded-sm bg-white/5 p-2 text-center">
-                  <span className="text-[10px] font-semibold tracking-wide text-slate-500 uppercase">
-                    TP
-                  </span>
-                  <span className="text-sm font-semibold text-white">
-                    {formatPrice(o.tp)}
-                  </span>
-                </div>
-              </div>
-            </div>
-          ))}
-        </section>
-
-        <section className="mt-5 lg:mt-0 flex flex-col gap-2 rounded-sm border border-white/10 bg-white/5 p-4 lg:col-span-12">
-          <p className="text-xs font-bold tracking-[0.14em] text-slate-500 uppercase">
-            Ordres programmés{" "}
-            {scheduledOrders.length > 0 && `(${scheduledOrders.length})`}
-          </p>
-          {scheduledOrders.length === 0 && (
-            <p className="text-sm text-slate-400">Aucun ordre programmé.</p>
-          )}
-          {scheduledOrders.map((o) => (
-            <div
-              key={o.id}
-              className="rounded-sm border border-white/10 bg-white/5 p-3"
-            >
-              <div className="flex items-center justify-between gap-2">
-                <span
-                  className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
-                    o.side === "sell"
-                      ? "bg-red-500/15 text-red-300"
-                      : "bg-emerald-500/15 text-emerald-300"
-                  }`}
-                >
-                  {o.side === "sell" ? "Vendre" : "Acheter"} ·{" "}
-                  {o.orderKind === "market" ? "Marché" : "Différé"}
-                </span>
-                <span className="text-xs text-slate-400">
-                  {formatExecutionTime(o.executionTime)}
-                </span>
-              </div>
-              <div className="mt-2 grid grid-cols-3 gap-2">
-                <div className="flex flex-col items-center gap-0.5 rounded-sm bg-white/5 p-2 text-center">
-                  <span className="text-[10px] font-semibold tracking-wide text-slate-500 uppercase">
-                    SL
-                  </span>
-                  <span className="text-sm font-semibold text-white">
-                    {formatPrice(o.sl)}
-                  </span>
-                </div>
-                <div className="flex flex-col items-center gap-0.5 rounded-sm bg-white/5 p-2 text-center">
-                  <span className="text-[10px] font-semibold tracking-wide text-slate-500 uppercase">
-                    TP
-                  </span>
-                  <span className="text-sm font-semibold text-white">
-                    {o.tp != null ? formatPrice(o.tp) : "—"}
-                  </span>
-                </div>
-                <div className="flex flex-col items-center gap-0.5 rounded-sm bg-white/5 p-2 text-center">
-                  <span className="text-[10px] font-semibold tracking-wide text-slate-500 uppercase">
-                    Risque
-                  </span>
-                  <span className="text-sm font-semibold text-white">
-                    {o.riskType === "amount"
-                      ? `${o.riskAmount}$`
-                      : `${o.risk}%`}
-                  </span>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => cancelScheduledOrder(o.id)}
-                disabled={cancellingScheduledId === o.id}
-                className="mt-3 min-h-8 rounded-full border border-red-500/30 px-3 text-xs font-semibold text-red-400 disabled:opacity-60"
-              >
-                {cancellingScheduledId === o.id ? "Annulation..." : "Annuler"}
-              </button>
             </div>
           ))}
         </section>

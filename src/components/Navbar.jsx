@@ -50,6 +50,7 @@ export function Navbar({ page, onNavigate }) {
                   { key: 'tasks', label: 'Gestion tâche' },
                   { key: 'tasksList', label: 'Liste des tâches' },
                   { key: 'setOrder', label: 'Ordre manuel' },
+                  { key: 'orders', label: 'Mes ordres' },
                   { key: 'journal', label: 'PNL' },
                   { key: 'mistakes', label: 'Journal de trading' },
                 ].map((item) => (

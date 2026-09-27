@@ -8,6 +8,7 @@ import { AccountsPage } from './pages/AccountsPage'
 import { TasksPage } from './pages/TasksPage'
 import { TasksListPage } from './pages/TasksListPage'
 import { SetOrderPage } from './pages/SetOrderPage'
+import { OrdersPage } from './pages/OrdersPage'
 import { JournalPage } from './pages/JournalPage'
 import { MistakesPage } from './pages/MistakesPage'
 import { Navbar } from './components/Navbar'
@@ -58,6 +59,7 @@ function App() {
         {page === 'tasks' && <TasksPage taskId={editingTaskId} />}
         {page === 'tasksList' && <TasksListPage onEditTask={editTask} />}
         {page === 'setOrder' && <SetOrderPage />}
+        {page === 'orders' && <OrdersPage />}
         {page === 'journal' && <JournalPage />}
         {page === 'mistakes' && <MistakesPage />}
       </main>
