@@ -7,6 +7,9 @@ mt5_status.py — Point d'entrée du VPS. Toutes les POLL_INTERVAL secondes :
     réessai automatique en cas d'échec temporaire (scheduled_orders.py) ;
   - alerte ~10 min avant chaque clôture de bougie H1/H4 sur USDJPY
     (alerte_pre_cloture.py) ;
+  - alerte 5 min avant l'ouverture de chaque session (Tokyo, Londres, New
+    York), les jours ouvrés uniquement, jamais plus d'une fois par session
+    et par jour (session_alerts.py) ;
   - surveille les ordres différés et positions ouvertes : notifie un
     déclenchement d'ordre, la progression vers le TP, notifie où en est
     chaque position suivie (TP/SL) à chaque clôture H1/H4 et déplace le SL
@@ -32,6 +35,7 @@ par fichier :
   tasks.py                  — scan + exécution des tâches dues (utilise mt5_client + scenarios)
   scheduled_orders.py       — scan + exécution des ordres manuels programmés (même pattern que tasks.py, sans scénario)
   alerte_pre_cloture.py     — alerte ~10 min avant clôture H1/H4 sur USDJPY
+  session_alerts.py         — alerte 5 min avant l'ouverture de Tokyo/Londres/New York
   position_shared.py        — primitives partagées par les modules ci-dessous (timeframe, bougies, progression)
   order_fills.py            — détecte un ordre différé qui se transforme en position
   untracked_positions.py    — détecte une position ouverte hors mymt5
@@ -62,6 +66,7 @@ from mt5_client import set_default_path
 from on_demand import check_all_requests
 from order_fills import check_order_fills
 from scheduled_orders import check_due_scheduled_orders
+from session_alerts import check_session_alerts
 from tasks import check_due_tasks
 from tp_progress import check_tp_progress
 from trades import check_closed_positions
@@ -89,6 +94,7 @@ def run():
             check_due_tasks(db)
             check_due_scheduled_orders(db)
             check_pre_close_alerts(db)
+            check_session_alerts(db)
             check_order_fills(db)
             check_untracked_positions(db)
             check_tp_progress(db)

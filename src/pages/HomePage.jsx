@@ -882,7 +882,7 @@ export function HomePage() {
                     (paragraph, index) => (
                       <p
                         key={index}
-                        className="text-justify text-sm leading-[1.5] text-white"
+                        className="text-justify text-base leading-[1.9] text-white"
                       >
                         {paragraph}
                       </p>
