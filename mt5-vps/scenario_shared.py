@@ -118,6 +118,19 @@ def apply_manual_override(task, sl, tp):
     return sl, tp
 
 
+def apply_manual_entry(task, entry_price):
+    """Le point d'entrée calculé par le scénario auto-détecté (borne de la
+    golden zone pour les scénarios 2/3/4, "prix support/résistance
+    intéressant" pour les scénarios 1) peut être remplacé par une valeur
+    fixée à la main sur la tâche (champ "Point d'entrée" — optionnel, sinon
+    calculé automatiquement à l'exécution comme SL/TP). Même mécanique que
+    apply_manual_override, appliquée à l'entrée plutôt qu'au SL/TP."""
+    manual_entry = task.get("manualEntry")
+    if isinstance(manual_entry, (int, float)):
+        return manual_entry
+    return entry_price
+
+
 def resolve_risk_amount(task, account_size):
     """Montant réellement risqué sur cette tâche, en $ — deux façons de le
     saisir à la création, mutuellement exclusives (riskType) :
@@ -138,6 +151,7 @@ def finish_sell_order(entry_price, sl, tp, candle_close, task, account_size):
     """Vérifie l'ordre SL > Entrée > TP, calcule le lot, et construit le
     résultat "matched". Partagé par Sell 2/3/4 (Sell 1 a sa propre logique
     d'entrée manuelle, donc son propre code équivalent)."""
+    entry_price = apply_manual_entry(task, entry_price)
     sl, tp = apply_manual_override(task, sl, tp)
     if not (sl > entry_price > tp):
         return {
@@ -162,6 +176,7 @@ def finish_buy_order(entry_price, sl, tp, candle_close, task, account_size):
     """Équivalent de finish_sell_order pour un achat : vérifie SL < Entrée <
     TP (ordre inversé par rapport à la vente), calcule le lot, construit le
     résultat "matched". Partagé par Buy 2/3/4."""
+    entry_price = apply_manual_entry(task, entry_price)
     sl, tp = apply_manual_override(task, sl, tp)
     if not (sl < entry_price < tp):
         return {

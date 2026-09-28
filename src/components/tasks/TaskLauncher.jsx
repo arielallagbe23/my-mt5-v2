@@ -28,6 +28,8 @@ export function TaskLauncher({
   onPriceConditionChange,
   supportPrice,
   onSupportPriceChange,
+  manualEntry,
+  onManualEntryChange,
   sl1Value,
   sl2Value,
   tp1Value,
@@ -94,6 +96,18 @@ export function TaskLauncher({
           inputMode="decimal"
           value={supportPrice}
           onChange={(event) => onSupportPriceChange(event.target.value)}
+          className={COMPACT_INPUT}
+        />
+      </label>
+
+      <label className="flex flex-col gap-1.5 text-xs text-slate-400">
+        <div>Point d'entrée (optionnel — sinon calculé automatiquement à l'exécution)</div>
+        <input
+          type="number"
+          inputMode="decimal"
+          placeholder="Entrée définie"
+          value={manualEntry}
+          onChange={(event) => onManualEntryChange(event.target.value)}
           className={COMPACT_INPUT}
         />
       </label>

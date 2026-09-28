@@ -27,6 +27,7 @@ function serialize(doc) {
     riskAmount: data.riskAmount ?? null,
     manualSl: data.manualSl ?? null,
     manualTp: data.manualTp ?? null,
+    manualEntry: data.manualEntry ?? null,
     status: data.status,
     result: data.result ?? null,
     createdAt: data.createdAt,
@@ -66,11 +67,12 @@ async function validateRiskAmountCap(body) {
   return null
 }
 
-function validateManualSlTp(body) {
-  const { manualSl, manualTp } = body ?? {}
+function validateManualOverrides(body) {
+  const { manualSl, manualTp, manualEntry } = body ?? {}
   for (const [label, value] of [
     ['manualSl', manualSl],
     ['manualTp', manualTp],
+    ['manualEntry', manualEntry],
   ]) {
     if (value != null && (typeof value !== 'number' || !Number.isFinite(value) || value <= 0)) {
       return `Champ ${label} invalide`
@@ -95,7 +97,7 @@ function validateTaskBody(body) {
     if (typeof value !== 'number' || !Number.isFinite(value)) return `Champ ${label} invalide`
   }
 
-  const manualError = validateManualSlTp(body)
+  const manualError = validateManualOverrides(body)
   if (manualError) return manualError
 
   const riskTypeError = validateRiskType(body)
@@ -135,7 +137,7 @@ function validateDraftBody(body) {
     if (value != null && (typeof value !== 'number' || !Number.isFinite(value))) return `Champ ${label} invalide`
   }
 
-  const manualError = validateManualSlTp(body)
+  const manualError = validateManualOverrides(body)
   if (manualError) return manualError
 
   const riskTypeError = validateRiskType(body)
@@ -220,6 +222,7 @@ router.post('/', requireAuth, async (req, res) => {
     riskAmount,
     manualSl,
     manualTp,
+    manualEntry,
   } = req.body
 
   const now = Date.now()
@@ -238,6 +241,7 @@ router.post('/', requireAuth, async (req, res) => {
     riskAmount: riskAmount ?? null,
     manualSl: manualSl ?? null,
     manualTp: manualTp ?? null,
+    manualEntry: manualEntry ?? null,
     status,
     result: null,
     createdAt: now,
@@ -277,6 +281,7 @@ router.patch('/:id', requireAuth, async (req, res) => {
     riskAmount,
     manualSl,
     manualTp,
+    manualEntry,
   } = merged
 
   await ref.update({
@@ -293,6 +298,7 @@ router.patch('/:id', requireAuth, async (req, res) => {
     riskAmount: riskAmount ?? null,
     manualSl: manualSl ?? null,
     manualTp: manualTp ?? null,
+    manualEntry: manualEntry ?? null,
     status,
     updatedAt: Date.now(),
   })

@@ -34,6 +34,7 @@ export function TasksPage({ taskId } = {}) {
   const [executionTime, setExecutionTime] = useState('')
   const [priceCondition, setPriceCondition] = useState('')
   const [supportPrice, setSupportPrice] = useState('')
+  const [manualEntry, setManualEntry] = useState('')
   const [manualSl, setManualSl] = useState('')
   const [manualTp, setManualTp] = useState('')
   const [risk, setRisk] = useState('')
@@ -68,6 +69,7 @@ export function TasksPage({ taskId } = {}) {
       setExecutionTime('')
       setPriceCondition('')
       setSupportPrice('')
+      setManualEntry('')
       setManualSl('')
       setManualTp('')
       setRisk('')
@@ -91,6 +93,7 @@ export function TasksPage({ taskId } = {}) {
         setExecutionTime(task.executionTime ? task.executionTime.slice(0, 16) : '')
         setPriceCondition(task.priceCondition != null ? String(task.priceCondition) : '')
         setSupportPrice(task.supportPrice != null ? String(task.supportPrice) : '')
+        setManualEntry(task.manualEntry != null ? String(task.manualEntry) : '')
         setManualSl(task.manualSl != null ? String(task.manualSl) : '')
         setManualTp(task.manualTp != null ? String(task.manualTp) : '')
         setRisk(task.risk != null ? String(task.risk) : '')
@@ -277,6 +280,7 @@ export function TasksPage({ taskId } = {}) {
     const parsedFibo0 = parseFloat(fibo0)
     const parsedPriceCondition = parseFloat(priceCondition)
     const parsedSupportPrice = parseFloat(supportPrice)
+    const parsedManualEntry = parseFloat(manualEntry)
     const parsedManualSl = parseFloat(manualSl)
     const parsedManualTp = parseFloat(manualTp)
     const parsedRisk = parseFloat(risk)
@@ -290,6 +294,7 @@ export function TasksPage({ taskId } = {}) {
       executionTime: executionTime ? `${executionTime}:00` : null,
       priceCondition: Number.isFinite(parsedPriceCondition) ? parsedPriceCondition : null,
       supportPrice: Number.isFinite(parsedSupportPrice) ? parsedSupportPrice : null,
+      manualEntry: Number.isFinite(parsedManualEntry) ? parsedManualEntry : null,
       manualSl: Number.isFinite(parsedManualSl) ? parsedManualSl : null,
       manualTp: Number.isFinite(parsedManualTp) ? parsedManualTp : null,
       riskType: effectiveRiskUnit,
@@ -459,6 +464,8 @@ export function TasksPage({ taskId } = {}) {
         onPriceConditionChange={setPriceCondition}
         supportPrice={supportPrice}
         onSupportPriceChange={setSupportPrice}
+        manualEntry={manualEntry}
+        onManualEntryChange={setManualEntry}
         sl1Value={sl1Value}
         sl2Value={sl2Value}
         tp1Value={tp1Value}
