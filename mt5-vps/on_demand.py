@@ -450,7 +450,7 @@ def _handle_adjust_order_request(db, doc):
         _publish_adjust_order_result(db, result)
         return
 
-    risk_amount = invert_lot_size(order.volume, order.price_open, order.sl, tick.bid)
+    risk_amount = invert_lot_size(order.volume_current, order.price_open, order.sl, tick.bid)
     lot = compute_lot_size(risk_amount, new_entry, new_sl, tick.bid)
     if lot is None:
         result["error"] = "Lot incalculable (vérifie le nouveau SL)"
