@@ -1,6 +1,13 @@
+import { useId } from 'react'
 import { formatAxisValue } from './journalStats'
 
 export function PerformanceCurve({ curve, unit }) {
+  // id unique par instance : cette page rend deux PerformanceCurve (trimestre
+  // + globale) — un id de gradient statique dupliqué en SVG fait que le
+  // navigateur applique la couleur d'UN SEUL des deux dégradés aux deux
+  // courbes (ex : zone bleue qui prend la couleur rouge de l'autre courbe).
+  const gradientId = useId()
+
   if (curve.length < 2) {
     return <p className="text-sm text-slate-400">Pas assez de trades pour tracer une courbe.</p>
   }
@@ -41,7 +48,7 @@ export function PerformanceCurve({ curve, unit }) {
       <div className="relative h-48 flex-1">
         <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="h-full w-full overflow-visible">
           <defs>
-            <linearGradient id="performanceGradient" x1="0" y1="0" x2="0" y2="1">
+            <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
               <stop offset="0%" stopColor={color} stopOpacity="0.35" />
               <stop offset="100%" stopColor={color} stopOpacity="0" />
             </linearGradient>
@@ -57,7 +64,7 @@ export function PerformanceCurve({ curve, unit }) {
             className="text-slate-600"
             vectorEffect="non-scaling-stroke"
           />
-          <polygon points={areaPoints} fill="url(#performanceGradient)" />
+          <polygon points={areaPoints} fill={`url(#${gradientId})`} />
           <polyline
             points={linePoints}
             fill="none"

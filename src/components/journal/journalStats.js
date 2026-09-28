@@ -32,6 +32,11 @@ export function formatR(value) {
   return typeof value === 'number' ? `${value >= 0 ? '+' : ''}${value.toFixed(2)} R` : '—'
 }
 
+export function formatQuarterLabel(key) {
+  const [year, quarter] = key.split('-Q')
+  return `T${quarter} ${year.slice(2)}`
+}
+
 export function computeKpis(trades) {
   const total = trades.length
   const wins = trades.filter((t) => t.net > 0)
@@ -118,6 +123,16 @@ export function computeMonthly(trades) {
     byMonth.set(key, (byMonth.get(key) ?? 0) + t.net)
   }
   return [...byMonth.entries()].sort(([a], [b]) => a.localeCompare(b))
+}
+
+export function computeQuarterly(trades) {
+  const byQuarter = new Map()
+  for (const t of trades) {
+    const d = new Date(t.closeTime * 1000)
+    const key = `${d.getFullYear()}-Q${Math.floor(d.getMonth() / 3) + 1}`
+    byQuarter.set(key, (byQuarter.get(key) ?? 0) + t.net)
+  }
+  return [...byQuarter.entries()].sort(([a], [b]) => a.localeCompare(b))
 }
 
 export function computeDailyNet(trades) {

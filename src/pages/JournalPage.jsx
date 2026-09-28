@@ -9,12 +9,15 @@ import { ResultsBreakdownCard } from '../components/journal/ResultsBreakdownCard
 import { TradingCalendarCard } from '../components/journal/TradingCalendarCard'
 import { BestWorstStreakCard } from '../components/journal/BestWorstStreakCard'
 import { MonthlyPnlCard } from '../components/journal/MonthlyPnlCard'
+import { QuarterlyPnlTable } from '../components/journal/QuarterlyPnlTable'
+import { QuarterlyLineChart } from '../components/journal/QuarterlyLineChart'
 import { TransactionsTable } from '../components/journal/TransactionsTable'
 import {
   computeKpis,
   computeStreak,
   computeBreakdown,
   computeMonthly,
+  computeQuarterly,
   computeDailyNet,
   computeCurve,
   computeTodayNet,
@@ -100,6 +103,7 @@ export function JournalPage() {
   const breakdown = useMemo(() => (trades ? computeBreakdown(trades, accountSize) : null), [trades, accountSize])
   const dailyNet = useMemo(() => (trades ? computeDailyNet(trades) : new Map()), [trades])
   const monthly = useMemo(() => (trades ? computeMonthly(trades) : []), [trades])
+  const quarterly = useMemo(() => (trades ? computeQuarterly(trades) : []), [trades])
   const currentMonthKey = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`
   const currentMonthNet = monthly.find(([key]) => key === currentMonthKey)?.[1] ?? null
   const currentMonthR = currentMonthNet != null && kpis?.riskUnit ? currentMonthNet / kpis.riskUnit : null
@@ -135,6 +139,16 @@ export function JournalPage() {
     () => (accountSize ? quarterlyDollarCurve.map((v) => (v / accountSize) * 100) : quarterlyDollarCurve),
     [quarterlyDollarCurve, accountSize],
   )
+  const quarterlyPerformancePercent = accountSize ? (quarterlyNet / accountSize) * 100 : null
+
+  // Même logique que le trimestre, mais sur l'année civile entière — pour
+  // la performance annuelle affichée dans KpiGrid.
+  const currentYearTrades = useMemo(
+    () => (trades ?? []).filter((t) => new Date(t.closeTime * 1000).getFullYear() === currentYear),
+    [trades, currentYear],
+  )
+  const yearlyNet = currentYearTrades.reduce((sum, t) => sum + t.net, 0)
+  const yearlyPerformancePercent = accountSize ? (yearlyNet / accountSize) * 100 : null
 
   const totalPages = trades ? Math.max(1, Math.ceil(trades.length / PAGE_SIZE)) : 1
   const pageTrades = trades ? trades.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE) : []
@@ -170,7 +184,14 @@ export function JournalPage() {
               <BestWorstStreakCard kpis={kpis} streak={streak} todayNet={todayNet} accountSize={accountSize} />
             </div>
             <div className="lg:w-[calc(75%-0.75rem)]">
-              <KpiGrid kpis={kpis} currentMonthR={currentMonthR} />
+              <KpiGrid
+                kpis={kpis}
+                currentMonthR={currentMonthR}
+                quarterlyPerformancePercent={quarterlyPerformancePercent}
+                yearlyPerformancePercent={yearlyPerformancePercent}
+                currentQuarterLabel={currentQuarterLabel}
+                currentYear={currentYear}
+              />
             </div>
           </div>
 
@@ -197,6 +218,16 @@ export function JournalPage() {
             </div>
             <div className="lg:w-[calc(50%-0.5rem)]">
               <MonthlyPnlCard monthly={monthly} />
+            </div>
+          </div>
+
+          {/* Ligne 3.5 : historique du P&L par trimestre (tableau) + courbe, même poids visuel (1/2 chacun) */}
+          <div className="flex flex-col gap-3 lg:flex-row lg:gap-4">
+            <div className="lg:w-[calc(50%-0.5rem)]">
+              <QuarterlyPnlTable quarterly={quarterly} unit={curveUnit} accountSize={accountSize} />
+            </div>
+            <div className="lg:w-[calc(50%-0.5rem)]">
+              <QuarterlyLineChart quarterly={quarterly} unit={curveUnit} accountSize={accountSize} />
             </div>
           </div>
 
