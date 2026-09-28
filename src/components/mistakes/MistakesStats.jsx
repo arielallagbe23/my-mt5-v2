@@ -1,4 +1,4 @@
-import { PLAN_OPTIONS, EXIT_OPTIONS, EMOTION_OPTIONS } from './mistakeOptions'
+import { PLAN_OPTIONS, EXIT_OPTIONS, EMOTION_OPTIONS, STRATEGY_OPTIONS } from './mistakeOptions'
 import {
   MIN_ENTRIES_FOR_STATS,
   computeBreakdown,
@@ -123,12 +123,14 @@ export function MistakesStats({ mistakes }) {
   const planBreakdown = computeBreakdown(mistakes, 'planRespected', PLAN_OPTIONS)
   const exitBreakdown = computeBreakdown(mistakes, 'exitReason', EXIT_OPTIONS)
   const emotionBreakdown = computeSortedBreakdown(mistakes, 'emotion', EMOTION_OPTIONS)
+  const strategyBreakdown = computeBreakdown(mistakes, 'strategy', STRATEGY_OPTIONS)
 
   return (
     <div className="flex flex-col gap-3 lg:grid lg:grid-cols-2 lg:gap-4">
       <BreakdownCard title="Respect du plan" rows={planBreakdown} />
       <BreakdownCard title="Raisons de sortie" rows={exitBreakdown} />
       <BreakdownCard title="États émotionnels" rows={emotionBreakdown} />
+      <BreakdownCard title="Répartition par stratégie" rows={strategyBreakdown} />
       <CorrelationsCard mistakes={mistakes} />
       <div className="lg:col-span-2">
         <WeeklyTrendCard mistakes={mistakes} />

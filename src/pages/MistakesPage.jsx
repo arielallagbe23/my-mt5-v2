@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { api } from '../lib/api'
 import { PAGE, PAGE_TITLE, FIELD_INPUT } from '../lib/layout'
-import { PLAN_OPTIONS, EXIT_OPTIONS, EMOTION_OPTIONS, findOption } from '../components/mistakes/mistakeOptions'
+import { PLAN_OPTIONS, EXIT_OPTIONS, EMOTION_OPTIONS, STRATEGY_OPTIONS, findOption } from '../components/mistakes/mistakeOptions'
 import { MistakesStats } from '../components/mistakes/MistakesStats'
 import { ImageCropModal } from '../components/mistakes/ImageCropModal'
 
@@ -202,6 +202,7 @@ export function MistakesPage() {
   const [planRespected, setPlanRespected] = useState(null)
   const [exitReason, setExitReason] = useState(null)
   const [emotion, setEmotion] = useState(null)
+  const [strategy, setStrategy] = useState(null)
   const [lesson, setLesson] = useState('')
   const [newFiles, setNewFiles] = useState([])
   const [saving, setSaving] = useState(false)
@@ -246,6 +247,7 @@ export function MistakesPage() {
         planRespected,
         exitReason,
         emotion,
+        strategy,
         lesson: lesson.trim(),
       })
       for (const file of newFiles) {
@@ -256,6 +258,7 @@ export function MistakesPage() {
       setPlanRespected(null)
       setExitReason(null)
       setEmotion(null)
+      setStrategy(null)
       setLesson('')
       setNewFiles([])
       setShowForm(false)
@@ -306,6 +309,7 @@ export function MistakesPage() {
         planRespected: m.planRespected ?? null,
         exitReason: m.exitReason ?? null,
         emotion: m.emotion ?? null,
+        strategy: m.strategy ?? null,
         lesson: m.lesson ?? m.text ?? '',
       },
     }))
@@ -333,6 +337,7 @@ export function MistakesPage() {
         planRespected: draft.planRespected,
         exitReason: draft.exitReason,
         emotion: draft.emotion,
+        strategy: draft.strategy,
         lesson: draft.lesson.trim(),
       }
       await api.updateMistake(id, payload)
@@ -427,6 +432,13 @@ export function MistakesPage() {
               onChange={(v) => updateEditDraft(m.id, 'emotion', v)}
               disabled={editSaving}
             />
+            <ChoiceGroup
+              label="Stratégie utilisée"
+              options={STRATEGY_OPTIONS}
+              value={editDrafts[m.id]?.strategy ?? null}
+              onChange={(v) => updateEditDraft(m.id, 'strategy', v)}
+              disabled={editSaving}
+            />
             <div>
               <p className="text-xs font-semibold text-slate-400">Qu'est-ce que tu retiens pour la prochaine fois ?</p>
               <textarea
@@ -446,7 +458,7 @@ export function MistakesPage() {
             ) : (
               <p className="text-lg font-bold text-slate-500 italic">Sans titre</p>
             )}
-            {(m.planRespected || m.exitReason || m.emotion) && (
+            {(m.planRespected || m.exitReason || m.emotion || m.strategy) && (
               <div className="mt-2 flex flex-wrap gap-1.5">
                 {m.planRespected && (
                   <Tag tone={findOption(PLAN_OPTIONS, m.planRespected).tone}>
@@ -461,6 +473,11 @@ export function MistakesPage() {
                 {m.emotion && (
                   <Tag tone={findOption(EMOTION_OPTIONS, m.emotion).tone}>
                     {findOption(EMOTION_OPTIONS, m.emotion).label}
+                  </Tag>
+                )}
+                {m.strategy && (
+                  <Tag tone={findOption(STRATEGY_OPTIONS, m.strategy).tone}>
+                    {findOption(STRATEGY_OPTIONS, m.strategy).label}
                   </Tag>
                 )}
               </div>
@@ -612,6 +629,13 @@ export function MistakesPage() {
             options={EMOTION_OPTIONS}
             value={emotion}
             onChange={setEmotion}
+            disabled={saving}
+          />
+          <ChoiceGroup
+            label="Stratégie utilisée"
+            options={STRATEGY_OPTIONS}
+            value={strategy}
+            onChange={setStrategy}
             disabled={saving}
           />
           <div>

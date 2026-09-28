@@ -17,6 +17,10 @@ export const EMOTION_OPTIONS = [
   { value: 'confident', label: 'Confiant', tone: 'bg-purple-500/15 text-purple-300', bar: 'bg-purple-400' },
   { value: 'hesitant', label: 'Hésitant', tone: 'bg-purple-500/15 text-purple-300', bar: 'bg-purple-400' },
 ]
+export const STRATEGY_OPTIONS = [
+  { value: 'rzav1', label: 'RZAV I', tone: 'bg-sky-500/15 text-sky-300', bar: 'bg-sky-400' },
+  { value: 'rzav2', label: 'RZAV II', tone: 'bg-fuchsia-500/15 text-fuchsia-300', bar: 'bg-fuchsia-400' },
+]
 
 export function findOption(options, value) {
   return options.find((o) => o.value === value) ?? null

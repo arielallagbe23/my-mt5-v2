@@ -23,6 +23,7 @@ const CONTENT_TYPE_EXTENSIONS = {
 const PLAN_VALUES = new Set(['full', 'partial', 'no'])
 const EXIT_VALUES = new Set(['sl', 'tp', 'manual_fear', 'manual_plan', 'other'])
 const EMOTION_VALUES = new Set(['calm', 'stressed', 'impatient', 'confident', 'hesitant'])
+const STRATEGY_VALUES = new Set(['rzav1', 'rzav2'])
 
 // Taille d'affichage choisie à la main par l'utilisateur pour une image
 // (boutons +/- dans la galerie) — bornes alignées sur IMAGE_SIZE_MIN/MAX
@@ -53,6 +54,7 @@ router.get('/', requireAuth, async (req, res) => {
         planRespected: data.planRespected ?? null,
         exitReason: data.exitReason ?? null,
         emotion: data.emotion ?? null,
+        strategy: data.strategy ?? null,
         lesson: data.lesson ?? null,
         createdAt: data.createdAt,
         images: data.images ?? [],
@@ -70,6 +72,7 @@ router.post('/', requireAuth, async (req, res) => {
   const planRespected = PLAN_VALUES.has(req.body?.planRespected) ? req.body.planRespected : null
   const exitReason = EXIT_VALUES.has(req.body?.exitReason) ? req.body.exitReason : null
   const emotion = EMOTION_VALUES.has(req.body?.emotion) ? req.body.emotion : null
+  const strategy = STRATEGY_VALUES.has(req.body?.strategy) ? req.body.strategy : null
   const lesson = (req.body?.lesson ?? '').trim()
 
   const docRef = await db.collection('mistakes').add({
@@ -78,6 +81,7 @@ router.post('/', requireAuth, async (req, res) => {
     planRespected,
     exitReason,
     emotion,
+    strategy,
     lesson,
     createdAt: Date.now(),
     images: [],
@@ -89,8 +93,8 @@ router.patch('/:id', requireAuth, async (req, res) => {
   const owned = await loadOwnedMistake(req, res)
   if (!owned) return
 
-  const { description, planRespected, exitReason, emotion, lesson } = req.body ?? {}
-  if ([description, planRespected, exitReason, emotion, lesson].every((v) => v === undefined)) {
+  const { description, planRespected, exitReason, emotion, strategy, lesson } = req.body ?? {}
+  if ([description, planRespected, exitReason, emotion, strategy, lesson].every((v) => v === undefined)) {
     return res.status(400).json({ error: 'Rien à mettre à jour' })
   }
 
@@ -103,6 +107,7 @@ router.patch('/:id', requireAuth, async (req, res) => {
   if (planRespected !== undefined) updates.planRespected = PLAN_VALUES.has(planRespected) ? planRespected : null
   if (exitReason !== undefined) updates.exitReason = EXIT_VALUES.has(exitReason) ? exitReason : null
   if (emotion !== undefined) updates.emotion = EMOTION_VALUES.has(emotion) ? emotion : null
+  if (strategy !== undefined) updates.strategy = STRATEGY_VALUES.has(strategy) ? strategy : null
   if (lesson !== undefined) updates.lesson = lesson.trim()
 
   await owned.ref.update(updates)
