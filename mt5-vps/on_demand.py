@@ -20,6 +20,7 @@ import crypto_utils
 from config import DRY_RUN, MAGIC, MAX_RISK_PERCENT, PRICE_SYMBOL, VPS_ID
 from mt5_client import ensure_mt5
 from notify import notify
+from mirror_publish import _order_snapshot
 from scenario_shared import compute_lot_size, invert_lot_size
 from tasks import _account_size
 from trades import handle_trades_sync_request
@@ -486,6 +487,15 @@ def _handle_adjust_order_request(db, doc):
         _publish_adjust_order_result(db, result)
         return
 
+    # Répercuté sur mirror_orders tout de suite, sans attendre le prochain
+    # publish_master_orders() (plus tard dans cette même itération de la
+    # boucle MASTER, mt5_status.py) : si une exception survient entre-temps
+    # dans une autre étape de la boucle, le suppléant (mirror_follower.py)
+    # resterait sinon avec un ordre miroir fantôme sur l'ancien ticket —
+    # c'est exactement ce qui a été observé en prod (l'annulation ne s'est
+    # pas propagée au suppléant).
+    db.collection("mirror_orders").document(str(ticket)).delete()
+
     new_res = m.order_send({
         "action": m.TRADE_ACTION_PENDING,
         "symbol": order.symbol,
@@ -511,6 +521,17 @@ def _handle_adjust_order_request(db, doc):
         result["newTicket"] = new_res.order
         notify("mymt5 — ordre différé ajusté", f"ticket {ticket} -> {new_res.order} @ {new_entry} lot {lot}")
         print(f"[ADJUST_ORDER] ticket {ticket} -> {new_res.order} @ {new_entry} lot {lot}")
+
+        # Même logique : publié tout de suite plutôt que de compter sur le
+        # prochain publish_master_orders() pour que le suppléant pose son
+        # miroir sans délai ni dépendance à la suite de la boucle.
+        new_orders = m.orders_get(ticket=new_res.order) or ()
+        if new_orders:
+            db.collection("mirror_orders").document(str(new_res.order)).set({
+                "ticket": new_res.order,
+                **_order_snapshot(new_orders[0]),
+                "updated_at": int(time.time()),
+            })
 
     _publish_adjust_order_result(db, result)
 
