@@ -272,12 +272,16 @@ def _close_reason_message(m, ticket):
     return f"{label} — {sign}{net:.2f}$"
 
 
-def _check_closed(db, m):
+def _check_closed(db, m, tracked_docs):
     """Diff entre les positions suivies (trailing_levels, closed=False) et
     les positions MT5 actuellement ouvertes — log le message final et
-    marque "closed" (jamais supprimé, pour garder l'historique lisible)."""
+    marque "closed" (jamais supprimé, pour garder l'historique lisible).
+    `tracked_docs` vient de check_trailing_stop, qui ne fait qu'UNE seule
+    requête Firestore par tour (partagée avec _check_sl_drift — voir
+    l'incident 429 Quota exceeded, causé par cette même requête exécutée en
+    double, sans le moindre garde-fou, à chaque tour de boucle ~10s)."""
     open_tickets = {p.ticket for p in (m.positions_get(symbol=PRICE_SYMBOL) or ())}
-    for doc in db.collection("trailing_levels").where(filter=FieldFilter("closed", "==", False)).stream():
+    for doc in tracked_docs:
         ticket = int(doc.id)
         if ticket in open_tickets:
             continue
@@ -327,9 +331,11 @@ def _move_sl(m, ticket, symbol, tp, sl_price):
 SL_DRIFT_TOLERANCE = 0.001  # marge d'arrondi broker, pas un vrai changement en dessous
 
 
-def _check_sl_drift(db, m):
+def _check_sl_drift(db, m, tracked_docs):
+    """`tracked_docs` : voir _check_closed — même requête partagée, pas
+    refaite ici."""
     open_positions = {p.ticket: p for p in (m.positions_get(symbol=PRICE_SYMBOL) or ())}
-    for doc in db.collection("trailing_levels").where(filter=FieldFilter("closed", "==", False)).stream():
+    for doc in tracked_docs:
         ticket = int(doc.id)
         pos = open_positions.get(ticket)
         if pos is None:
@@ -402,8 +408,9 @@ def check_trailing_stop(db):
     if m is None:
         return
 
-    _check_closed(db, m)
-    _check_sl_drift(db, m)
+    tracked_docs = list(db.collection("trailing_levels").where(filter=FieldFilter("closed", "==", False)).stream())
+    _check_closed(db, m, tracked_docs)
+    _check_sl_drift(db, m, tracked_docs)
 
     for timeframe in ELIGIBLE_TIMEFRAMES:
         # Aucune horloge consultée ici, ni système ni broker : on compare
