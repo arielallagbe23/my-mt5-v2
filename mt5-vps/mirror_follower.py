@@ -78,13 +78,21 @@ MAGIC = 234100  # différent du MAGIC du compte principal (234000)
 # survivre à un redémarrage de ce process.
 _mirrored_tickets = {}
 
-# Tickets déjà ouverts côté compte principal au tout premier tour après
-# (re)démarrage — jamais miroités, même s'ils n'étaient pas encore dans
-# _mirrored_tickets : pas de mirroring rétroactif d'une position qui a déjà
-# bougé avant que le suivi ne commence. None tant que ce premier tour n'a
-# pas eu lieu ; recalculé à chaque redémarrage (par design — un redémarrage
-# redéfinit "déjà ouvert" au moment présent).
-_pre_existing_tickets = None
+# Un ticket (position/ordre) déjà ouvert côté principal AVANT le démarrage
+# de CE process suppléant n'est jamais mirroité rétroactivement. Décidé au
+# cas par cas via son updated_at (mirror_publish.py) comparé à l'instant de
+# démarrage (_follower_boot_time) — PAS via "était-il déjà présent dans le
+# tout premier instantané Firestore reçu" (ancien comportement). Cette
+# première approche était sujette à une course observée en prod : une tâche
+# exécutée côté principal dans les toutes premières secondes du démarrage
+# du suppléant pouvait atterrir dans ce tout premier instantané et être
+# prise à tort pour "déjà là avant nous", donc jamais mirroitée.
+# PRE_EXISTING_GRACE_SECONDS absorbe l'imprécision d'horodatage (secondes
+# entières) entre les deux process — mieux vaut mirroiter un cas limite que
+# le rater.
+_follower_boot_time = None
+_ignored_pre_existing_tickets = set()
+PRE_EXISTING_GRACE_SECONDS = 5
 
 # account_size change rarement (palier de challenge, scaling plan...) — pas
 # besoin de le relire à chaque tour (~10s) juste pour retomber sur la même
@@ -103,8 +111,7 @@ _account_size_cache = {}
 # pas fait, le cache est vide alors que le compte principal a peut-être
 # déjà des positions ouvertes. Sans ce garde-fou, sync_mirror agirait sur
 # une image incomplète et pourrait croire (à tort) que tout a fermé côté
-# principal, et fermer des miroirs par erreur, ou mal calculer
-# _pre_existing_tickets au démarrage.
+# principal, et fermer des miroirs par erreur.
 _master_state_lock = threading.Lock()
 _master_positions_cache = {}
 _master_orders_cache = {}
@@ -375,6 +382,21 @@ def _close_mirror(m, follower_pos):
         print(f"[MIRROR] miroir {follower_pos.ticket} fermé")
 
 
+def _is_pre_existing(master_ticket, master_state_doc):
+    """True si ce ticket existait déjà côté principal avant le démarrage de
+    ce process (voir le commentaire sur _follower_boot_time plus haut) —
+    décision prise au cas par cas sur un vrai horodatage, puis mémorisée
+    pour ne pas la refaire à chaque tour."""
+    if master_ticket in _ignored_pre_existing_tickets:
+        return True
+    updated_at = master_state_doc.get("updated_at")
+    if updated_at is not None and updated_at <= _follower_boot_time - PRE_EXISTING_GRACE_SECONDS:
+        _ignored_pre_existing_tickets.add(master_ticket)
+        print(f"[MIRROR] {master_ticket} déjà ouvert(e) avant le démarrage, ignoré(e) (pas de mirroring rétroactif)")
+        return True
+    return False
+
+
 def sync_mirror(db):
     m = ensure_mt5(path=TERMINAL_PATH)
     if m is None:
@@ -396,16 +418,6 @@ def sync_mirror(db):
         master_positions = dict(_master_positions_cache)
         master_orders = dict(_master_orders_cache)
 
-    global _pre_existing_tickets
-    if _pre_existing_tickets is None:
-        seen = set(master_positions) | set(master_orders)
-        _pre_existing_tickets = seen - set(_mirrored_tickets)
-        if _pre_existing_tickets:
-            print(
-                f"[MIRROR] {len(_pre_existing_tickets)} position/ordre déjà ouvert(e) au démarrage, "
-                f"ignoré(e)(s) (pas de mirroring rétroactif) : {', '.join(sorted(_pre_existing_tickets))}"
-            )
-
     follower_positions = {p.ticket: p for p in (m.positions_get(symbol=PRICE_SYMBOL) or ())}
     follower_orders = {o.ticket: o for o in (m.orders_get(symbol=PRICE_SYMBOL) or ())}
 
@@ -413,9 +425,9 @@ def sync_mirror(db):
     follower_account_size = _account_size(db, FOLLOWER_ID)
 
     # 1a. Ouvrir les positions du compte principal pas encore miroitées (ni
-    # déjà ouvertes avant le démarrage de ce process — voir _pre_existing_tickets).
+    # déjà ouvertes avant le démarrage de ce process — voir _is_pre_existing).
     for master_ticket, master_pos in master_positions.items():
-        if master_ticket in _mirrored_tickets or master_ticket in _pre_existing_tickets:
+        if master_ticket in _mirrored_tickets or _is_pre_existing(master_ticket, master_pos):
             continue
         lot = compute_follower_lot(master_pos["volume"], master_account_size, follower_account_size)
         if lot is None:
@@ -425,7 +437,7 @@ def sync_mirror(db):
 
     # 1b. Poser les ordres différés du compte principal pas encore miroités.
     for master_ticket, master_order in master_orders.items():
-        if master_ticket in _mirrored_tickets or master_ticket in _pre_existing_tickets:
+        if master_ticket in _mirrored_tickets or _is_pre_existing(master_ticket, master_order):
             continue
         lot = compute_follower_lot(master_order["volume"], master_account_size, follower_account_size)
         if lot is None:
@@ -483,6 +495,7 @@ if __name__ == "__main__":
     if not os.path.exists(SA_PATH):
         raise SystemExit(f"[ERREUR] {SA_PATH} introuvable.")
 
+    _follower_boot_time = time.time()
     db = firestore.Client.from_service_account_json(SA_PATH)
     print(f"[BOOT] FOLLOWER_ID={FOLLOWER_ID} | terminal={TERMINAL_PATH} | dry_run={DRY_RUN} | poll={POLL_INTERVAL}s")
     _load_state(db)
