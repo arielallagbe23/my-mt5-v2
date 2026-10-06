@@ -74,6 +74,23 @@ from trailing_stop import check_trailing_stop
 from untracked_positions import check_untracked_positions
 
 
+def _run_safely(name, func, db):
+    """Exécute UN check isolément : une exception ici ne doit jamais empêcher
+    les checks suivants de tourner sur ce même tour de boucle. Avant ce
+    correctif, tous les checks partageaient un seul try/except autour de la
+    boucle entière — une exception dans l'un d'eux (ex: une donnée MT5
+    transitoirement absente) sautait silencieusement TOUS les checks
+    suivants pour tout le tour (potentiellement ceux qui notifient une
+    clôture de position ou une progression de TP), avec pour seule trace un
+    traceback perdu dans une console non surveillée. Symptôme observé :
+    notifications manquantes sans aucune erreur visible côté notify()."""
+    try:
+        func(db)
+    except Exception:
+        print(f"[LOOP] erreur dans {name} :")
+        traceback.print_exc()
+
+
 def run():
     from google.cloud import firestore
 
@@ -88,24 +105,25 @@ def run():
     db = firestore.Client.from_service_account_json(SA_PATH)
     print(f"[BOOT] VPS_ID={VPS_ID} | poll={POLL_INTERVAL}s | terminal={MASTER_TERMINAL_PATH or '(défaut)'}")
 
+    checks = [
+        ("check_all_requests", check_all_requests),
+        ("check_due_tasks", check_due_tasks),
+        ("check_due_scheduled_orders", check_due_scheduled_orders),
+        ("check_pre_close_alerts", check_pre_close_alerts),
+        ("check_session_alerts", check_session_alerts),
+        ("check_order_fills", check_order_fills),
+        ("check_untracked_positions", check_untracked_positions),
+        ("check_tp_progress", check_tp_progress),
+        ("check_trailing_stop", check_trailing_stop),
+        ("check_closed_positions_notify", check_closed_positions_notify),
+        ("check_closed_positions", check_closed_positions),
+        ("publish_master_positions", publish_master_positions),
+        ("publish_master_orders", publish_master_orders),
+    ]
+
     while True:
-        try:
-            check_all_requests(db)
-            check_due_tasks(db)
-            check_due_scheduled_orders(db)
-            check_pre_close_alerts(db)
-            check_session_alerts(db)
-            check_order_fills(db)
-            check_untracked_positions(db)
-            check_tp_progress(db)
-            check_trailing_stop(db)
-            check_closed_positions_notify(db)
-            check_closed_positions(db)
-            publish_master_positions(db)
-            publish_master_orders(db)
-        except Exception:
-            print("[LOOP] erreur :")
-            traceback.print_exc()
+        for name, func in checks:
+            _run_safely(name, func, db)
         time.sleep(POLL_INTERVAL)
 
 
