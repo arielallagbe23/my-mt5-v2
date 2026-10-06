@@ -9,5 +9,9 @@ follower_terminal_path.txt
 follower_dry_run.txt
 master_vps_id.txt
 master_terminal_path.txt
+follower2_id.txt
+follower2_terminal_path.txt
+follower2_dry_run.txt
+follower2_magic.txt
 __pycache__/
 *.pyc

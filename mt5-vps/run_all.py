@@ -17,10 +17,13 @@ FOLLOWER). mirror_follower.py lit FOLLOWER_ID en priorité depuis l'env (voir
 son commentaire) précisément pour que deux instances lancées ici avec des
 env différents ne se marchent jamais dessus, même si elles partagent les
 mêmes fichiers follower_*.txt locaux (ces fichiers ne servent alors que de
-repli en lancement manuel, sans run_all.py). Pour ajouter un 2e suppléant
-(3e compte), décommente l'entrée FOLLOWER2 ci-dessous et renseigne le
-chemin exact vers SON terminal MT5 (installation séparée, compte différent
-déjà connecté dedans).
+repli en lancement manuel, sans run_all.py).
+
+Un 2e suppléant (3e compte) se configure comme tout le reste ici : un
+fichier local follower2_terminal_path.txt (jamais commité, même régime que
+master_terminal_path.txt/follower_terminal_path.txt — voir .gitignore).
+Tant qu'il n'existe pas, FOLLOWER2 n'est tout simplement pas lancé — pas
+besoin de retoucher ce fichier pour l'activer sur CE VPS.
 
 Ctrl+C ici arrête proprement tous les sous-process (terminate, puis kill
 après 10s si l'un d'eux ne répond pas).
@@ -31,16 +34,30 @@ import subprocess
 import sys
 import threading
 
+_DIR = os.path.dirname(os.path.abspath(__file__))
+
+
+def _read(name, default=None):
+    path = os.path.join(_DIR, name)
+    if not os.path.exists(path):
+        return default
+    with open(path, "r", encoding="utf-8-sig") as f:
+        return f.read().strip()
+
+
 PROCESSES = [
     ("MASTER", ["mt5_status.py"], None),
     ("FOLLOWER", ["mirror_follower.py"], None),
-    # ("FOLLOWER2", ["mirror_follower.py"], {
-    #     "FOLLOWER_ID": "account3",
-    #     "FOLLOWER_TERMINAL_PATH": r"C:\Program Files\MetaTrader 5 - Account3\terminal64.exe",
-    #     "FOLLOWER_DRY_RUN": "true",  # repasser à "false" seulement une fois vérifié en dry-run
-    #     "FOLLOWER_MAGIC": "234200",
-    # }),
 ]
+
+_follower2_terminal_path = _read("follower2_terminal_path.txt")
+if _follower2_terminal_path:
+    PROCESSES.append(("FOLLOWER2", ["mirror_follower.py"], {
+        "FOLLOWER_ID": _read("follower2_id.txt", "account3"),
+        "FOLLOWER_TERMINAL_PATH": _follower2_terminal_path,
+        "FOLLOWER_DRY_RUN": _read("follower2_dry_run.txt", "true"),
+        "FOLLOWER_MAGIC": _read("follower2_magic.txt", "234200"),
+    }))
 
 
 def _stream(name, proc):
