@@ -63,15 +63,22 @@ def _read(name, default=None):
         return f.read().strip()
 
 
-FOLLOWER_ID = _read("follower_id.txt") or os.environ.get("FOLLOWER_ID", "account2")
-TERMINAL_PATH = _read("follower_terminal_path.txt") or os.environ.get("FOLLOWER_TERMINAL_PATH")
-DRY_RUN = (_read("follower_dry_run.txt") or os.environ.get("FOLLOWER_DRY_RUN", "true")).strip().lower() != "false"
-MASTER_VPS_ID = _read("master_vps_id.txt") or os.environ.get("MASTER_VPS_ID", "main")
+# Variable d'env prioritaire sur le fichier local : les fichiers follower_*.txt
+# sont partagés par TOUS les process mirror_follower.py lancés depuis ce même
+# dossier (_DIR est toujours mt5-vps/, quel que soit le process qui lit) — un
+# deuxième suppléant lancé en parallèle lirait sinon la même identité que le
+# premier. run_all.py distingue chaque instance en lui passant des variables
+# d'env dédiées ; en lancement manuel (python mirror_follower.py, pas d'env),
+# le fichier local reste le comportement par défaut, inchangé.
+FOLLOWER_ID = os.environ.get("FOLLOWER_ID") or _read("follower_id.txt") or "account2"
+TERMINAL_PATH = os.environ.get("FOLLOWER_TERMINAL_PATH") or _read("follower_terminal_path.txt")
+DRY_RUN = (os.environ.get("FOLLOWER_DRY_RUN") or _read("follower_dry_run.txt") or "true").strip().lower() != "false"
+MASTER_VPS_ID = os.environ.get("MASTER_VPS_ID") or _read("master_vps_id.txt") or "main"
 POLL_INTERVAL = float(os.environ.get("POLL_INTERVAL", "10"))
 SA_PATH = os.path.join(_DIR, "service-account.json")
 
 PRICE_SYMBOL = "USDJPY"
-MAGIC = 234100  # différent du MAGIC du compte principal (234000)
+MAGIC = int(os.environ.get("FOLLOWER_MAGIC", "234100"))  # différent du MAGIC du compte principal (234000)
 
 # ticket compte principal (str) -> ticket compte suppléant (int, ou -1 en
 # DRY_RUN — pas de vrai ticket). Persisté dans Firestore (mirror_state) pour
