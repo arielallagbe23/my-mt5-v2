@@ -551,7 +551,7 @@ export function MistakesPage() {
   }
 
   return (
-    <div className={`${PAGE} lg:max-w-none`}>
+    <div className={`${PAGE} lg:mx-0 lg:max-w-none`}>
       <h1 className={PAGE_TITLE}>Erreurs et succès</h1>
       <p className="text-sm text-slate-400">
         Note ce que tu fais de mal ou de bien sur un trade, avec une capture si besoin — ou capture juste le trade

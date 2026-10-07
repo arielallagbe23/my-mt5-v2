@@ -214,7 +214,7 @@ export function SetOrderPage() {
   }
 
   return (
-    <div className={PAGE}>
+    <div className={`${PAGE} lg:mx-0`}>
       <h1 className={PAGE_TITLE}>Ordre manuel</h1>
       <p className="text-sm text-slate-400">
         {livePrice ? `USDJPY bid ${livePrice.bid} / ask ${livePrice.ask}` : 'Récupération du prix...'}

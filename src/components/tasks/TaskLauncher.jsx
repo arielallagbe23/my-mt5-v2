@@ -114,7 +114,7 @@ export function TaskLauncher({
 
       <div className="flex flex-col gap-1.5 text-xs text-slate-400">
         <div>SL / TP (optionnel — sinon calculés automatiquement à l'exécution)</div>
-        <div className="grid grid-cols-4 gap-2">
+        <div className="grid grid-cols-2 gap-2">
           <SlTpButton label="SL1" value={sl1Value} onClick={(v) => onManualSlChange(String(v))} />
           <SlTpButton label="SL2" value={sl2Value} onClick={(v) => onManualSlChange(String(v))} />
           <SlTpButton label="TP1" value={tp1Value} onClick={(v) => onManualTpChange(String(v))} />
@@ -237,12 +237,12 @@ export function TaskLauncher({
         )}
       </label>
 
-      <div className="flex gap-2">
+      <div className="flex flex-col gap-2">
         <button
           type="button"
           onClick={onSaveDraft}
           disabled={saving}
-          className="min-h-14 flex-1 rounded-sm border border-white/10 bg-white/5 text-base font-semibold text-slate-300 disabled:opacity-60"
+          className="min-h-14 rounded-sm border border-white/10 bg-white/5 text-base font-semibold text-slate-300 disabled:opacity-60"
         >
           {saving ? '...' : 'Enregistrer comme brouillon'}
         </button>
@@ -250,7 +250,7 @@ export function TaskLauncher({
           type="button"
           onClick={onFinalize}
           disabled={saving}
-          className="min-h-14 flex-1 rounded-sm bg-amber-600 text-base font-semibold text-white disabled:opacity-60"
+          className="min-h-14 rounded-sm bg-amber-600 text-base font-semibold text-white disabled:opacity-60"
         >
           {saving ? '...' : 'Confirmer la tâche'}
         </button>

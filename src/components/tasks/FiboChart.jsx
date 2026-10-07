@@ -1,10 +1,10 @@
 export function FiboChart({ linePositions, labelPositions, highlightZone }) {
   if (!labelPositions.length) {
-    return <div className="h-80 rounded-sm border border-white/10 bg-white/5" />
+    return <div className="h-96 rounded-sm border border-white/10 bg-white/5" />
   }
 
   return (
-    <div className="flex h-100 gap-1">
+    <div className="flex h-120 gap-1">
       <div className="relative w-1/6 shrink-0 rounded-sm border border-white/10 bg-white/5 px-4">
         {labelPositions.map(({ key, textClass, pos, percentLabel }) => (
           <span

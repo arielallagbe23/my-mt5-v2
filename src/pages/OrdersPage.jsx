@@ -204,7 +204,7 @@ export function OrdersPage() {
   const positions = data?.positions ?? []
 
   return (
-    <div className={`${PAGE} lg:max-w-5xl`}>
+    <div className={`${PAGE} lg:mx-0 lg:max-w-5xl`}>
       <div className="flex items-center justify-between gap-3">
         <h1 className={PAGE_TITLE}>Mes ordres</h1>
         <button

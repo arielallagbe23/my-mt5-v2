@@ -402,17 +402,17 @@ export function TasksPage({ taskId } = {}) {
   }
 
   return (
-    <div className={`${PAGE} lg:max-w-5xl`}>
+    <div className={`${PAGE} lg:mx-0 lg:max-w-none`}>
       <div className="flex items-center gap-2">
         <div className="text-sm font-bold text-white">USDJPY</div>
         {priceLoading && <span className="text-sm text-slate-400">Récupération du prix...</span>}
         {loadingTask && <span className="text-sm text-slate-400">Chargement du brouillon...</span>}
       </div>
 
-      <ScenarioToggle scenario={scenario} onToggle={toggleScenario} />
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:gap-4">
+        <div className="flex flex-col gap-3 lg:min-w-0 lg:w-[calc(50%-0.5rem)]">
+          <ScenarioToggle scenario={scenario} onToggle={toggleScenario} />
 
-      <div className="flex flex-col gap-3 lg:flex-row lg:gap-4">
-        <div className="lg:min-w-0 lg:w-[calc(50%-0.5rem)]">
           <FiboInputs
             fibo100={fibo100}
             fibo0={fibo0}
@@ -420,8 +420,6 @@ export function TasksPage({ taskId } = {}) {
             onFibo0Change={setFibo0}
             reversed={scenario === 'sell'}
           />
-        </div>
-        <div className="lg:min-w-0 lg:w-[calc(50%-0.5rem)]">
           <CandleReferenceForm
             timeframe={timeframe}
             onTimeframeChange={setTimeframe}
@@ -431,64 +429,57 @@ export function TasksPage({ taskId } = {}) {
             loading={candleLoading}
             error={candleError}
           />
-        </div>
-      </div>
-
-      <div className="flex flex-col gap-3 lg:flex-row lg:gap-4">
-        {candle && (
-          <div className="lg:min-w-0 lg:w-[calc(33.333%-0.5rem)]">
-            <CandleTable candle={candle} />
-          </div>
-        )}
-        <div className={`lg:min-w-0 ${candle ? 'lg:w-[calc(66.667%-0.5rem)]' : 'lg:w-full'}`}>
+          {candle && <CandleTable candle={candle} />}
           <FiboChart linePositions={linePositions} labelPositions={labelPositions} highlightZone={highlightZone} />
+
+          {fibo236Bounds && (
+            <div className="flex justify-center gap-4 text-sm text-slate-400">
+              <span>
+                Borne basse : <span className="font-semibold text-amber-400">{fibo236Bounds.low.toFixed(3)}</span>
+              </span>
+              <span>
+                Borne haute : <span className="font-semibold text-amber-400">{fibo236Bounds.high.toFixed(3)}</span>
+              </span>
+            </div>
+          )}
+        </div>
+
+        <div className="lg:min-w-0 lg:w-[calc(50%-0.5rem)]">
+          <TaskLauncher
+            scenario={scenario}
+            executionTime={executionTime}
+            onExecutionTimeChange={setExecutionTime}
+            priceCondition={priceCondition}
+            onPriceConditionChange={setPriceCondition}
+            supportPrice={supportPrice}
+            onSupportPriceChange={setSupportPrice}
+            manualEntry={manualEntry}
+            onManualEntryChange={setManualEntry}
+            sl1Value={sl1Value}
+            sl2Value={sl2Value}
+            tp1Value={tp1Value}
+            tp2Value={tp2Value}
+            manualSl={manualSl}
+            onManualSlChange={setManualSl}
+            manualTp={manualTp}
+            onManualTpChange={setManualTp}
+            risk={risk}
+            onRiskChange={setRisk}
+            riskAmount={riskAmount}
+            riskMode={riskMode}
+            riskUnit={riskUnit}
+            onRiskUnitChange={setRiskUnit}
+            riskAmountInput={riskAmountInput}
+            onRiskAmountInputChange={setRiskAmountInput}
+            growthPercent={growthPercent}
+            onSaveDraft={saveDraft}
+            onFinalize={finalizeTask}
+            saving={taskSaving}
+            saveError={taskSaveError}
+            savedStatus={taskSavedStatus}
+          />
         </div>
       </div>
-
-      {fibo236Bounds && (
-        <div className="flex justify-center gap-4 text-sm text-slate-400">
-          <span>
-            Borne basse : <span className="font-semibold text-amber-400">{fibo236Bounds.low.toFixed(3)}</span>
-          </span>
-          <span>
-            Borne haute : <span className="font-semibold text-amber-400">{fibo236Bounds.high.toFixed(3)}</span>
-          </span>
-        </div>
-      )}
-
-      <TaskLauncher
-        scenario={scenario}
-        executionTime={executionTime}
-        onExecutionTimeChange={setExecutionTime}
-        priceCondition={priceCondition}
-        onPriceConditionChange={setPriceCondition}
-        supportPrice={supportPrice}
-        onSupportPriceChange={setSupportPrice}
-        manualEntry={manualEntry}
-        onManualEntryChange={setManualEntry}
-        sl1Value={sl1Value}
-        sl2Value={sl2Value}
-        tp1Value={tp1Value}
-        tp2Value={tp2Value}
-        manualSl={manualSl}
-        onManualSlChange={setManualSl}
-        manualTp={manualTp}
-        onManualTpChange={setManualTp}
-        risk={risk}
-        onRiskChange={setRisk}
-        riskAmount={riskAmount}
-        riskMode={riskMode}
-        riskUnit={riskUnit}
-        onRiskUnitChange={setRiskUnit}
-        riskAmountInput={riskAmountInput}
-        onRiskAmountInputChange={setRiskAmountInput}
-        growthPercent={growthPercent}
-        onSaveDraft={saveDraft}
-        onFinalize={finalizeTask}
-        saving={taskSaving}
-        saveError={taskSaveError}
-        savedStatus={taskSavedStatus}
-      />
     </div>
   )
 }

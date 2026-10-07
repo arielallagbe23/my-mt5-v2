@@ -255,7 +255,7 @@ export function HomePage() {
   const activityCount = upcomingTasks.length + positions.length + reports.length;
 
   return (
-    <div className={`${PAGE} lg:max-w-max`}>
+    <div className={`${PAGE} lg:mx-0 lg:max-w-max`}>
       <div className="-mb-1 flex items-start justify-between gap-3">
         <div>
           <h1 className={PAGE_TITLE}>{greeting()}</h1>

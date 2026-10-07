@@ -82,7 +82,7 @@ export function AssigneesPage() {
   }
 
   return (
-    <div className={PAGE}>
+    <div className={`${PAGE} lg:mx-0`}>
       <h1 className={PAGE_TITLE}>Assignés</h1>
       <p className="text-sm text-slate-400">
         Liste des pseudos que tu pourras assigner plus tard (comptes, tâches...).

@@ -102,7 +102,7 @@ export function ProfilePage() {
   }
 
   return (
-    <div className={PAGE}>
+    <div className={`${PAGE} lg:mx-0`}>
       <h1 className={PAGE_TITLE}>Profil</h1>
 
       <div>

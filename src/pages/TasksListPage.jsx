@@ -97,7 +97,7 @@ export function TasksListPage({ onEditTask }) {
   const historyPageItems = historyTasks.slice(safePage * HISTORY_PAGE_SIZE, (safePage + 1) * HISTORY_PAGE_SIZE)
 
   return (
-    <div className={PAGE}>
+    <div className={`${PAGE} lg:mx-0 lg:max-w-5xl`}>
       <h1 className={PAGE_TITLE}>Liste des tâches</h1>
 
       {loading && <p className="text-sm text-slate-400">Chargement...</p>}
@@ -172,7 +172,8 @@ export function TasksListPage({ onEditTask }) {
                     onClick={() => setExpandedId(isOpen ? null : task.id)}
                     className="flex min-h-11 w-full items-center justify-between gap-2 px-3 py-2 text-left text-xs"
                   >
-                    <span className="text-slate-400">{formatDateTime(task.executionTime)}</span>
+                    <span className="shrink-0 text-slate-400">{formatDateTime(task.executionTime)}</span>
+                    <span className="hidden flex-1 truncate text-slate-500 lg:block">{historyDetail(task)}</span>
                     <span className="flex-1 truncate text-right text-slate-500">
                       {STATUS_LABELS[task.status] ?? task.status}
                     </span>
@@ -185,7 +186,7 @@ export function TasksListPage({ onEditTask }) {
                       {task.updatedAt && (
                         <p className="mt-0.5 text-slate-600">Évaluée le {formatExecutedAt(task.updatedAt)}</p>
                       )}
-                      <p className="mt-1.5 text-slate-400">{historyDetail(task)}</p>
+                      <p className="mt-1.5 text-slate-400 lg:hidden">{historyDetail(task)}</p>
                       <button
                         type="button"
                         onClick={() => handleDelete(task)}

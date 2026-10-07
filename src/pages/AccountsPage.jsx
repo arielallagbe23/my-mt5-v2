@@ -187,7 +187,7 @@ export function AccountsPage() {
   const entries = accounts ? Object.entries(accounts) : []
 
   return (
-    <div className={`${PAGE} lg:max-w-5xl`}>
+    <div className={`${PAGE} lg:mx-0 lg:max-w-5xl`}>
       <h1 className={PAGE_TITLE}>Mes comptes</h1>
 
       {loading && <p className="text-sm text-slate-400">Chargement...</p>}
