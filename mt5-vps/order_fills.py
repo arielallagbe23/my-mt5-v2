@@ -14,9 +14,10 @@ from position_shared import POSITION_TYPE_NAMES, resolve_timeframe
 
 # Timeframe appliqué automatiquement à une position tout juste déclenchée
 # quand rien ne la suit déjà (ni une tâche — comment "task-{id}" — ni une
-# activation manuelle antérieure via managed_positions) — même valeur par
-# défaut que le bouton "Activer" côté app (OrdersPage.jsx).
-AUTO_TRAILING_TIMEFRAME = "H1"
+# activation manuelle antérieure via managed_positions) — H4 choisi car
+# c'est le timeframe utilisé la plupart du temps (différent du défaut H1 du
+# bouton "Activer" côté app, OrdersPage.jsx, qui reste inchangé).
+AUTO_TRAILING_TIMEFRAME = "H4"
 
 # État en mémoire (pas en Firestore, pour ne rien coûter en lecture/écriture)
 # du dernier ensemble de tickets d'ordres différés connu. None = pas encore
