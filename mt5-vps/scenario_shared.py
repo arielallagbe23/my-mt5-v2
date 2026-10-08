@@ -68,6 +68,56 @@ def invert_lot_size(lot, entry_price, sl_price, current_price):
     return (lot / (1 - FEE_BUFFER)) * risk_per_lot
 
 
+# Port direct de src/lib/riskTiers.js (RISK_STRATEGY_PRESETS, computeGrowthPercent,
+# computeAutoRisk) — à garder cohérent si les paliers changent un jour côté app.
+# Utilisé par mirror_follower.py pour que chaque suppléant recalcule son propre
+# lot selon SA stratégie de risque (account_settings/{vpsId}.riskStrategy),
+# plutôt qu'un simple prorata sur la taille de compte par rapport au principal.
+RISK_STRATEGY_PRESETS = {
+    "strategy-1": {"tiers": [], "cap_risk": 0.5},
+    "strategy-2": {
+        "tiers": [{"threshold": 3.05, "risk": 0.5}, {"threshold": 7.05, "risk": 1}],
+        "cap_risk": 2,
+    },
+    "strategy-3": {
+        "tiers": [
+            {"threshold": 2.05, "risk": 0.5},
+            {"threshold": 3.05, "risk": 1},
+            {"threshold": 4.05, "risk": 2},
+        ],
+        "cap_risk": 3,
+    },
+    "strategy-4": {"tiers": [{"threshold": 1.05, "risk": 0.5}], "cap_risk": 1},
+    "strategy-5": {"tiers": [], "cap_risk": 1},
+}
+
+
+def compute_growth_percent(equity, account_size):
+    """Croissance de l'équité live par rapport au capital de référence FIXE
+    (account_size, jamais l'équité elle-même comme base — voir mémoire
+    risk_sizing_strategy)."""
+    if equity is None or not account_size:
+        return None
+    return ((equity - account_size) / account_size) * 100
+
+
+def compute_auto_risk(growth_percent, tiers, cap_risk):
+    """Même règle que computeAutoRisk (riskTiers.js) : paliers ascendants,
+    chaque palier réclame la croissance <= son seuil, sauf le dernier avant
+    le plafond qui est strict (<) — pile au seuil, c'est déjà le plafond."""
+    if growth_percent is None:
+        return None
+    sorted_tiers = sorted(tiers or [], key=lambda t: t["threshold"])
+    for i, tier in enumerate(sorted_tiers):
+        is_last = i == len(sorted_tiers) - 1
+        if is_last:
+            if growth_percent < tier["threshold"]:
+                return tier["risk"]
+        elif growth_percent <= tier["threshold"]:
+            return tier["risk"]
+    return cap_risk
+
+
 def fibo_price(hi, lo, level):
     """Prix correspondant à un niveau de retracement Fibonacci entre `lo` (0%) et
     `hi` (100%). Ex: level=0.236 -> prix à 23,6% en remontant de lo vers hi. Les

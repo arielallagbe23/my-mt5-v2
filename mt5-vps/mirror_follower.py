@@ -2,11 +2,16 @@
 """
 mirror_follower.py — Process SÉPARÉ pour un compte suppléant : reproduit en
 quasi temps réel les positions ET les ordres différés USDJPY publiés par
-mirror_publish.py (compte principal), avec un lot recalculé au prorata de
-l'account_size de CE compte-ci (voir compute_follower_lot) — jamais un
-recalcul indépendant du risque, un simple prorata sur la taille de compte,
-mis en cache 60s (ACCOUNT_SIZE_CACHE_SECONDS) pour s'adapter automatiquement
-si un palier change (challenge validé, scaling plan...) sans relire
+mirror_publish.py (compte principal), avec un lot recalculé selon LA PROPRE
+Stratégie de risque de ce suppléant (account_settings/{FOLLOWER_ID}.riskStrategy
++ sa propre équité live — voir compute_follower_lot_by_strategy) : le lot/risque
+réellement utilisé côté principal n'entre pas en compte, chaque suppléant
+applique son propre risque % à la distance entrée/SL de la position mirrorée.
+Si le suppléant est en mode "manuel" (pas de stratégie choisie), on retombe
+sur un simple prorata de l'account_size par rapport au principal (voir
+compute_follower_lot) — account_size et riskStrategy sont mis en cache 60s
+(ACCOUNT_SIZE_CACHE_SECONDS) pour s'adapter automatiquement si un palier
+change (challenge validé, scaling plan, stratégie changée...) sans relire
 Firestore à chaque tour de boucle pour retomber sur la même valeur.
 
 IMPORTANT (quota Firestore dépassé, corrigé) : les écritures (statut,
@@ -51,6 +56,7 @@ import time
 import traceback
 
 from mt5_client import ensure_mt5
+from scenario_shared import RISK_STRATEGY_PRESETS, compute_auto_risk, compute_growth_percent, compute_lot_size
 
 _DIR = os.path.dirname(os.path.abspath(__file__))
 
@@ -187,14 +193,63 @@ def _account_size(db, vps_id):
     return value
 
 
+# riskStrategy change rarement (changé à la main sur Mes comptes) — même
+# cache 60s que _account_size, pour ne pas relire Firestore à chaque tour.
+_risk_strategy_cache = {}
+
+
+def _risk_strategy(db, vps_id):
+    cached = _risk_strategy_cache.get(vps_id)
+    if cached is not None and (time.time() - cached[1]) < ACCOUNT_SIZE_CACHE_SECONDS:
+        return cached[0]
+
+    doc = db.collection("account_settings").document(vps_id).get()
+    value = doc.to_dict().get("riskStrategy") if doc.exists else None
+    _risk_strategy_cache[vps_id] = (value, time.time())
+    return value
+
+
 def compute_follower_lot(master_volume, master_account_size, follower_account_size):
     """Prorata simple sur l'account_size — le lot suit le même ratio que
     les tailles de compte (compte suppléant deux fois plus gros -> lot
-    doublé), pas un recalcul indépendant du risque à partir de l'entrée/SL."""
+    doublé), pas un recalcul indépendant du risque à partir de l'entrée/SL.
+    Filet de secours UNIQUEMENT : utilisé quand le suppléant est en mode
+    "manuel" (pas de Stratégie de risque choisie) — voir
+    compute_follower_lot_by_strategy, qui a priorité dès qu'une stratégie
+    est configurée."""
     if not master_account_size or not follower_account_size or not master_volume:
         return None
     ratio = follower_account_size / master_account_size
     return max(0.01, round(master_volume * ratio, 2))
+
+
+def compute_follower_lot_by_strategy(db, m, follower_account_size, entry, sl):
+    """Lot calculé à partir du risque PROPRE à ce suppléant (sa Stratégie de
+    risque choisie sur Mes comptes + SA propre équité live), à la distance
+    entrée/SL de la position/ordre mirroré — complètement indépendant du lot
+    ou du risque réellement utilisé côté compte principal. Retourne None si
+    le suppléant est en mode "manuel" (pas de stratégie à appliquer, voir
+    compute_follower_lot) ou si une donnée nécessaire manque."""
+    strategy = _risk_strategy(db, FOLLOWER_ID)
+    preset = RISK_STRATEGY_PRESETS.get(strategy)
+    if preset is None:
+        return None
+
+    ai = m.account_info()
+    if ai is None or not follower_account_size:
+        return None
+
+    growth = compute_growth_percent(ai.equity, follower_account_size)
+    risk_percent = compute_auto_risk(growth, preset["tiers"], preset["cap_risk"])
+    if risk_percent is None:
+        return None
+    risk_amount = (risk_percent / 100) * follower_account_size
+
+    tick = m.symbol_info_tick(PRICE_SYMBOL)
+    if tick is None:
+        return None
+
+    return compute_lot_size(risk_amount, entry, sl, tick.bid)
 
 
 STATUS_HEARTBEAT_SECONDS = 60
@@ -433,10 +488,16 @@ def sync_mirror(db):
 
     # 1a. Ouvrir les positions du compte principal pas encore miroitées (ni
     # déjà ouvertes avant le démarrage de ce process — voir _is_pre_existing).
+    # Le lot suit TOUJOURS la Stratégie de risque de CE suppléant quand elle
+    # est configurée (compute_follower_lot_by_strategy) — le prorata sur la
+    # taille de compte (compute_follower_lot) n'est qu'un filet de secours
+    # pour un suppléant en mode "manuel".
     for master_ticket, master_pos in master_positions.items():
         if master_ticket in _mirrored_tickets or _is_pre_existing(master_ticket, master_pos):
             continue
-        lot = compute_follower_lot(master_pos["volume"], master_account_size, follower_account_size)
+        lot = compute_follower_lot_by_strategy(db, m, follower_account_size, master_pos["entry"], master_pos["sl"])
+        if lot is None:
+            lot = compute_follower_lot(master_pos["volume"], master_account_size, follower_account_size)
         if lot is None:
             print(f"[MIRROR] account_size manquant (principal ou suppléant), position {master_ticket} ignorée pour l'instant")
             continue
@@ -446,7 +507,9 @@ def sync_mirror(db):
     for master_ticket, master_order in master_orders.items():
         if master_ticket in _mirrored_tickets or _is_pre_existing(master_ticket, master_order):
             continue
-        lot = compute_follower_lot(master_order["volume"], master_account_size, follower_account_size)
+        lot = compute_follower_lot_by_strategy(db, m, follower_account_size, master_order["entry"], master_order["sl"])
+        if lot is None:
+            lot = compute_follower_lot(master_order["volume"], master_account_size, follower_account_size)
         if lot is None:
             print(f"[MIRROR] account_size manquant (principal ou suppléant), ordre différé {master_ticket} ignoré pour l'instant")
             continue
