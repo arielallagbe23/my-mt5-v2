@@ -11,7 +11,9 @@ mt5_status.py — Point d'entrée du VPS. Toutes les POLL_INTERVAL secondes :
     York), les jours ouvrés uniquement, jamais plus d'une fois par session
     et par jour (session_alerts.py) ;
   - surveille les ordres différés et positions ouvertes : notifie un
-    déclenchement d'ordre, la progression vers le TP, notifie où en est
+    déclenchement d'ordre, annule automatiquement un ordre différé jamais
+    déclenché si le marché a déjà parcouru 50% du chemin PE->TP sans lui
+    (pending_order_watch.py), la progression vers le TP, notifie où en est
     chaque position suivie (TP/SL) à chaque clôture H1/H4 et déplace le SL
     par paliers (BE, 25%, 50%) — respecte DRY_RUN comme le reste
     (order_fills.py, untracked_positions.py, tp_progress.py, trailing_stop.py) ;
@@ -65,6 +67,7 @@ from mirror_publish import publish_master_orders, publish_master_positions
 from mt5_client import set_default_path
 from on_demand import check_all_requests
 from order_fills import check_order_fills
+from pending_order_watch import check_missed_entry_orders
 from scheduled_orders import check_due_scheduled_orders
 from session_alerts import check_session_alerts
 from tasks import check_due_tasks
@@ -112,6 +115,7 @@ def run():
         ("check_pre_close_alerts", check_pre_close_alerts),
         ("check_session_alerts", check_session_alerts),
         ("check_order_fills", check_order_fills),
+        ("check_missed_entry_orders", check_missed_entry_orders),
         ("check_untracked_positions", check_untracked_positions),
         ("check_tp_progress", check_tp_progress),
         ("check_trailing_stop", check_trailing_stop),
