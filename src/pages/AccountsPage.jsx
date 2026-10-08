@@ -19,6 +19,7 @@ const RISK_STRATEGY_OPTIONS = [
   { value: 'strategy-3', label: 'Stratégie 3 (0,5% → 1% → 2% → 3%)' },
   { value: 'strategy-4', label: 'Stratégie 4 (0,5% → 1%)' },
   { value: 'strategy-5', label: 'Stratégie 5 (1% fixe)' },
+  { value: 'strategy-6', label: 'Stratégie 6 (2% fixe)' },
 ]
 
 const RISK_STRATEGY_DESCRIPTIONS = {
@@ -31,6 +32,7 @@ const RISK_STRATEGY_DESCRIPTIONS = {
   'strategy-4':
     '0,5% jusqu\'à 1,05% de croissance, puis 1% au-delà — redescend tout seul si l\'équité redescend, sans mémoire.',
   'strategy-5': '1% de risque fixe, quelle que soit la croissance de l\'équité.',
+  'strategy-6': '2% de risque fixe, quelle que soit la croissance de l\'équité.',
 }
 
 export function AccountsPage() {

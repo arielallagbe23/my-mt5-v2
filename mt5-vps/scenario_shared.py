@@ -89,6 +89,7 @@ RISK_STRATEGY_PRESETS = {
     },
     "strategy-4": {"tiers": [{"threshold": 1.05, "risk": 0.5}], "cap_risk": 1},
     "strategy-5": {"tiers": [], "cap_risk": 1},
+    "strategy-6": {"tiers": [], "cap_risk": 2},
 }
 
 

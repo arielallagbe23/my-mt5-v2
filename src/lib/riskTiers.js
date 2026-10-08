@@ -44,6 +44,7 @@ export const RISK_STRATEGY_PRESETS = {
     capRisk: 1,
   },
   'strategy-5': { tiers: [], capRisk: 1 },
+  'strategy-6': { tiers: [], capRisk: 2 },
 }
 
 export function computeGrowthPercent(equity, accountSize) {

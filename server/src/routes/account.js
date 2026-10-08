@@ -92,7 +92,7 @@ router.get('/all', requireAuth, async (req, res) => {
 
 const MAX_PSEUDO_LENGTH = 40
 const MAX_ASSOCIATE_LENGTH = 40
-const RISK_STRATEGIES = new Set(['manual', 'strategy-1', 'strategy-2', 'strategy-3', 'strategy-4', 'strategy-5'])
+const RISK_STRATEGIES = new Set(['manual', 'strategy-1', 'strategy-2', 'strategy-3', 'strategy-4', 'strategy-5', 'strategy-6'])
 
 // Pseudo, associé et/ou stratégie de risque d'un compte — édités
 // indépendamment depuis la page "Mes comptes" (merge:true : un PATCH
