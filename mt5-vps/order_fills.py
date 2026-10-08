@@ -1,13 +1,22 @@
 """
 order_fills.py — Détecte quand un ordre différé se transforme en position
-ouverte (déclenché) et notifie. Seule responsabilité de ce module : suivre
-le passage ordre -> position, à chaque tour de boucle.
+ouverte (déclenché), notifie, et active automatiquement le suivi trailing
+stop dessus si rien ne le suit déjà. Seule responsabilité de ce module :
+suivre le passage ordre -> position, à chaque tour de boucle.
 """
+
+import time
 
 from config import PRICE_SYMBOL
 from mt5_client import ensure_mt5
 from notify import notify
-from position_shared import POSITION_TYPE_NAMES
+from position_shared import POSITION_TYPE_NAMES, resolve_timeframe
+
+# Timeframe appliqué automatiquement à une position tout juste déclenchée
+# quand rien ne la suit déjà (ni une tâche — comment "task-{id}" — ni une
+# activation manuelle antérieure via managed_positions) — même valeur par
+# défaut que le bouton "Activer" côté app (OrdersPage.jsx).
+AUTO_TRAILING_TIMEFRAME = "H1"
 
 # État en mémoire (pas en Firestore, pour ne rien coûter en lecture/écriture)
 # du dernier ensemble de tickets d'ordres différés connu. None = pas encore
@@ -53,5 +62,17 @@ def check_order_fills(db):
                 f"{pos.symbol} {side} @ {pos.price_open} vient de s'ouvrir (ticket {ticket})",
             )
             print(f"[FILL] ticket {ticket} déclenché : {pos.symbol} {side} @ {pos.price_open}")
+
+            # Suivi trailing stop automatique : si cette position n'est déjà
+            # suivie ni par une tâche (comment "task-{id}") ni par une
+            # activation manuelle antérieure, on l'active nous-mêmes — plus
+            # besoin de cliquer "Activer" après coup pour un ordre différé
+            # (manuel ou programmé) qui vient de se déclencher.
+            if resolve_timeframe(db, ticket, pos.comment) is None:
+                db.collection("managed_positions").document(str(ticket)).set({
+                    "timeframe": AUTO_TRAILING_TIMEFRAME,
+                    "activatedAt": int(time.time() * 1000),
+                })
+                print(f"[FILL] ticket {ticket} : suivi trailing stop activé automatiquement ({AUTO_TRAILING_TIMEFRAME})")
 
     _last_pending_tickets = current_tickets
