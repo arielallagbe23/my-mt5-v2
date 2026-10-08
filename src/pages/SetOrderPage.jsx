@@ -3,6 +3,7 @@ import { api } from '../lib/api'
 import { PAGE, PAGE_TITLE, FIELD_INPUT } from '../lib/layout'
 import { requestAndPoll, isFreshTs } from '../lib/onDemand'
 import { ScenarioToggle } from '../components/tasks/ScenarioToggle'
+import { computeGrowthPercent, computeAutoRisk, RISK_STRATEGY_PRESETS } from '../lib/riskTiers'
 
 // Mêmes constantes que mt5-vps/config.py — uniquement pour l'aperçu du lot
 // affiché avant l'envoi. Le calcul qui compte réellement est refait côté
@@ -43,6 +44,8 @@ export function SetOrderPage() {
 
   const [livePrice, setLivePrice] = useState(null)
   const [accountSize, setAccountSize] = useState(null)
+  const [equity, setEquity] = useState(null)
+  const [riskStrategy, setRiskStrategy] = useState('manual')
 
   const [confirming, setConfirming] = useState(false)
   const [validationError, setValidationError] = useState('')
@@ -76,6 +79,8 @@ export function SetOrderPage() {
       .then((data) => {
         const size = data.accounts?.[String(data.login)]?.account_size
         if (typeof size === 'number') setAccountSize(size)
+        if (typeof data.equity === 'number') setEquity(data.equity)
+        setRiskStrategy(data.riskStrategy ?? 'manual')
       })
       .catch(() => {})
     loadScheduledOrders()
@@ -83,6 +88,24 @@ export function SetOrderPage() {
       cancelled = true
     }
   }, [])
+
+  // En mode auto, le risque suit la Stratégie de risque choisie pour CE
+  // compte (Mes comptes) — jamais de choix manuel, voir riskTiers.js et
+  // le même mécanisme déjà utilisé par TaskLauncher.jsx (tâches).
+  const riskMode = riskStrategy === 'manual' ? 'manual' : 'auto'
+  const riskPreset = RISK_STRATEGY_PRESETS[riskStrategy]
+  const growthPercent = computeGrowthPercent(equity, accountSize)
+  const autoRiskPercent = riskPreset ? computeAutoRisk(growthPercent, riskPreset.tiers, riskPreset.capRisk) : null
+
+  useEffect(() => {
+    if (riskMode === 'auto' && autoRiskPercent != null) {
+      setRisk(String(autoRiskPercent))
+    }
+  }, [riskMode, autoRiskPercent])
+
+  // Le mode auto est toujours en %, jamais en montant fixe — même règle
+  // que TasksPage.jsx.
+  const effectiveRiskUnit = riskMode === 'auto' ? 'percent' : riskUnit
 
   const parsedSl = parseFloat(sl)
   const parsedTp = parseFloat(tp)
@@ -93,7 +116,7 @@ export function SetOrderPage() {
   const effectiveEntry = orderKind === 'market' ? marketEntry : parsedEntry
 
   const riskAmount =
-    riskUnit === 'amount'
+    effectiveRiskUnit === 'amount'
       ? Number.isFinite(parsedRiskAmountInput)
         ? parsedRiskAmountInput
         : null
@@ -124,7 +147,7 @@ export function SetOrderPage() {
       setValidationError('TP invalide.')
       return
     }
-    if (riskUnit === 'amount') {
+    if (effectiveRiskUnit === 'amount') {
       if (!Number.isFinite(parsedRiskAmountInput) || parsedRiskAmountInput <= 0) {
         setValidationError('Montant risqué invalide.')
         return
@@ -145,7 +168,7 @@ export function SetOrderPage() {
     setSending(true)
 
     const riskFields =
-      riskUnit === 'amount'
+      effectiveRiskUnit === 'amount'
         ? { riskType: 'amount', riskAmount: parsedRiskAmountInput }
         : { riskType: 'percent', risk: parsedRisk }
 
@@ -273,78 +296,91 @@ export function SetOrderPage() {
 
         <label className="flex flex-col gap-1.5 text-xs text-slate-400">
           <div>Risque</div>
-          <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={() => setRiskUnit('percent')}
-              className={`min-h-8 flex-1 rounded-sm text-xs font-semibold transition-colors ${
-                riskUnit === 'percent' ? 'bg-amber-600 text-white' : 'bg-white/5 text-slate-400'
-              }`}
-            >
-              % du capital
-            </button>
-            <button
-              type="button"
-              onClick={() => setRiskUnit('amount')}
-              className={`min-h-8 flex-1 rounded-sm text-xs font-semibold transition-colors ${
-                riskUnit === 'amount' ? 'bg-amber-600 text-white' : 'bg-white/5 text-slate-400'
-              }`}
-            >
-              Montant fixe ($)
-            </button>
-          </div>
-
-          {riskUnit === 'amount' ? (
-            <input
-              type="number"
-              inputMode="decimal"
-              min="0"
-              step="1"
-              placeholder="Montant en $"
-              value={riskAmountInput}
-              onChange={(e) => setRiskAmountInput(e.target.value)}
-              className={FIELD_INPUT}
-            />
+          {riskMode === 'auto' ? (
+            <div className="rounded-sm border border-amber-500/30 bg-amber-500/10 p-2">
+              <p className="text-sm font-semibold text-white">{risk !== '' ? `${risk}%` : '—'} (auto)</p>
+              <p className="mt-0.5 text-xs text-slate-400">
+                {typeof growthPercent === 'number'
+                  ? `Calculé depuis la croissance de l'équité (${growthPercent >= 0 ? '+' : ''}${growthPercent.toFixed(2)}%) — voir Paramètres.`
+                  : 'Calculé automatiquement — voir Paramètres.'}
+              </p>
+            </div>
           ) : (
             <>
               <div className="flex gap-2">
-                {RISK_PRESETS.map((preset) => (
-                  <button
-                    key={preset}
-                    type="button"
-                    onClick={() => {
-                      setRisk(preset)
-                      setCustomRisk(false)
-                    }}
-                    className={`min-h-9 flex-1 rounded-sm text-sm font-semibold transition-colors ${
-                      !customRisk && risk === preset ? 'bg-amber-600 text-white' : 'bg-amber-500/15 text-amber-300'
-                    }`}
-                  >
-                    {preset}%
-                  </button>
-                ))}
                 <button
                   type="button"
-                  onClick={() => setCustomRisk(true)}
-                  className={`min-h-9 flex-1 rounded-sm text-sm font-semibold transition-colors ${
-                    customRisk ? 'bg-amber-600 text-white' : 'bg-amber-500/15 text-amber-300'
+                  onClick={() => setRiskUnit('percent')}
+                  className={`min-h-8 flex-1 rounded-sm text-xs font-semibold transition-colors ${
+                    riskUnit === 'percent' ? 'bg-amber-600 text-white' : 'bg-white/5 text-slate-400'
                   }`}
                 >
-                  Autre
+                  % du capital
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setRiskUnit('amount')}
+                  className={`min-h-8 flex-1 rounded-sm text-xs font-semibold transition-colors ${
+                    riskUnit === 'amount' ? 'bg-amber-600 text-white' : 'bg-white/5 text-slate-400'
+                  }`}
+                >
+                  Montant fixe ($)
                 </button>
               </div>
-              {customRisk && (
+
+              {riskUnit === 'amount' ? (
                 <input
                   type="number"
                   inputMode="decimal"
                   min="0"
-                  max={MAX_RISK_PERCENT}
-                  step="0.1"
-                  placeholder={`Max ${MAX_RISK_PERCENT}%`}
-                  value={risk}
-                  onChange={(e) => setRisk(e.target.value)}
+                  step="1"
+                  placeholder="Montant en $"
+                  value={riskAmountInput}
+                  onChange={(e) => setRiskAmountInput(e.target.value)}
                   className={FIELD_INPUT}
                 />
+              ) : (
+                <>
+                  <div className="flex gap-2">
+                    {RISK_PRESETS.map((preset) => (
+                      <button
+                        key={preset}
+                        type="button"
+                        onClick={() => {
+                          setRisk(preset)
+                          setCustomRisk(false)
+                        }}
+                        className={`min-h-9 flex-1 rounded-sm text-sm font-semibold transition-colors ${
+                          !customRisk && risk === preset ? 'bg-amber-600 text-white' : 'bg-amber-500/15 text-amber-300'
+                        }`}
+                      >
+                        {preset}%
+                      </button>
+                    ))}
+                    <button
+                      type="button"
+                      onClick={() => setCustomRisk(true)}
+                      className={`min-h-9 flex-1 rounded-sm text-sm font-semibold transition-colors ${
+                        customRisk ? 'bg-amber-600 text-white' : 'bg-amber-500/15 text-amber-300'
+                      }`}
+                    >
+                      Autre
+                    </button>
+                  </div>
+                  {customRisk && (
+                    <input
+                      type="number"
+                      inputMode="decimal"
+                      min="0"
+                      max={MAX_RISK_PERCENT}
+                      step="0.1"
+                      placeholder={`Max ${MAX_RISK_PERCENT}%`}
+                      value={risk}
+                      onChange={(e) => setRisk(e.target.value)}
+                      className={FIELD_INPUT}
+                    />
+                  )}
+                </>
               )}
             </>
           )}
@@ -435,7 +471,7 @@ export function SetOrderPage() {
             <span>
               Risque :{' '}
               <span className="font-semibold text-white">
-                {riskUnit === 'amount' ? `${parsedRiskAmountInput}$` : `${parsedRisk}%`}
+                {effectiveRiskUnit === 'amount' ? `${parsedRiskAmountInput}$` : `${parsedRisk}%`}
               </span>
             </span>
             {mode === 'scheduled' && (
