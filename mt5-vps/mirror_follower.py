@@ -55,6 +55,7 @@ import threading
 import time
 import traceback
 
+from account_order import command_doc_id, handle_account_order_request
 from mt5_client import ensure_mt5
 from scenario_shared import RISK_STRATEGY_PRESETS, compute_auto_risk, compute_growth_percent, compute_lot_size
 
@@ -459,11 +460,25 @@ def _is_pre_existing(master_ticket, master_state_doc):
     return False
 
 
+def check_account_order_requests(db, m):
+    """Ordre manuel indépendant placé directement sur CE suppléant depuis le
+    nouvel onglet "par compte" (account_order.py, partagé avec on_demand.py
+    côté principal) — commands/account_order_request_{FOLLOWER_ID}. Ce
+    process n'a sinon AUCUNE lecture de la collection commands (il ne fait
+    que mirror) ; c'est la seule commande qu'il traite lui-même."""
+    doc = db.collection("commands").document(command_doc_id(FOLLOWER_ID)).get()
+    if not doc.exists or doc.to_dict().get("status") != "pending":
+        return
+    follower_account_size = _account_size(db, FOLLOWER_ID)
+    handle_account_order_request(db, doc, m, FOLLOWER_ID, follower_account_size, MAGIC, DRY_RUN, PRICE_SYMBOL)
+
+
 def sync_mirror(db):
     m = ensure_mt5(path=TERMINAL_PATH)
     if m is None:
         return
 
+    check_account_order_requests(db, m)
     _publish_own_status(db, m)
 
     _start_master_state_listeners(db)

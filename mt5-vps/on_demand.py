@@ -17,6 +17,7 @@ from datetime import datetime, timedelta, timezone
 from google.cloud.firestore_v1.base_query import FieldFilter
 
 import crypto_utils
+from account_order import command_doc_id, handle_account_order_request
 from config import DRY_RUN, MAGIC, MAX_RISK_PERCENT, PRICE_SYMBOL, VPS_ID
 from mt5_client import ensure_mt5
 from notify import notify
@@ -622,6 +623,22 @@ def _handle_market_recap_request(db, doc):
     print(f"[MARKET_RECAP] terminé, {len(failed)} échec(s) sur {len(MARKET_RECAP_SCRIPTS)}")
 
 
+def _handle_account_order_request_main(db, doc):
+    """Wrapper pour le compte principal du nouvel onglet "ordre par compte"
+    (account_order.py, générique) — fournit m/vps_id/account_size/magic/
+    dry_run propres au principal. Totalement séparé de set_order_request
+    (l'ancien "Ordre manuel", intouché) : voir account_order.py."""
+    m = ensure_mt5()
+    if m is None:
+        doc.reference.update({"status": "done"})
+        db.collection("account_order_results").document(VPS_ID).set(
+            {"vpsId": VPS_ID, "success": False, "error": "MT5 indisponible", "ts": int(time.time())}
+        )
+        return
+    account_size = _account_size(db, m.account_info().login)
+    handle_account_order_request(db, doc, m, VPS_ID, account_size, MAGIC, DRY_RUN, PRICE_SYMBOL)
+
+
 HANDLERS = {
     "status_request": _handle_status_request,
     "price_request": _handle_price_request,
@@ -633,6 +650,7 @@ HANDLERS = {
     "adjust_order_request": _handle_adjust_order_request,
     "market_recap_request": _handle_market_recap_request,
     "switch_account_request": _handle_switch_account_request,
+    command_doc_id(VPS_ID): _handle_account_order_request_main,
 }
 
 
