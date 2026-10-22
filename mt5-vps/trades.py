@@ -9,6 +9,9 @@ trades.py — Historique des trades fermés, pour le Journal.
     quand une position ouverte disparaît (fermée — SL, TP, manuelle...) et
     écrit son trade automatiquement, sans action de l'utilisateur. Une fois
     l'import initial fait, plus jamais besoin de resynchroniser à la main.
+    Crée aussi, pour chaque position ainsi détectée, une entrée dans le
+    journal "Erreurs et succès" (voir auto_journal.py) — pas pour l'import
+    en masse ci-dessus, qui inonderait le journal d'anciens trades.
 
 Les deux partagent _deals_to_trade, qui utilise le champ `reason` fourni par
 MT5 (DEAL_REASON_SL/TP/...) pour classer le résultat — fiable, contrairement
@@ -16,8 +19,10 @@ MT5 (DEAL_REASON_SL/TP/...) pour classer le résultat — fiable, contrairement
 """
 
 import time
+import traceback
 from datetime import datetime, timedelta, timezone
 
+import auto_journal
 from config import PRICE_SYMBOL
 from mt5_client import ensure_mt5
 
@@ -148,5 +153,15 @@ def check_closed_positions(db):
             continue
         db.collection("trades").document(str(position_id)).set(trade)
         print(f"[TRADES] position {position_id} fermée : net={trade['net']:.2f} ({trade['reason']})")
+
+        # Isolé dans son propre try/except : un souci ici (ex: aucun
+        # utilisateur trouvé) ne doit jamais empêcher le trade d'être
+        # enregistré ci-dessus, ni la boucle de continuer sur les autres
+        # positions fermées de ce même tour.
+        try:
+            auto_journal.create_entry_from_trade(db, trade)
+        except Exception:
+            print(f"[AUTO_JOURNAL] échec création d'entrée pour la position {position_id} :")
+            traceback.print_exc()
 
     _last_open_position_ids = current_ids
