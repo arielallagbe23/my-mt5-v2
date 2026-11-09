@@ -51,6 +51,7 @@ Pré-requis Firestore (comme pour le compte principal) :
 """
 
 import os
+import sys
 import threading
 import time
 import traceback
@@ -58,6 +59,13 @@ import traceback
 from account_order import command_doc_id, handle_account_order_request
 from mt5_client import ensure_mt5
 from scenario_shared import RISK_STRATEGY_PRESETS, compute_auto_risk, compute_growth_percent, compute_lot_size
+
+# Windows ouvre souvent la console avec l'ancien codepage (cp1252), qui ne
+# sait pas encoder certains caractères utilisés dans nos messages (ex: "→")
+# — sans ça, un simple print() plante le process entier. Voir la même note
+# dans mt5_status.py pour le détail.
+sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 
 _DIR = os.path.dirname(os.path.abspath(__file__))
 

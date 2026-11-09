@@ -34,6 +34,16 @@ import subprocess
 import sys
 import threading
 
+# Windows ouvre souvent la console avec l'ancien codepage (cp1252), qui ne
+# sait pas encoder certains caractères utilisés dans nos messages (ex: "→")
+# — sans ça, un print() ici (relayant une ligne d'un sous-process) plante
+# tout run_all.py. Les sous-process eux-mêmes forcent aussi leur stdout en
+# UTF-8 (voir la même note dans mt5_status.py/mirror_follower.py) — il faut
+# donc aussi décoder leur pipe en UTF-8 ci-dessous (Popen encoding=), sinon
+# ça ne fait que déplacer le problème (déchiffrer du cp1252 côté parent).
+sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+
 _DIR = os.path.dirname(os.path.abspath(__file__))
 
 
@@ -75,6 +85,8 @@ def main():
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
                 text=True,
+                encoding="utf-8",
+                errors="replace",
                 bufsize=1,
                 env=env,
             )

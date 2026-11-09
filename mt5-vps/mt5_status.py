@@ -57,6 +57,7 @@ Pré-requis (sur le VPS) :
 """
 
 import os
+import sys
 import time
 import traceback
 
@@ -74,6 +75,17 @@ from tasks import check_due_tasks
 from tp_progress import check_tp_progress
 from trades import check_closed_positions
 from trailing_stop import check_trailing_stop
+
+# Windows ouvre souvent la console avec l'ancien codepage (cp1252), qui ne
+# sait pas encoder certains caractères utilisés dans nos messages (ex: "→").
+# Sans ça, un simple print() plante le process entier (UnicodeEncodeError)
+# dès qu'un tel caractère apparaît — observé en prod sur _check_sl_drift
+# (trailing_stop.py). Forcer stdout/stderr en UTF-8 dès le démarrage évite
+# la classe entière de bug, pas juste ce message précis. errors="replace"
+# en filet de sécurité : un caractère vraiment non affichable devient "?"
+# plutôt que de faire planter le process.
+sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 from untracked_positions import check_untracked_positions
 
 
