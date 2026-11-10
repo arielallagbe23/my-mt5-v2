@@ -38,7 +38,7 @@ function Chart({ quarterly, unit, accountSize, gradientId }) {
   const lastPoint = points[points.length - 1]
 
   return (
-    <div className="flex h-48 gap-2">
+    <div className="flex min-h-0 flex-1 gap-2">
       <div className="relative w-11 shrink-0 font-mono text-xs text-slate-500">
         {max > 0 && (
           <span className="absolute left-0 -translate-y-1/2" style={{ top: `${yFor(max)}%` }}>
