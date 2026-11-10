@@ -221,14 +221,13 @@ export function JournalPage() {
             </div>
           </div>
 
-          {/* Ligne 3.5 : historique du P&L par trimestre (tableau) + courbe, même poids visuel (1/2 chacun) */}
-          <div className="flex flex-col gap-3 lg:flex-row lg:gap-4">
-            <div className="lg:w-[calc(50%-0.5rem)]">
-              <QuarterlyPnlTable quarterly={quarterly} unit={curveUnit} accountSize={accountSize} />
-            </div>
-            <div className="lg:w-[calc(50%-0.5rem)]">
-              <QuarterlyLineChart quarterly={quarterly} unit={curveUnit} accountSize={accountSize} />
-            </div>
+          {/* Ligne 3.5 : historique du P&L par trimestre (tableau) + courbe. Grid plutôt que flex :
+              avec height: auto sur les deux cartes, le stretch par défaut de CSS grid prend la
+              hauteur de contenu du tableau (généralement la plus grande) comme référence et étire
+              la courbe dessus — pas besoin de h-full ni de mesurer quoi que ce soit à la main. */}
+          <div className="grid grid-cols-1 gap-3 lg:grid-cols-2 lg:gap-4">
+            <QuarterlyPnlTable quarterly={quarterly} unit={curveUnit} accountSize={accountSize} />
+            <QuarterlyLineChart quarterly={quarterly} unit={curveUnit} accountSize={accountSize} />
           </div>
 
           {/* Ligne 4 : tableau des transactions, pleine largeur (a besoin de place) */}
