@@ -7,11 +7,16 @@ export function QuarterlyLineChart({ quarterly, unit, accountSize }) {
   // dans l'autre quand plusieurs instances sont rendues sur la même page).
   const gradientId = useId()
 
-  if (quarterly.length < 2) {
-    return <p className="text-sm text-slate-400">Pas assez de trimestres pour tracer une courbe.</p>
-  }
-
-  return <Chart quarterly={quarterly} unit={unit} accountSize={accountSize} gradientId={gradientId} />
+  return (
+    <div className="flex h-full flex-col rounded-sm border border-white/10 bg-white/5 p-4">
+      <p className="mb-3 text-xs font-bold tracking-[0.14em] text-slate-400 uppercase">P&amp;L par trimestre</p>
+      {quarterly.length < 2 ? (
+        <p className="text-sm text-slate-400">Pas assez de trimestres pour tracer une courbe.</p>
+      ) : (
+        <Chart quarterly={quarterly} unit={unit} accountSize={accountSize} gradientId={gradientId} />
+      )}
+    </div>
+  )
 }
 
 function Chart({ quarterly, unit, accountSize, gradientId }) {
@@ -33,7 +38,7 @@ function Chart({ quarterly, unit, accountSize, gradientId }) {
   const lastPoint = points[points.length - 1]
 
   return (
-    <div className="flex h-full min-h-0 gap-2">
+    <div className="flex min-h-0 flex-1 gap-2">
       <div className="relative w-11 shrink-0 font-mono text-xs text-slate-500">
         {max > 0 && (
           <span className="absolute left-0 -translate-y-1/2" style={{ top: `${yFor(max)}%` }}>

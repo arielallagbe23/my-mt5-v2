@@ -13,7 +13,8 @@ export function QuarterlyPnlTable({ quarterly, unit, accountSize }) {
   const pageItems = reversed.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE)
 
   return (
-    <div className="flex h-full flex-col">
+    <div className="flex h-full flex-col rounded-sm border border-white/10 bg-white/5 p-4">
+      <p className="mb-3 text-xs font-bold tracking-[0.14em] text-slate-400 uppercase">P&amp;L par trimestre</p>
       <div className="overflow-x-auto">
         <table className="w-full text-left text-sm">
           <thead>
