@@ -225,7 +225,10 @@ export function JournalPage() {
               avec height: auto sur les deux cartes, le stretch par défaut de CSS grid prend la
               hauteur de contenu du tableau (généralement la plus grande) comme référence et étire
               la courbe dessus — pas besoin de h-full ni de mesurer quoi que ce soit à la main. */}
-          <div className="grid grid-cols-1 gap-3 lg:grid-cols-2 lg:gap-4">
+          {/* grid-cols-[1fr_3fr] plutôt que col-span sur un wrapper : les deux composants
+              restent des grid items DIRECTS (nécessaire pour que height:auto + stretch
+              par défaut de la grille continue de caler la courbe sur le tableau). */}
+          <div className="grid grid-cols-1 gap-3 lg:grid-cols-[1fr_3fr] lg:gap-4">
             <QuarterlyPnlTable quarterly={quarterly} unit={curveUnit} accountSize={accountSize} />
             <QuarterlyLineChart quarterly={quarterly} unit={curveUnit} accountSize={accountSize} />
           </div>
