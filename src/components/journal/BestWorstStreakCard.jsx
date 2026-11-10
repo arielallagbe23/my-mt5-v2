@@ -7,7 +7,7 @@ export function BestWorstStreakCard({ kpis, streak, todayNet, accountSize }) {
   const netTotal = kpis.netTotal
 
   return (
-    <div className="overflow-hidden rounded-sm border border-white/10 bg-white/5">
+    <div className="h-full overflow-hidden rounded-sm border border-white/10 bg-white/5">
       <div className={`p-6 ${netTotal >= 0 ? 'bg-emerald-500/10' : 'bg-red-500/10'}`}>
         <p className="text-xs font-bold tracking-[0.14em] text-slate-400 uppercase">P&amp;L net total</p>
         <p className={`mt-1 text-4xl font-bold ${netTotal >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
