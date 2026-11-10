@@ -159,7 +159,7 @@ def check_closed_positions(db):
         # enregistré ci-dessus, ni la boucle de continuer sur les autres
         # positions fermées de ce même tour.
         try:
-            auto_journal.create_entry_from_trade(db, trade)
+            auto_journal.create_entry_from_trade(db, m, trade)
         except Exception:
             print(f"[AUTO_JOURNAL] échec création d'entrée pour la position {position_id} :")
             traceback.print_exc()

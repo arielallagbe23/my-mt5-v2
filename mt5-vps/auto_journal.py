@@ -9,9 +9,15 @@ façon indépendante hors "Ordre par compte").
 Pré-remplit la durée du trade, le gain/perte réalisé et la raison de sortie
 (SL/TP/autre) ; les autres champs (plan respecté, émotion, stratégie,
 leçon) restent vides, à compléter à la main dans l'app ensuite.
+
+Tente aussi d'attacher un graphique du trade (bougies + zones TP/SL, voir
+trade_chart.py) — dans son propre try/except, pour qu'un échec (MT5,
+réseau, Blob...) ne fasse jamais échouer la création de l'entrée elle-même.
 """
 
 import time
+
+import trade_chart
 
 # "SL"/"TP" (voir trades._reason_name) -> valeur attendue par exitReason
 # côté app (server/src/routes/mistakes.js, EXIT_VALUES) ; tout le reste
@@ -48,7 +54,7 @@ def _format_duration(seconds):
     return f"{secs}s"
 
 
-def create_entry_from_trade(db, trade):
+def create_entry_from_trade(db, m, trade):
     """trade = le dict retourné par trades._deals_to_trade. Ne fait rien
     (juste un log) si aucun utilisateur n'est trouvé — ne doit jamais
     empêcher check_closed_positions d'avoir déjà écrit le trade lui-même."""
@@ -66,8 +72,12 @@ def create_entry_from_trade(db, trade):
     )
     exit_reason = EXIT_REASON_MAP.get(trade["reason"], "other")
 
-    db.collection("mistakes").add({
+    # tradeId : référence au ticket MT5 d'origine, pour pouvoir relier cette
+    # entrée à son trade plus tard (ex: backfill_trade_charts.py) — absent
+    # des entrées créées avant ce champ.
+    doc_ref = db.collection("mistakes").add({
         "userId": user_id,
+        "tradeId": trade["positionId"],
         "description": description,
         "planRespected": None,
         "exitReason": exit_reason,
@@ -76,8 +86,16 @@ def create_entry_from_trade(db, trade):
         "lesson": "",
         "createdAt": int(time.time() * 1000),
         "images": [],
-    })
+    })[1]
     print(
         f"[AUTO_JOURNAL] entrée créée pour la position {trade['positionId']} "
         f"({exit_reason}, {sign}{trade['net']:.2f}$)"
     )
+
+    try:
+        trade_chart.generate_and_attach(db, m, trade, doc_ref.id)
+    except Exception:
+        import traceback
+
+        print(f"[CHART] échec génération graphique pour la position {trade['positionId']} :")
+        traceback.print_exc()
