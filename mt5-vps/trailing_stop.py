@@ -203,28 +203,44 @@ def _describe_zone(close, sl, entry, levels, is_buy):
     return f"prix au-delà de {STAGE_LABELS[bounds[-1][0]]}"
 
 
-def _stage_action(target_pct):
+def _stage_action(target_pct, outcome):
     """Ce qu'il faut faire pour CE palier, sous forme de texte d'action à
     coller après la description de zone. None = rien à faire (pas encore
     25%, déjà dans le rouge, ou palier déjà traité une bougie précédente —
-    voir _process_position, qui ne passe target_pct que s'il est NOUVEAU)."""
+    voir _process_position, qui ne passe target_pct que s'il est NOUVEAU).
+
+    `outcome` (voir _move_sl) dit ce qui s'est RÉELLEMENT passé — le texte ne
+    doit jamais annoncer un déplacement qui n'a pas eu lieu. Avant ce
+    correctif, ce texte était construit (et notifié) AVANT même d'avoir
+    tenté le déplacement réel : une notif pouvait annoncer "le SL est passé
+    à X%" alors que l'ordre avait échoué ou que DRY_RUN l'avait simplement
+    simulé — symptôme observé : SL resté inchangé malgré la notif, obligeant
+    à le déplacer à la main."""
     if target_pct is None or target_pct == 25:
         return "rien n'a été fait"
-    if target_pct in SL_TARGET:
-        sl_pct = SL_TARGET[target_pct]
-        label = "BE" if sl_pct == 0 else f"{sl_pct}%"
+    if target_pct not in SL_TARGET:
+        return "rien n'a été fait"
+
+    sl_pct = SL_TARGET[target_pct]
+    label = "BE" if sl_pct == 0 else f"{sl_pct}%"
+
+    if outcome == "moved":
         action = f"le SL est passé à {label}"
-        if target_pct == 95:
-            action += " — connecte-toi si tu veux couper à la main"
-        return action
-    return "rien n'a été fait"
+    elif outcome == "dry_run":
+        action = f"le SL serait passé à {label} (dry-run, aucun ordre réel envoyé)"
+    else:  # "failed"
+        return f"ÉCHEC du déplacement du SL à {label} — à faire à la main"
+
+    if target_pct == 95:
+        action += " — connecte-toi si tu veux couper à la main"
+    return action
 
 
-def _build_message(close, sl, entry, levels, is_buy, target_pct):
+def _build_message(close, sl, entry, levels, is_buy, target_pct, outcome):
     """Assemble le message complet : zone + action. `target_pct` doit déjà
     être None si ce n'est pas un nouveau palier — voir _process_position."""
     zone = _describe_zone(close, sl, entry, levels, is_buy)
-    action = _stage_action(target_pct)
+    action = _stage_action(target_pct, outcome)
     return f"{zone}, {action}"
 
 
@@ -298,12 +314,13 @@ def _check_closed(db, m, tracked_docs):
 
 
 def _move_sl(m, ticket, symbol, tp, sl_price):
-    """Renvoie True si le SL a RÉELLEMENT été déplacé côté MT5 (jamais en
-    DRY_RUN — voir _update_current_sl, qui ne doit se fier qu'à un
-    changement réel)."""
+    """Renvoie "moved" / "dry_run" / "failed" — jamais un simple booléen, pour
+    que l'appelant (_process_position) puisse distinguer une vraie réussite
+    d'une simulation DRY_RUN ou d'un échec réel, et construire un message
+    qui reflète ce qui s'est VRAIMENT passé plutôt que de le supposer."""
     if DRY_RUN:
         print(f"[TRAILING] (dry-run) ticket {ticket} : SL aurait été déplacé à {sl_price:.3f}")
-        return False
+        return "dry_run"
 
     res = m.order_send({
         "action": m.TRADE_ACTION_SLTP,
@@ -315,10 +332,10 @@ def _move_sl(m, ticket, symbol, tp, sl_price):
     if res is None or res.retcode != m.TRADE_RETCODE_DONE:
         error = str(m.last_error()) if res is None else res.comment
         print(f"[TRAILING] ticket {ticket} : échec déplacement SL à {sl_price:.3f} : {error}")
-        return False
+        return "failed"
 
     print(f"[TRAILING] ticket {ticket} : SL déplacé à {sl_price:.3f}")
-    return True
+    return "moved"
 
 
 # ============================================================
@@ -384,7 +401,22 @@ def _process_position(db, m, pos, close):
     target_pct = _highest_stage_reached(close, levels, is_buy)
     is_new_stage = target_pct is not None and target_pct > applied
 
-    message = _build_message(close, pos.sl, entry, levels, is_buy, target_pct if is_new_stage else None)
+    # Le déplacement réel du SL est tenté AVANT de construire/notifier le
+    # message — jamais après. Avant ce correctif, le message était envoyé
+    # en supposant que le déplacement allait réussir, pendant que la
+    # tentative réelle n'avait lieu qu'ensuite : une notif pouvait annoncer
+    # "le SL est passé à X%" alors que l'ordre venait d'échouer (ou que
+    # DRY_RUN l'avait juste simulé), sans que rien n'ait réellement bougé.
+    outcome = None
+    if is_new_stage and target_pct in SL_TARGET:
+        sl_price = _sl_price(entry, levels, SL_TARGET[target_pct])
+        outcome = _move_sl(m, ticket, pos.symbol, tp, sl_price)
+        if outcome == "moved":
+            _update_current_sl(db, ticket, sl_price)
+
+    message = _build_message(
+        close, pos.sl, entry, levels, is_buy, target_pct if is_new_stage else None, outcome
+    )
     _log_report(db, ticket, message, int(time.time()))
     notify(f"mymt5 — suivi position {ticket}", message)
     print(f"[TRAILING] ticket {ticket} : {message}")
@@ -392,11 +424,14 @@ def _process_position(db, m, pos, close):
     if not is_new_stage:
         return
 
+    # Un échec réel (ordre rejeté) ne doit PAS marquer le palier comme
+    # traité : sans ce garde-fou, le système abandonnerait silencieusement
+    # et ne retenterait plus jamais ce palier, alors que c'est justement
+    # celui qui protège la position. Une simulation DRY_RUN, elle, doit
+    # progresser normalement — c'est le comportement attendu de ce mode.
+    if outcome == "failed":
+        return
     _update_applied(db, ticket, target_pct)
-    if target_pct in SL_TARGET:
-        sl_price = _sl_price(entry, levels, SL_TARGET[target_pct])
-        if _move_sl(m, ticket, pos.symbol, tp, sl_price):
-            _update_current_sl(db, ticket, sl_price)
 
 
 def check_trailing_stop(db):
