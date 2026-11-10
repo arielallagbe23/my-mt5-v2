@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { api } from '../lib/api'
 import { PAGE } from '../lib/layout'
 import { JournalHeader } from '../components/journal/JournalHeader'
+import { NetPnlCard } from '../components/journal/NetPnlCard'
 import { KpiGrid } from '../components/journal/KpiGrid'
 import { PerformanceCard } from '../components/journal/PerformanceCard'
 import { ResultsBreakdownCard } from '../components/journal/ResultsBreakdownCard'
@@ -176,9 +177,10 @@ export function JournalPage() {
 
       {kpis && trades.length > 0 && (
         <div className="flex flex-col gap-3">
-          {/* Ligne 1 : chiffre clé + best/worst en un seul bloc (1/4, même hauteur que la grille) + paliers R (3/4) */}
+          {/* Ligne 1 : chiffre clé + best/worst empilés (1/4, même hauteur que la grille) + paliers R (3/4) */}
           <div className="flex flex-col gap-3 lg:flex-row lg:gap-4">
-            <div className="lg:w-[calc(25%-0.5rem)]">
+            <div className="flex flex-col gap-3 lg:w-[calc(25%-0.5rem)]">
+              <NetPnlCard netTotal={kpis.netTotal} />
               <BestWorstStreakCard kpis={kpis} streak={streak} todayNet={todayNet} accountSize={accountSize} />
             </div>
             <div className="lg:w-[calc(75%-0.5rem)]">
