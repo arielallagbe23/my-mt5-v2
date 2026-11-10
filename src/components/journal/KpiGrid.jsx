@@ -10,65 +10,83 @@ export function KpiGrid({
 }) {
   return (
     <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-      <div className="rounded-sm border border-white/10 bg-white/5 p-3">
-        <p className="text-xs text-slate-400 uppercase">R global</p>
-        <p className={`text-xl font-bold ${kpis.rTotal >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-          {formatR(kpis.rTotal)}
-        </p>
+      <div className="flex h-full flex-col justify-between rounded-sm border border-white/10 bg-white/5 p-3">
+        <div>
+          <p className="text-xs text-slate-400 uppercase">R global</p>
+          <p className={`text-xl font-bold ${kpis.rTotal >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+            {formatR(kpis.rTotal)}
+          </p>
+        </div>
         <p className="text-xs text-slate-500">1R = perte moyenne ({money(kpis.avgLoss)})</p>
       </div>
-      <div className="rounded-sm border border-white/10 bg-white/5 p-3">
-        <p className="text-xs text-slate-400 uppercase">R ce mois-ci</p>
-        <p className={`text-xl font-bold ${currentMonthR >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-          {formatR(currentMonthR)}
-        </p>
+      <div className="flex h-full flex-col justify-between rounded-sm border border-white/10 bg-white/5 p-3">
+        <div>
+          <p className="text-xs text-slate-400 uppercase">R ce mois-ci</p>
+          <p className={`text-xl font-bold ${currentMonthR >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+            {formatR(currentMonthR)}
+          </p>
+        </div>
         <p className="text-xs text-slate-500">performance du mois en cours</p>
       </div>
-      <div className="rounded-sm border border-white/10 bg-white/5 p-3">
-        <p className="text-xs text-slate-400 uppercase">Win rate</p>
-        <p className="text-xl font-bold text-white">{pct(kpis.winRate)}</p>
+      <div className="flex h-full flex-col justify-between rounded-sm border border-white/10 bg-white/5 p-3">
+        <div>
+          <p className="text-xs text-slate-400 uppercase">Win rate</p>
+          <p className="text-xl font-bold text-white">{pct(kpis.winRate)}</p>
+        </div>
         <p className="text-xs text-slate-500">
           {kpis.winCount} / {kpis.total}
         </p>
       </div>
-      <div className="rounded-sm border border-white/10 bg-white/5 p-3">
-        <p className="text-xs text-slate-400 uppercase">Profit factor</p>
-        <p className="text-xl font-bold text-white">
-          {kpis.profitFactor === null ? '—' : kpis.profitFactor.toFixed(2)}
-        </p>
+      <div className="flex h-full flex-col justify-between rounded-sm border border-white/10 bg-white/5 p-3">
+        <div>
+          <p className="text-xs text-slate-400 uppercase">Profit factor</p>
+          <p className="text-xl font-bold text-white">
+            {kpis.profitFactor === null ? '—' : kpis.profitFactor.toFixed(2)}
+          </p>
+        </div>
         <p className="text-xs text-slate-500">
           {kpis.profitFactor === null ? '—' : kpis.profitFactor >= 1 ? 'favorable' : 'défavorable'}
         </p>
       </div>
-      <div className="col-span-2 rounded-sm border border-white/10 bg-white/5 p-3">
-        <p className="text-xs text-slate-400 uppercase">Expectancy</p>
-        <p className={`text-xl font-bold ${kpis.expectancy >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-          {money(kpis.expectancy)}
-        </p>
+      <div className="col-span-2 flex h-full flex-col justify-between rounded-sm border border-white/10 bg-white/5 p-3">
+        <div>
+          <p className="text-xs text-slate-400 uppercase">Expectancy</p>
+          <p className={`text-xl font-bold ${kpis.expectancy >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+            {money(kpis.expectancy)}
+          </p>
+        </div>
         <p className="text-xs text-slate-500">gain moyen par trade, gagnant ou perdant</p>
       </div>
-      <div className="rounded-sm border border-white/10 bg-white/5 p-3">
-        <p className="text-xs text-slate-400 uppercase">Gain moyen</p>
-        <p className="text-xl font-bold text-emerald-400">{money(kpis.avgWin)}</p>
+      <div className="flex h-full flex-col justify-between rounded-sm border border-white/10 bg-white/5 p-3">
+        <div>
+          <p className="text-xs text-slate-400 uppercase">Gain moyen</p>
+          <p className="text-xl font-bold text-emerald-400">{money(kpis.avgWin)}</p>
+        </div>
         <p className="text-xs text-slate-500">par trade gagnant</p>
       </div>
-      <div className="rounded-sm border border-white/10 bg-white/5 p-3">
-        <p className="text-xs text-slate-400 uppercase">Perte moyenne</p>
-        <p className="text-xl font-bold text-red-400">{money(kpis.avgLoss)}</p>
+      <div className="flex h-full flex-col justify-between rounded-sm border border-white/10 bg-white/5 p-3">
+        <div>
+          <p className="text-xs text-slate-400 uppercase">Perte moyenne</p>
+          <p className="text-xl font-bold text-red-400">{money(kpis.avgLoss)}</p>
+        </div>
         <p className="text-xs text-slate-500">par trade perdant</p>
       </div>
-      <div className="col-span-2 rounded-sm border border-white/10 bg-white/5 p-3">
-        <p className="text-xs text-slate-400 uppercase">Performance {currentYear}</p>
-        <p className={`text-xl font-bold ${yearlyPerformancePercent >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-          {formatSignedPct(yearlyPerformancePercent)}
-        </p>
+      <div className="col-span-2 flex h-full flex-col justify-between rounded-sm border border-white/10 bg-white/5 p-3">
+        <div>
+          <p className="text-xs text-slate-400 uppercase">Performance {currentYear}</p>
+          <p className={`text-xl font-bold ${yearlyPerformancePercent >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+            {formatSignedPct(yearlyPerformancePercent)}
+          </p>
+        </div>
         <p className="text-xs text-slate-500">performance annuelle</p>
       </div>
-      <div className="col-span-2 rounded-sm border border-white/10 bg-white/5 p-3">
-        <p className="text-xs text-slate-400 uppercase">Performance {currentQuarterLabel}</p>
-        <p className={`text-xl font-bold ${quarterlyPerformancePercent >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-          {formatSignedPct(quarterlyPerformancePercent)}
-        </p>
+      <div className="col-span-2 flex h-full flex-col justify-between rounded-sm border border-white/10 bg-white/5 p-3">
+        <div>
+          <p className="text-xs text-slate-400 uppercase">Performance {currentQuarterLabel}</p>
+          <p className={`text-xl font-bold ${quarterlyPerformancePercent >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+            {formatSignedPct(quarterlyPerformancePercent)}
+          </p>
+        </div>
         <p className="text-xs text-slate-500">performance du trimestre</p>
       </div>
     </div>

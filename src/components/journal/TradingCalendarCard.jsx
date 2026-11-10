@@ -60,7 +60,7 @@ export function TradingCalendarCard({ dailyNet }) {
             <div
               key={key}
               title={hasTrade ? money(net) : undefined}
-              className={`flex aspect-square flex-col items-center justify-center rounded-lg text-xs ${
+              className={`flex h-9 flex-col items-center justify-center rounded-lg text-xs sm:h-10 ${
                 hasTrade
                   ? net > 0
                     ? 'bg-emerald-500/20 text-emerald-300'
