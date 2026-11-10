@@ -40,6 +40,22 @@ MAX_IMAGE_BYTES = 8 * 1024 * 1024  # même limite que mistakes.js côté serveur
 
 REASON_LABELS = {"TP": "TP hit", "SL": "SL hit"}
 
+EMA_PERIOD = 20  # contexte de tendance avant l'entrée — demandé par l'utilisateur sur ses propres captures TradingView
+
+
+def _ema(values, period):
+    """EMA classique (lissage exponentiel) — period réduite si moins de
+    bougies disponibles que period, pour toujours avoir une courbe (même
+    approximative) plutôt que rien sur un trade avec peu de contexte."""
+    if not values:
+        return []
+    period = min(period, len(values))
+    k = 2 / (period + 1)
+    ema = [values[0]]
+    for v in values[1:]:
+        ema.append(v * k + ema[-1] * (1 - k))
+    return ema
+
 
 def _original_order_details(m, ticket):
     """SL/TP et commentaire de l'ORDRE D'ENTRÉE d'origine (le premier dans
@@ -82,8 +98,10 @@ def _render_png(trade, candles, timeframe, entry, sl, tp):
     fig, ax = plt.subplots(figsize=(9, 6), facecolor="#0d1117")
     ax.set_facecolor("#0d1117")
 
-    for c in candles:
-        t = datetime.fromtimestamp(int(c["time"]), tz=timezone.utc)
+    times = [datetime.fromtimestamp(int(c["time"]), tz=timezone.utc) for c in candles]
+    closes = [float(c["close"]) for c in candles]
+
+    for t, c in zip(times, candles):
         o, h, l, close = float(c["open"]), float(c["high"]), float(c["low"]), float(c["close"])
         color = "#4fa8e0" if close >= o else "#6e7681"
         ax.plot([t, t], [l, h], color=color, linewidth=1)
@@ -97,6 +115,10 @@ def _render_png(trade, candles, timeframe, entry, sl, tp):
                 edgecolor=color,
             )
         )
+
+    ax.plot(times, _ema(closes, EMA_PERIOD), color="#f2c14e", linewidth=1.6, alpha=0.9, zorder=3,
+             label=f"EMA {EMA_PERIOD}")
+    ax.legend(loc="upper left", facecolor="#0d1117", edgecolor="#30363d", labelcolor="#c9d1d9", fontsize=8)
 
     x0 = mdates.date2num(datetime.fromtimestamp(int(candles[0]["time"]), tz=timezone.utc))
     x1 = mdates.date2num(datetime.fromtimestamp(int(candles[-1]["time"]), tz=timezone.utc)) + width.total_seconds() / 86400
