@@ -40,21 +40,10 @@ MAX_IMAGE_BYTES = 8 * 1024 * 1024  # même limite que mistakes.js côté serveur
 
 REASON_LABELS = {"TP": "TP hit", "SL": "SL hit"}
 
-EMA_PERIOD = 20  # contexte de tendance avant l'entrée — demandé par l'utilisateur sur ses propres captures TradingView
-
-
-def _ema(values, period):
-    """EMA classique (lissage exponentiel) — period réduite si moins de
-    bougies disponibles que period, pour toujours avoir une courbe (même
-    approximative) plutôt que rien sur un trade avec peu de contexte."""
-    if not values:
-        return []
-    period = min(period, len(values))
-    k = 2 / (period + 1)
-    ema = [values[0]]
-    for v in values[1:]:
-        ema.append(v * k + ema[-1] * (1 - k))
-    return ema
+# Dézoom demandé par l'utilisateur : davantage de bougies de contexte, et de
+# la marge autour des prix (axe Y) plutôt qu'un cadrage collé aux données.
+CONTEXT_ZOOM_OUT = 1.6
+PRICE_PADDING_RATIO = 0.12
 
 
 def _original_order_details(m, ticket):
@@ -74,12 +63,13 @@ def _original_order_details(m, ticket):
 
 def _chart_window(open_time, close_time, timeframe):
     """Début de la plage de bougies à récupérer : autant de contexte AVANT
-    l'entrée que la durée réelle du trade, avec un minimum de
-    MIN_CONTEXT_BARS bougies pour qu'un trade très rapide ait quand même un
-    graphique lisible."""
+    l'entrée que la durée réelle du trade (× CONTEXT_ZOOM_OUT, pour un
+    cadrage légèrement dézoomé plutôt que collé pile à l'entrée), avec un
+    minimum de MIN_CONTEXT_BARS bougies pour qu'un trade très rapide ait
+    quand même un graphique lisible."""
     duration = max(close_time - open_time, 0)
     min_context = MIN_CONTEXT_BARS * TIMEFRAME_SECONDS[timeframe]
-    context = max(duration, min_context)
+    context = max(duration, min_context) * CONTEXT_ZOOM_OUT
     return open_time - context
 
 
@@ -99,7 +89,8 @@ def _render_png(trade, candles, timeframe, entry, sl, tp):
     ax.set_facecolor("#0d1117")
 
     times = [datetime.fromtimestamp(int(c["time"]), tz=timezone.utc) for c in candles]
-    closes = [float(c["close"]) for c in candles]
+    lows = [float(c["low"]) for c in candles]
+    highs = [float(c["high"]) for c in candles]
 
     for t, c in zip(times, candles):
         o, h, l, close = float(c["open"]), float(c["high"]), float(c["low"]), float(c["close"])
@@ -115,10 +106,6 @@ def _render_png(trade, candles, timeframe, entry, sl, tp):
                 edgecolor=color,
             )
         )
-
-    ax.plot(times, _ema(closes, EMA_PERIOD), color="#f2c14e", linewidth=1.6, alpha=0.9, zorder=3,
-             label=f"EMA {EMA_PERIOD}")
-    ax.legend(loc="upper left", facecolor="#0d1117", edgecolor="#30363d", labelcolor="#c9d1d9", fontsize=8)
 
     x0 = mdates.date2num(datetime.fromtimestamp(int(candles[0]["time"]), tz=timezone.utc))
     x1 = mdates.date2num(datetime.fromtimestamp(int(candles[-1]["time"]), tz=timezone.utc)) + width.total_seconds() / 86400
@@ -151,6 +138,12 @@ def _render_png(trade, candles, timeframe, entry, sl, tp):
         loc="left",
     )
     ax.set_xlim(x0, x1 + (x1 - x0) * 0.12)
+
+    price_values = lows + highs + [entry] + ([tp] if tp is not None else []) + ([sl] if sl is not None else [])
+    y_min, y_max = min(price_values), max(price_values)
+    y_pad = (y_max - y_min) * PRICE_PADDING_RATIO
+    ax.set_ylim(y_min - y_pad, y_max + y_pad)
+
     ax.tick_params(colors="#8b949e")
     for spine in ax.spines.values():
         spine.set_color("#30363d")
