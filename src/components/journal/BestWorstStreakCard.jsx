@@ -14,7 +14,7 @@ export function BestWorstStreakCard({ kpis, streak, todayNet, accountSize }) {
           {money(netTotal)}
         </p>
       </div>
-      <div className="px-3">
+      <div className="mt-4 px-3">
         <div className="flex items-center justify-between border-t border-white/10 py-2">
           <span className="text-xs text-slate-400 uppercase">Meilleur trade</span>
           <span className="text-sm font-semibold text-emerald-400">{kpis.best ? money(kpis.best.net) : '—'}</span>
