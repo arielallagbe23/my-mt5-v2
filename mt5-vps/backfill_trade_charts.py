@@ -19,8 +19,8 @@ Usage : python backfill_trade_charts.py
 import time
 
 from auto_journal import _format_duration, _resolve_owner_user_id
-from config import SA_PATH
-from mt5_client import ensure_mt5
+from config import MASTER_TERMINAL_PATH, SA_PATH
+from mt5_client import ensure_mt5, set_default_path
 from trade_chart import generate_and_attach
 
 
@@ -38,6 +38,11 @@ def run():
     from google.cloud import firestore
 
     db = firestore.Client.from_service_account_json(SA_PATH)
+
+    # Indispensable dès qu'un deuxième terminal MT5 tourne sur la machine
+    # (compte(s) suppléant(s)) — sans ça, ensure_mt5() peut se connecter au
+    # hasard à un terminal non autorisé (voir mt5_client.py).
+    set_default_path(MASTER_TERMINAL_PATH)
     m = ensure_mt5()
     if m is None:
         raise SystemExit("[BACKFILL] connexion MT5 impossible")
