@@ -56,7 +56,11 @@ function Chart({ quarterly, unit, accountSize, gradientId }) {
       </div>
       <div className="flex min-h-0 flex-1 flex-col">
         <div className="relative min-h-0 flex-1">
-          <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="h-full w-full overflow-visible">
+          <svg
+            viewBox="0 0 100 100"
+            preserveAspectRatio="none"
+            className="absolute inset-0 h-full w-full overflow-visible"
+          >
             <defs>
               <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
                 <stop offset="0%" stopColor={color} stopOpacity="0.35" />
