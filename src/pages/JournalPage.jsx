@@ -179,7 +179,7 @@ export function JournalPage() {
         <div className="flex flex-col gap-3">
           {/* Ligne 1 : chiffre clé + best/worst empilés (1/4, même hauteur que la grille) + paliers R (3/4) */}
           <div className="flex flex-col gap-3 lg:flex-row lg:gap-4">
-            <div className="flex flex-col gap-3 lg:w-[calc(25%-0.5rem)] bg-red-500">
+            <div className="flex flex-col gap-3 lg:w-[calc(25%-0.5rem)]">
               <NetPnlCard netTotal={kpis.netTotal} />
               <BestWorstStreakCard kpis={kpis} streak={streak} todayNet={todayNet} accountSize={accountSize} />
             </div>
