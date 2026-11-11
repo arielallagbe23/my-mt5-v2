@@ -198,10 +198,30 @@ def resolve_risk_amount(task, account_size):
     return (task["risk"] / 100) * account_size if account_size else None
 
 
+MAX_RRP = 2.75  # au-delà, le ratio récompense/risque est jugé trop beau pour
+# être vrai — souvent un piège de gourmandise (SL trop serré, mouvement
+# irréaliste visé) plutôt qu'une vraie opportunité : on n'envoie pas l'ordre.
+
+
+def check_max_rrp(entry_price, sl, tp):
+    """Refuse l'ordre si son ratio récompense/risque dépasse MAX_RRP. Retourne
+    None si c'est bon, sinon le dict de rejet à renvoyer tel quel. Partagé par
+    finish_sell_order/finish_buy_order (Sell/Buy 2/3/4) ET Sell/Buy 1, qui ont
+    chacun leur propre point de construction de l'ordre final."""
+    rrp = abs(tp - entry_price) / abs(sl - entry_price)
+    if rrp > MAX_RRP:
+        return {
+            "matched": False,
+            "reason": f"Ratio récompense/risque trop élevé ({rrp:.2f} > {MAX_RRP}) — ordre non envoyé",
+        }
+    return None
+
+
 def finish_sell_order(entry_price, sl, tp, candle_close, task, account_size):
-    """Vérifie l'ordre SL > Entrée > TP, calcule le lot, et construit le
-    résultat "matched". Partagé par Sell 2/3/4 (Sell 1 a sa propre logique
-    d'entrée manuelle, donc son propre code équivalent)."""
+    """Vérifie l'ordre SL > Entrée > TP et le ratio récompense/risque
+    (check_max_rrp), calcule le lot, et construit le résultat "matched".
+    Partagé par Sell 2/3/4 (Sell 1 a sa propre logique d'entrée manuelle,
+    donc son propre code équivalent)."""
     entry_price = apply_manual_entry(task, entry_price)
     sl, tp = apply_manual_override(task, sl, tp)
     if not (sl > entry_price > tp):
@@ -209,6 +229,10 @@ def finish_sell_order(entry_price, sl, tp, candle_close, task, account_size):
             "matched": False,
             "reason": f"Ordre incohérent (SL {sl} / Entrée {entry_price} / TP {tp})",
         }
+
+    rrp_rejection = check_max_rrp(entry_price, sl, tp)
+    if rrp_rejection:
+        return rrp_rejection
 
     risk_amount = resolve_risk_amount(task, account_size)
     lot = compute_lot_size(risk_amount, entry_price, sl, candle_close)
@@ -225,8 +249,9 @@ def finish_sell_order(entry_price, sl, tp, candle_close, task, account_size):
 
 def finish_buy_order(entry_price, sl, tp, candle_close, task, account_size):
     """Équivalent de finish_sell_order pour un achat : vérifie SL < Entrée <
-    TP (ordre inversé par rapport à la vente), calcule le lot, construit le
-    résultat "matched". Partagé par Buy 2/3/4."""
+    TP (ordre inversé par rapport à la vente) et le ratio récompense/risque
+    (check_max_rrp), calcule le lot, construit le résultat "matched".
+    Partagé par Buy 2/3/4."""
     entry_price = apply_manual_entry(task, entry_price)
     sl, tp = apply_manual_override(task, sl, tp)
     if not (sl < entry_price < tp):
@@ -234,6 +259,10 @@ def finish_buy_order(entry_price, sl, tp, candle_close, task, account_size):
             "matched": False,
             "reason": f"Ordre incohérent (SL {sl} / Entrée {entry_price} / TP {tp})",
         }
+
+    rrp_rejection = check_max_rrp(entry_price, sl, tp)
+    if rrp_rejection:
+        return rrp_rejection
 
     risk_amount = resolve_risk_amount(task, account_size)
     lot = compute_lot_size(risk_amount, entry_price, sl, candle_close)

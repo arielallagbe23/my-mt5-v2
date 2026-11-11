@@ -5,7 +5,14 @@ a déjà vérifié cette position avant d'appeler cette fonction — elle ne fai
 que construire l'ordre.
 """
 
-from scenario_shared import apply_manual_entry, apply_manual_override, compute_lot_size, fibo_price, resolve_risk_amount
+from scenario_shared import (
+    apply_manual_entry,
+    apply_manual_override,
+    check_max_rrp,
+    compute_lot_size,
+    fibo_price,
+    resolve_risk_amount,
+)
 
 
 def evaluate_sell_1(task, candle, account_size):
@@ -29,6 +36,10 @@ def evaluate_sell_1(task, candle, account_size):
             "matched": False,
             "reason": f"Ordre incohérent (SL {sl} / Entrée {entry_price} / TP {tp})",
         }
+
+    rrp_rejection = check_max_rrp(entry_price, sl, tp)
+    if rrp_rejection:
+        return rrp_rejection
 
     risk_amount = resolve_risk_amount(task, account_size)
     lot = compute_lot_size(risk_amount, entry_price, sl, candle["close"])
