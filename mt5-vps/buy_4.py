@@ -9,19 +9,22 @@ from scenario_shared import fibo_price, finish_buy_order
 MIN_RRP = 1.20  # ratio récompense/risque minimum ; en dessous, on vise TP2 au lieu de TP1
 
 
-def evaluate_buy_4(task, candle, account_size, golden_high, sl1, tp1):
+def evaluate_buy_4(task, candle, account_size, golden_high, sl1, tp1, fibo0):
     """Entrée = borne haute de la golden zone, SL = SL1 (80% Fibo 2).
 
     TP : normalement TP1 (58,8% du Fibo 1). MAIS si le ratio récompense/risque
     avec TP1 est trop faible (RRP < 1,20 — reward/risk = distance(entrée, TP)
     / distance(entrée, SL)), on vise plus loin : TP2 (97,5% du Fibo 1) à la
     place, pour un ratio plus intéressant.
+
+    `fibo0` est déjà dérivé par le routeur (scenarios.py) du plus bas réel
+    de la bougie de clôture — jamais relu brut depuis task ici.
     """
     entry_price = golden_high
 
     rrp = abs(tp1 - entry_price) / abs(sl1 - entry_price)
     if rrp < MIN_RRP:
-        tp2 = fibo_price(task["fibo100"], task["fibo0"], 0.975)  # niveau 97,5% du Fibo 1
+        tp2 = fibo_price(task["fibo100"], fibo0, 0.975)  # niveau 97,5% du Fibo 1
         tp = tp2
     else:
         tp = tp1

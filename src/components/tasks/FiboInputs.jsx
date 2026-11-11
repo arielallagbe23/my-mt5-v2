@@ -18,12 +18,13 @@ export function FiboInputs({ fibo100, fibo0, onFibo100Change, onFibo0Change, rev
 
   const field0 = (
     <label key="0" className="flex min-w-0 flex-col gap-1.5 text-xs text-slate-400">
-      <div>Niveau 0%</div>
+      <div>Niveau 0% (optionnel)</div>
       <input
         type="number"
         inputMode="decimal"
         value={fibo0}
         onChange={(event) => onFibo0Change(event.target.value)}
+        placeholder="auto (bougie de clôture)"
         className={COMPACT_INPUT}
       />
     </label>
