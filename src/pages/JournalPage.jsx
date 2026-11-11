@@ -211,12 +211,12 @@ export function JournalPage() {
             </div>
           </div>
 
-          {/* Ligne 3 : calendrier + P&L mensuel, même poids visuel (1/2 chacun) */}
+          {/* Ligne 3 : calendrier (1/3) + P&L mensuel (2/3) */}
           <div className="flex flex-col gap-3 lg:flex-row lg:gap-4">
-            <div className="lg:w-[calc(50%-0.5rem)]">
+            <div className="lg:w-[calc(33.333%-0.5rem)]">
               <TradingCalendarCard dailyNet={dailyNet} />
             </div>
-            <div className="lg:w-[calc(50%-0.5rem)]">
+            <div className="lg:w-[calc(66.667%-0.5rem)]">
               <MonthlyPnlCard monthly={monthly} />
             </div>
           </div>
