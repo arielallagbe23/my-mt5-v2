@@ -90,16 +90,12 @@ function validateTaskBody(body) {
   if (typeof executionTime !== 'string' || Number.isNaN(Date.parse(executionTime))) return 'Heure d\'exécution invalide'
   for (const [label, value] of [
     ['fibo100', fibo100],
+    ['fibo0', fibo0],
     ['priceCondition', priceCondition],
     ['supportPrice', supportPrice],
   ]) {
     if (typeof value !== 'number' || !Number.isFinite(value)) return `Champ ${label} invalide`
   }
-  // fibo0 (le 0% du Fibo 1) n'est plus requis à la création : le VPS le
-  // dérive automatiquement du plus haut (vente) / plus bas (achat) de la
-  // bougie de clôture au moment de l'exécution (voir scenarios.py). S'il est
-  // quand même fourni, il sert de plancher/plafond de sécurité côté VPS.
-  if (fibo0 != null && (typeof fibo0 !== 'number' || !Number.isFinite(fibo0))) return 'Champ fibo0 invalide'
 
   const manualError = validateManualOverrides(body)
   if (manualError) return manualError

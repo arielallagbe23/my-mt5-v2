@@ -81,24 +81,23 @@ def evaluate_sell(task, candle, account_size):
             "reason": f"Condition non remplie (close={close} > seuil {threshold})",
         }
 
-    # Le 0% du Fibo 1 (fibo0) est désormais dérivé automatiquement du plus
-    # haut réel de la bougie qui vient de se terminer (l'ancienne saisie
-    # manuelle à la création de la tâche est optionnelle) : si elle est quand
-    # même renseignée, elle ne sert plus que de plancher de sécurité — le
-    # high réel l'emporte toujours s'il est plus haut.
-    manual_fibo0 = task.get("fibo0")
-    fibo0 = candle["high"] if manual_fibo0 is None else max(manual_fibo0, candle["high"])
+    # Le 0% du Fibo 1 (fibo0) est saisi manuellement à la création de la
+    # tâche, donc AVANT que la bougie de clôture ne se termine. Si cette
+    # bougie fait une mèche (high) au-dessus de ce 0% choisi, le vrai sommet
+    # atteint par le marché est plus haut que prévu — on recale le 0% sur ce
+    # high réel plutôt que de garder une valeur dépassée par les faits.
+    fibo0 = max(task["fibo0"], candle["high"])
 
     golden_low, golden_mid, golden_high, sl1, tp1 = golden_zone(task["fibo100"], fibo0, candle["low"])
     open_price = candle["open"]
 
     if open_price >= golden_high:
-        return evaluate_sell_1(task, candle, account_size, fibo0)
+        return evaluate_sell_1(task, candle, account_size)
     if open_price >= golden_mid:
         return evaluate_sell_2(task, candle, account_size, golden_high, sl1, tp1)
     if open_price >= golden_low:
         return evaluate_sell_3(task, candle, account_size, golden_mid, sl1, tp1)
-    return evaluate_sell_4(task, candle, account_size, golden_low, sl1, tp1, fibo0)
+    return evaluate_sell_4(task, candle, account_size, golden_low, sl1, tp1)
 
 
 def evaluate_buy(task, candle, account_size):
@@ -114,19 +113,19 @@ def evaluate_buy(task, candle, account_size):
             "reason": f"Condition non remplie (close={close} < seuil {threshold})",
         }
 
-    # Miroir de l'ajustement fait dans evaluate_sell : fibo0 est dérivé du
-    # plus bas réel de la bougie de clôture ; une valeur manuelle, si
-    # présente, ne sert plus que de plafond de sécurité.
-    manual_fibo0 = task.get("fibo0")
-    fibo0 = candle["low"] if manual_fibo0 is None else min(manual_fibo0, candle["low"])
+    # Miroir de l'ajustement fait dans evaluate_sell : si la bougie de
+    # clôture fait une mèche (low) sous le 0% choisi manuellement (fibo0),
+    # le vrai creux atteint est plus bas que prévu — on recale le 0% sur ce
+    # low réel.
+    fibo0 = min(task["fibo0"], candle["low"])
 
     golden_low, golden_mid, golden_high, sl1, tp1 = golden_zone(task["fibo100"], fibo0, candle["high"])
     open_price = candle["open"]
 
     if open_price <= golden_low:
-        return evaluate_buy_1(task, candle, account_size, fibo0)
+        return evaluate_buy_1(task, candle, account_size)
     if open_price <= golden_mid:
         return evaluate_buy_2(task, candle, account_size, golden_low, sl1, tp1)
     if open_price <= golden_high:
         return evaluate_buy_3(task, candle, account_size, golden_mid, sl1, tp1)
-    return evaluate_buy_4(task, candle, account_size, golden_high, sl1, tp1, fibo0)
+    return evaluate_buy_4(task, candle, account_size, golden_high, sl1, tp1)

@@ -347,9 +347,7 @@ export function TasksPage({ taskId } = {}) {
 
     const payload = { ...buildPayload(), status: 'pending' }
 
-    // fibo0 n'est plus requis : laissé vide, le VPS le dérivera automatiquement
-    // du plus haut/plus bas de la bougie de clôture à l'exécution (scenarios.py).
-    if ([payload.fibo100, payload.priceCondition, payload.supportPrice].includes(null)) {
+    if ([payload.fibo100, payload.fibo0, payload.priceCondition, payload.supportPrice].includes(null)) {
       setTaskSaveError('Remplis tous les champs (Fibo, prix) avant d\'enregistrer.')
       return
     }

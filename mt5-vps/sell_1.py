@@ -8,17 +8,15 @@ que construire l'ordre.
 from scenario_shared import apply_manual_entry, apply_manual_override, compute_lot_size, fibo_price, resolve_risk_amount
 
 
-def evaluate_sell_1(task, candle, account_size, fibo0):
+def evaluate_sell_1(task, candle, account_size):
     """Entrée = "prix support/résistance intéressant" saisi à la main sur la
     tâche (PAS calculé depuis la golden zone, contrairement à Sell 2/3/4),
     sauf si "Point d'entrée" (task["manualEntry"]) est renseigné — il prend
     alors le dessus, comme pour SL/TP.
     SL = niveau -0,05% du Fibo 1, TP = niveau 58,8% du Fibo 1.
-
-    `fibo0` est déjà dérivé par le routeur (scenarios.py) du plus haut réel
-    de la bougie de clôture — jamais relu brut depuis task ici.
     """
     fibo100 = task["fibo100"]
+    fibo0 = task["fibo0"]
 
     sl = fibo_price(fibo100, fibo0, -0.05)  # niveau -0,05% du Fibo 1 -> stop loss
     tp = fibo_price(fibo100, fibo0, 0.588)  # niveau 58,8% du Fibo 1 -> take profit
