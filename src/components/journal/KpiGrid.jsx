@@ -9,7 +9,7 @@ export function KpiGrid({
   currentQuarterLabel,
 }) {
   return (
-    <div className="grid h-full grid-cols-2 content-between gap-3 lg:grid-cols-4">
+    <div className="grid h-full grid-cols-2 gap-3 lg:grid-cols-4">
       <div className="flex h-full flex-col justify-between rounded-sm border border-white/10 bg-white/5 p-3">
         <div>
           <p className="text-xs text-slate-400 uppercase">R global</p>
