@@ -19,7 +19,14 @@ const MIN_LABEL_GAP = 4 // % minimum entre deux libellés pour éviter le chevau
 const SCENARIO_IDS = { buy: null, sell: 'sell-1' }
 const MAX_RISK_PERCENT = 2 // garde-fou : jamais plus de 2% du capital risqué sur une tâche
 
+// Pure UI pour l'instant : le reste du pipeline (requestPrice/requestCandle,
+// et surtout le VPS avec son PRICE_SYMBOL unique codé en dur) ne gère encore
+// que USDJPY — choisir un autre symbole ici ne change rien derrière tant que
+// ce pipeline n'a pas été adapté.
+const AVAILABLE_SYMBOLS = ['USDJPY', 'EURJPY', 'GBPJPY', 'XAUUSD']
+
 export function TasksPage({ taskId } = {}) {
+  const [symbol, setSymbol] = useState('USDJPY')
   const [fibo100, setFibo100] = useState('')
   const [fibo0, setFibo0] = useState('')
   const [priceLoading, setPriceLoading] = useState(!taskId)
@@ -403,11 +410,21 @@ export function TasksPage({ taskId } = {}) {
 
   return (
     <div className={`${PAGE} lg:mx-0 lg:max-w-none`}>
-      <div className="flex flex-col gap-2">
-        <div className="bg-amber-600 p-2 text-lg font-bold text-white">USDJPY</div>
+      <div className="flex flex-col">
+        <select
+          value={symbol}
+          onChange={(event) => setSymbol(event.target.value)}
+          className="w-1/3 rounded-sm bg-amber-600 p-2 text-center text-lg font-bold text-white"
+        >
+          {AVAILABLE_SYMBOLS.map((s) => (
+            <option key={s} value={s}>
+              {s}
+            </option>
+          ))}
+        </select>
         <div className="flex items-center gap-2">
-          {priceLoading && <span className="text-sm text-slate-400">Récupération du prix...</span>}
-          {loadingTask && <span className="text-sm text-slate-400">Chargement du brouillon...</span>}
+          {priceLoading && <span className="text-sm text-slate-400 mt-2">Récupération du prix...</span>}
+          {loadingTask && <span className="text-sm text-slate-400 mt-2">Chargement du brouillon...</span>}
         </div>
       </div>
 
