@@ -403,7 +403,7 @@ export function TasksPage({ taskId } = {}) {
 
   return (
     <div className={`${PAGE} lg:mx-0 lg:max-w-none`}>
-      <div className="flex w-1/3 items-center justify-center gap-2 bg-amber-600">
+      <div className="flex items-center gap-2 bg-amber-600 p-2">
         <div className="text-lg font-bold text-white">USDJPY</div>
         {priceLoading && <span className="text-sm text-slate-400">Récupération du prix...</span>}
         {loadingTask && <span className="text-sm text-slate-400">Chargement du brouillon...</span>}
