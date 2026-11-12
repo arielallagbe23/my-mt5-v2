@@ -28,6 +28,7 @@ export const api = {
     request(`/api/account/${vpsId}/settings`, { method: 'PATCH', body: settings }),
   updateAccountSymbolSettings: (vpsId, symbol, settings) =>
     request(`/api/account/${vpsId}/symbols/${symbol}`, { method: 'PATCH', body: settings }),
+  deleteAccount: (vpsId) => request(`/api/account/${vpsId}`, { method: 'DELETE' }),
   requestSwitchAccount: (login, password, server) =>
     request('/api/account/switch', { method: 'POST', body: { login, password, server } }),
   switchAccountResult: () => request('/api/account/switch/result'),

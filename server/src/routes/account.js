@@ -220,4 +220,22 @@ router.get('/switch/result', requireAuth, async (req, res) => {
   res.json(doc.data())
 })
 
+// Supprime un compte suppléant de l'app (ex: un follower cassé/abandonné,
+// voir account3) — nettoie uniquement les docs Firestore propres à l'app,
+// jamais le compte MT5 réel ni le process VPS qui le fait tourner (ça,
+// c'est manuel : renommer son fichier de config + redémarrer run_all.py).
+// Jamais le compte principal : sinon l'app perd le suivi du compte qui
+// exécute réellement les tâches.
+const DELETABLE_COLLECTIONS = ['vps_status', 'account_settings', 'mirror_state', 'account_order_results']
+
+router.delete('/:vpsId', requireAuth, async (req, res) => {
+  const { vpsId } = req.params
+  if (vpsId === VPS_ID) {
+    return res.status(400).json({ error: 'Impossible de supprimer le compte principal depuis cette page' })
+  }
+
+  await Promise.all(DELETABLE_COLLECTIONS.map((collection) => db.collection(collection).doc(vpsId).delete()))
+  res.status(204).end()
+})
+
 export default router

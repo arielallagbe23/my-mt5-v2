@@ -77,6 +77,31 @@ export function AccountsPage() {
   const [symbolSavingKey, setSymbolSavingKey] = useState(null)
   const [symbolError, setSymbolError] = useState('')
 
+  const [deleteConfirmingId, setDeleteConfirmingId] = useState(null)
+  const [deleteSendingId, setDeleteSendingId] = useState(null)
+  const [deleteError, setDeleteError] = useState('')
+
+  // Nettoie uniquement les docs Firestore de l'app (voir la route serveur) —
+  // le compte MT5 réel et le process VPS qui le fait tourner ne sont pas
+  // touchés, c'est un nettoyage manuel à part (voir la note dans l'app).
+  async function deleteAccount(vpsId) {
+    setDeleteError('')
+    setDeleteSendingId(vpsId)
+    try {
+      await api.deleteAccount(vpsId)
+      setAccounts((current) => {
+        const next = { ...current }
+        delete next[vpsId]
+        return next
+      })
+      setDeleteConfirmingId(null)
+    } catch (err) {
+      setDeleteError(err.message)
+    } finally {
+      setDeleteSendingId(null)
+    }
+  }
+
   async function updateSymbolSetting(vpsId, symbol, patch) {
     setSymbolError('')
     const key = `${vpsId}:${symbol}`
@@ -369,14 +394,51 @@ export function AccountsPage() {
                       </button>
                     </div>
                   </>
+                ) : deleteConfirmingId === vpsId ? (
+                  <div className="flex flex-col gap-2 rounded-sm border border-red-500/30 bg-red-500/10 p-3">
+                    <p className="text-xs text-red-300">
+                      Supprimer ce compte de l'app ? Ses réglages (stratégie, paires activées, pseudo) seront
+                      définitivement perdus. Le compte MT5 réel et son process VPS ne sont pas touchés — à arrêter à
+                      la main si besoin.
+                    </p>
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setDeleteConfirmingId(null)}
+                        disabled={deleteSendingId === vpsId}
+                        className="min-h-8 flex-1 rounded-sm border border-white/10 bg-white/5 text-xs font-semibold text-slate-300 disabled:opacity-60"
+                      >
+                        Annuler
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => deleteAccount(vpsId)}
+                        disabled={deleteSendingId === vpsId}
+                        className="min-h-8 flex-1 rounded-sm bg-red-600 text-xs font-semibold text-white disabled:opacity-60"
+                      >
+                        {deleteSendingId === vpsId ? 'Suppression...' : 'Confirmer'}
+                      </button>
+                    </div>
+                  </div>
                 ) : (
-                  <button
-                    type="button"
-                    onClick={() => setEditingId(vpsId)}
-                    className="min-h-8 self-start rounded-full bg-white/5 px-3 text-xs font-semibold text-slate-300"
-                  >
-                    Modifier
-                  </button>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setEditingId(vpsId)}
+                      className="min-h-8 self-start rounded-full bg-white/5 px-3 text-xs font-semibold text-slate-300"
+                    >
+                      Modifier
+                    </button>
+                    {vpsId !== 'main' && (
+                      <button
+                        type="button"
+                        onClick={() => setDeleteConfirmingId(vpsId)}
+                        className="min-h-8 self-start rounded-full bg-red-500/15 px-3 text-xs font-semibold text-red-300"
+                      >
+                        Supprimer
+                      </button>
+                    )}
+                  </div>
                 )}
               </div>
             </li>
@@ -387,6 +449,7 @@ export function AccountsPage() {
       {saveError && <p className="text-sm text-red-400">{saveError}</p>}
       {riskStrategyError && <p className="text-sm text-red-400">{riskStrategyError}</p>}
       {symbolError && <p className="text-sm text-red-400">{symbolError}</p>}
+      {deleteError && <p className="text-sm text-red-400">{deleteError}</p>}
 
       <div className="mt-4 flex flex-col gap-3 rounded-sm border border-white/10 bg-white/5 p-4 lg:max-w-md">
         <div>
