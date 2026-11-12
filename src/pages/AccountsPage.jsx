@@ -22,6 +22,11 @@ const RISK_STRATEGY_OPTIONS = [
   { value: 'strategy-6', label: 'Stratégie 6 (2% fixe)' },
 ]
 
+// USDJPY n'est pas dans cette liste : il reste piloté par le champ
+// historique riskStrategy (toujours actif, pas de case à cocher) — voir
+// updateRiskStrategy. Ces 3-là sont désactivés par défaut (opt-in).
+const OTHER_SYMBOLS = ['EURJPY', 'GBPJPY', 'XAUUSD']
+
 const RISK_STRATEGY_DESCRIPTIONS = {
   manual: 'Le risque est saisi à la main sur chaque tâche, aucun calcul automatique.',
   'strategy-1': '0,5% de risque fixe, quelle que soit la croissance de l\'équité.',
@@ -66,6 +71,29 @@ export function AccountsPage() {
       setRiskStrategyError(err.message)
     } finally {
       setRiskStrategySavingId(null)
+    }
+  }
+
+  const [symbolSavingKey, setSymbolSavingKey] = useState(null)
+  const [symbolError, setSymbolError] = useState('')
+
+  async function updateSymbolSetting(vpsId, symbol, patch) {
+    setSymbolError('')
+    const key = `${vpsId}:${symbol}`
+    setSymbolSavingKey(key)
+    try {
+      const updated = await api.updateAccountSymbolSettings(vpsId, symbol, patch)
+      setAccounts((current) => ({
+        ...current,
+        [vpsId]: {
+          ...current[vpsId],
+          symbols: { ...current[vpsId].symbols, [symbol]: updated },
+        },
+      }))
+    } catch (err) {
+      setSymbolError(err.message)
+    } finally {
+      setSymbolSavingKey(null)
     }
   }
 
@@ -229,26 +257,68 @@ export function AccountsPage() {
                 {assignedPseudo && <span>Assigné : {assignedPseudo}</span>}
               </div>
 
-              <div className="mt-3 flex flex-col gap-1.5 border-t border-white/10 pt-3">
-                <span className="text-xs text-slate-400">Stratégie de risque</span>
-                <select
-                  value={riskStrategy}
-                  onChange={(e) => updateRiskStrategy(vpsId, e.target.value)}
-                  disabled={riskStrategySavingId === vpsId}
-                  className={`${FIELD_INPUT} disabled:opacity-60`}
-                >
-                  {RISK_STRATEGY_OPTIONS.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-                <span className="text-xs text-slate-500">{RISK_STRATEGY_DESCRIPTIONS[riskStrategy]}</span>
-                {autoRisk != null && (
-                  <span className="text-xs text-slate-500">
-                    Croissance {growthPercent?.toFixed(2)}% → risque actuel : <span className="font-semibold text-white">{autoRisk}%</span>
-                  </span>
-                )}
+              <div className="mt-3 flex flex-col gap-2 border-t border-white/10 pt-3">
+                <span className="text-xs font-bold tracking-[0.14em] text-slate-500 uppercase">Paires & risque</span>
+
+                <div className="flex flex-col gap-1.5 rounded-sm border border-white/10 bg-black/20 p-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-semibold text-white">USDJPY</span>
+                    <span className="text-xs text-emerald-400">Toujours actif</span>
+                  </div>
+                  <select
+                    value={riskStrategy}
+                    onChange={(e) => updateRiskStrategy(vpsId, e.target.value)}
+                    disabled={riskStrategySavingId === vpsId}
+                    className={`${FIELD_INPUT} disabled:opacity-60`}
+                  >
+                    {RISK_STRATEGY_OPTIONS.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                  <span className="text-xs text-slate-500">{RISK_STRATEGY_DESCRIPTIONS[riskStrategy]}</span>
+                  {autoRisk != null && (
+                    <span className="text-xs text-slate-500">
+                      Croissance {growthPercent?.toFixed(2)}% → risque actuel :{' '}
+                      <span className="font-semibold text-white">{autoRisk}%</span>
+                    </span>
+                  )}
+                </div>
+
+                {OTHER_SYMBOLS.map((symbol) => {
+                  const symbolInfo = info.symbols?.[symbol] ?? { enabled: false, riskStrategy: 'manual' }
+                  const savingKey = symbolSavingKey === `${vpsId}:${symbol}`
+                  return (
+                    <div key={symbol} className="flex flex-col gap-1.5 rounded-sm border border-white/10 bg-black/20 p-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-semibold text-white">{symbol}</span>
+                        <label className="flex items-center gap-1.5 text-xs text-slate-400">
+                          Activé
+                          <input
+                            type="checkbox"
+                            checked={symbolInfo.enabled}
+                            onChange={(e) => updateSymbolSetting(vpsId, symbol, { enabled: e.target.checked })}
+                            disabled={savingKey}
+                          />
+                        </label>
+                      </div>
+                      <select
+                        value={symbolInfo.riskStrategy}
+                        onChange={(e) => updateSymbolSetting(vpsId, symbol, { riskStrategy: e.target.value })}
+                        disabled={savingKey}
+                        className={`${FIELD_INPUT} disabled:opacity-60`}
+                      >
+                        {RISK_STRATEGY_OPTIONS.map((option) => (
+                          <option key={option.value} value={option.value}>
+                            {option.label}
+                          </option>
+                        ))}
+                      </select>
+                      <span className="text-xs text-slate-500">{RISK_STRATEGY_DESCRIPTIONS[symbolInfo.riskStrategy]}</span>
+                    </div>
+                  )
+                })}
               </div>
 
               <div className="mt-3 flex flex-col gap-2 border-t border-white/10 pt-3">
@@ -316,6 +386,7 @@ export function AccountsPage() {
 
       {saveError && <p className="text-sm text-red-400">{saveError}</p>}
       {riskStrategyError && <p className="text-sm text-red-400">{riskStrategyError}</p>}
+      {symbolError && <p className="text-sm text-red-400">{symbolError}</p>}
 
       <div className="mt-4 flex flex-col gap-3 rounded-sm border border-white/10 bg-white/5 p-4 lg:max-w-md">
         <div>

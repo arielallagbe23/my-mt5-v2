@@ -6,6 +6,20 @@ import { requireAuth } from '../middleware/auth.js'
 const router = Router()
 const VPS_ID = process.env.MT5_VPS_ID ?? 'main'
 
+// Multi-actifs : USDJPY reste piloté par le champ historique `riskStrategy`
+// du compte (toujours activé, pas de case à cocher — c'est le symbole de
+// base) ; les autres symboles sont dans account_settings/{vpsId}.symbols,
+// désactivés par défaut (opt-in explicite), jamais écrits par le VPS.
+const SYMBOLS = ['USDJPY', 'EURJPY', 'GBPJPY', 'XAUUSD']
+
+function resolveSymbolSettings(settings, symbol) {
+  if (symbol === 'USDJPY') {
+    return { enabled: true, riskStrategy: settings?.riskStrategy ?? 'manual' }
+  }
+  const entry = settings?.symbols?.[symbol]
+  return { enabled: entry?.enabled ?? false, riskStrategy: entry?.riskStrategy ?? 'manual' }
+}
+
 // Chiffre le mot de passe MT5 avant de le poser dans Firestore (le VPS a la
 // même clé — ACCOUNT_SWITCH_KEY — dans son fichier local
 // account_switch_key.txt, jamais commité, même régime que cron_secret.txt).
@@ -85,6 +99,7 @@ router.get('/all', requireAuth, async (req, res) => {
       associate: settings?.associate ?? null,
       assigneeId: settings?.assigneeId ?? null,
       riskStrategy: settings?.riskStrategy ?? 'manual',
+      symbols: Object.fromEntries(SYMBOLS.map((symbol) => [symbol, resolveSymbolSettings(settings, symbol)])),
     }
   }
   res.json(result)
@@ -126,6 +141,39 @@ router.patch('/:vpsId/settings', requireAuth, async (req, res) => {
 
   await db.collection('account_settings').doc(req.params.vpsId).set(updates, { merge: true })
   res.json(updates)
+})
+
+// Activation + stratégie de risque pour UN symbole autre que USDJPY (qui,
+// lui, reste géré par /settings ci-dessus — toujours activé, pas de case à
+// cocher). merge:true sur un champ imbriqué ne touche que ce symbole, jamais
+// les autres déjà enregistrés dans symbols.
+router.patch('/:vpsId/symbols/:symbol', requireAuth, async (req, res) => {
+  const { symbol } = req.params
+  if (symbol === 'USDJPY') {
+    return res.status(400).json({ error: 'USDJPY se gère via la stratégie de risque principale du compte' })
+  }
+  if (!SYMBOLS.includes(symbol)) return res.status(400).json({ error: 'Symbole invalide' })
+
+  const { enabled, riskStrategy } = req.body ?? {}
+  if (enabled !== undefined && typeof enabled !== 'boolean') {
+    return res.status(400).json({ error: 'enabled invalide' })
+  }
+  if (riskStrategy !== undefined && !RISK_STRATEGIES.has(riskStrategy)) {
+    return res.status(400).json({ error: 'Stratégie de risque invalide' })
+  }
+
+  const doc = await db.collection('account_settings').doc(req.params.vpsId).get()
+  const current = doc.data()?.symbols?.[symbol] ?? {}
+  const updated = {
+    enabled: enabled !== undefined ? enabled : (current.enabled ?? false),
+    riskStrategy: riskStrategy !== undefined ? riskStrategy : (current.riskStrategy ?? 'manual'),
+  }
+
+  await db
+    .collection('account_settings')
+    .doc(req.params.vpsId)
+    .set({ symbols: { [symbol]: updated }, updatedAt: Date.now() }, { merge: true })
+  res.json(updated)
 })
 
 // Bascule le compte principal sur un nouveau login/mot de passe/serveur —
