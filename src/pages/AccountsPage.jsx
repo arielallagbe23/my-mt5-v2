@@ -285,65 +285,76 @@ export function AccountsPage() {
               <div className="mt-3 flex flex-col gap-2 border-t border-white/10 pt-3">
                 <span className="text-xs font-bold tracking-[0.14em] text-slate-500 uppercase">Paires & risque</span>
 
-                <div className="flex flex-col gap-1.5 rounded-sm border border-white/10 bg-black/20 p-2">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm font-semibold text-white">USDJPY</span>
-                    <span className="text-xs text-emerald-400">Toujours actif</span>
-                  </div>
-                  <select
-                    value={riskStrategy}
-                    onChange={(e) => updateRiskStrategy(vpsId, e.target.value)}
-                    disabled={riskStrategySavingId === vpsId}
-                    className={`${FIELD_INPUT} disabled:opacity-60`}
-                  >
-                    {RISK_STRATEGY_OPTIONS.map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
-                  <span className="text-xs text-slate-500">{RISK_STRATEGY_DESCRIPTIONS[riskStrategy]}</span>
-                  {autoRisk != null && (
-                    <span className="text-xs text-slate-500">
-                      Croissance {growthPercent?.toFixed(2)}% → risque actuel :{' '}
-                      <span className="font-semibold text-white">{autoRisk}%</span>
-                    </span>
-                  )}
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-sm">
+                    <thead>
+                      <tr className="text-xs text-slate-500">
+                        <th className="pb-1.5 font-normal">Paire</th>
+                        <th className="pb-1.5 text-center font-normal">Activé</th>
+                        <th className="pb-1.5 font-normal">Stratégie</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr className="border-t border-white/5">
+                        <td className="py-1.5 pr-2 font-semibold whitespace-nowrap text-white">USDJPY</td>
+                        <td className="py-1.5 text-center text-xs whitespace-nowrap text-emerald-400">Toujours</td>
+                        <td className="py-1.5">
+                          <select
+                            value={riskStrategy}
+                            onChange={(e) => updateRiskStrategy(vpsId, e.target.value)}
+                            disabled={riskStrategySavingId === vpsId}
+                            title={RISK_STRATEGY_DESCRIPTIONS[riskStrategy]}
+                            className={`${FIELD_INPUT} disabled:opacity-60`}
+                          >
+                            {RISK_STRATEGY_OPTIONS.map((option) => (
+                              <option key={option.value} value={option.value}>
+                                {option.label}
+                              </option>
+                            ))}
+                          </select>
+                        </td>
+                      </tr>
+                      {OTHER_SYMBOLS.map((symbol) => {
+                        const symbolInfo = info.symbols?.[symbol] ?? { enabled: false, riskStrategy: 'manual' }
+                        const savingKey = symbolSavingKey === `${vpsId}:${symbol}`
+                        return (
+                          <tr key={symbol} className="border-t border-white/5">
+                            <td className="py-1.5 pr-2 font-semibold whitespace-nowrap text-white">{symbol}</td>
+                            <td className="py-1.5 text-center">
+                              <input
+                                type="checkbox"
+                                checked={symbolInfo.enabled}
+                                onChange={(e) => updateSymbolSetting(vpsId, symbol, { enabled: e.target.checked })}
+                                disabled={savingKey}
+                              />
+                            </td>
+                            <td className="py-1.5">
+                              <select
+                                value={symbolInfo.riskStrategy}
+                                onChange={(e) => updateSymbolSetting(vpsId, symbol, { riskStrategy: e.target.value })}
+                                disabled={savingKey}
+                                title={RISK_STRATEGY_DESCRIPTIONS[symbolInfo.riskStrategy]}
+                                className={`${FIELD_INPUT} disabled:opacity-60`}
+                              >
+                                {RISK_STRATEGY_OPTIONS.map((option) => (
+                                  <option key={option.value} value={option.value}>
+                                    {option.label}
+                                  </option>
+                                ))}
+                              </select>
+                            </td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
                 </div>
-
-                {OTHER_SYMBOLS.map((symbol) => {
-                  const symbolInfo = info.symbols?.[symbol] ?? { enabled: false, riskStrategy: 'manual' }
-                  const savingKey = symbolSavingKey === `${vpsId}:${symbol}`
-                  return (
-                    <div key={symbol} className="flex flex-col gap-1.5 rounded-sm border border-white/10 bg-black/20 p-2">
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm font-semibold text-white">{symbol}</span>
-                        <label className="flex items-center gap-1.5 text-xs text-slate-400">
-                          Activé
-                          <input
-                            type="checkbox"
-                            checked={symbolInfo.enabled}
-                            onChange={(e) => updateSymbolSetting(vpsId, symbol, { enabled: e.target.checked })}
-                            disabled={savingKey}
-                          />
-                        </label>
-                      </div>
-                      <select
-                        value={symbolInfo.riskStrategy}
-                        onChange={(e) => updateSymbolSetting(vpsId, symbol, { riskStrategy: e.target.value })}
-                        disabled={savingKey}
-                        className={`${FIELD_INPUT} disabled:opacity-60`}
-                      >
-                        {RISK_STRATEGY_OPTIONS.map((option) => (
-                          <option key={option.value} value={option.value}>
-                            {option.label}
-                          </option>
-                        ))}
-                      </select>
-                      <span className="text-xs text-slate-500">{RISK_STRATEGY_DESCRIPTIONS[symbolInfo.riskStrategy]}</span>
-                    </div>
-                  )
-                })}
+                {autoRisk != null && (
+                  <span className="text-xs text-slate-500">
+                    USDJPY — croissance {growthPercent?.toFixed(2)}% → risque actuel :{' '}
+                    <span className="font-semibold text-white">{autoRisk}%</span>
+                  </span>
+                )}
               </div>
 
               <div className="mt-3 flex flex-col gap-2 border-t border-white/10 pt-3">
