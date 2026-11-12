@@ -23,7 +23,6 @@ import traceback
 from datetime import datetime, timedelta, timezone
 
 import auto_journal
-from config import PRICE_SYMBOL
 from mt5_client import ensure_mt5
 
 
@@ -137,7 +136,9 @@ def check_closed_positions(db):
     if m is None:
         return
 
-    positions = m.positions_get(symbol=PRICE_SYMBOL) or ()
+    # Pas de filtre symbol= : le ticket fait le tri, pas le symbole —
+    # _deals_to_trade lit déjà pos.symbol depuis MT5, pas une constante.
+    positions = m.positions_get() or ()
     current_ids = {p.ticket for p in positions}
 
     if _last_open_position_ids is None:

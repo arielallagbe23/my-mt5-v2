@@ -85,6 +85,13 @@ def publish_master_positions(db):
     if ai is not None:
         _publish_vps_heartbeat(db, ai)
 
+    # Filtre symbol= volontairement conservé ici (contrairement aux autres
+    # positions_get du VPS, voir la todo multi-actifs) : mirror_follower.py,
+    # qui consomme ça, mirrorerait aveuglément n'importe quel symbole publié
+    # ici sur TOUS les comptes suppléants, sans encore de case activé/risque
+    # par symbole — à lever EN MÊME TEMPS que ce garde-fou côté
+    # mirror_follower.py, jamais avant, sous peine de miroir non désiré sur
+    # un compte réel.
     positions = m.positions_get(symbol=PRICE_SYMBOL) or ()
     current_tickets = set()
 
@@ -117,6 +124,7 @@ def publish_master_orders(db):
     if m is None:
         return
 
+    # Filtre symbol= conservé ici aussi — même raison que publish_master_positions.
     orders = m.orders_get(symbol=PRICE_SYMBOL) or ()
     current_tickets = set()
 

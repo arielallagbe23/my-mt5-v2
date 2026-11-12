@@ -124,7 +124,9 @@ def _execute_task(db, ref, task_id, task, target_dt):
         print(f"[TASK] {task_id} : MT5 indisponible, réessai au prochain tour")
         return
 
-    symbol = PRICE_SYMBOL
+    # Symbole propre à CETTE tâche (nouveau champ, ajouté pour le multi-actifs) ;
+    # repli sur PRICE_SYMBOL pour les tâches créées avant son ajout.
+    symbol = task.get("symbol") or PRICE_SYMBOL
     timeframe = task.get("timeframe", "H1")
     tf_map = {"M15": m.TIMEFRAME_M15, "H1": m.TIMEFRAME_H1, "H4": m.TIMEFRAME_H4}
     tf = tf_map.get(timeframe, m.TIMEFRAME_H1)

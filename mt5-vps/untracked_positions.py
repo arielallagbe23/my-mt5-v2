@@ -4,7 +4,6 @@ manuellement ou par un autre EA) et notifie une seule fois, pour inviter à
 activer son suivi (trailing stop + progression TP) depuis l'app.
 """
 
-from config import PRICE_SYMBOL
 from mt5_client import ensure_mt5
 from notify import notify
 from position_shared import POSITION_TYPE_NAMES
@@ -26,7 +25,8 @@ def check_untracked_positions(db):
     if m is None:
         return
 
-    positions = m.positions_get(symbol=PRICE_SYMBOL) or ()
+    # Pas de filtre symbol= : le ticket fait le tri, pas le symbole.
+    positions = m.positions_get() or ()
     current_tickets = {p.ticket for p in positions}
 
     if _last_known_position_tickets is None:

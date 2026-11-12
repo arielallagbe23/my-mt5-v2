@@ -19,10 +19,11 @@ const MIN_LABEL_GAP = 4 // % minimum entre deux libellés pour éviter le chevau
 const SCENARIO_IDS = { buy: null, sell: 'sell-1' }
 const MAX_RISK_PERCENT = 2 // garde-fou : jamais plus de 2% du capital risqué sur une tâche
 
-// Pure UI pour l'instant : le reste du pipeline (requestPrice/requestCandle,
-// et surtout le VPS avec son PRICE_SYMBOL unique codé en dur) ne gère encore
-// que USDJPY — choisir un autre symbole ici ne change rien derrière tant que
-// ce pipeline n'a pas été adapté.
+// Le prix live et la bougie de référence suivent maintenant ce choix (voir les
+// deux useEffect plus bas) et symbol est envoyé avec la tâche — mais le VPS,
+// lui, a encore PRICE_SYMBOL codé en dur partout (voir scenarios.py/tasks.py) :
+// une tâche EURJPY/GBPJPY/XAUUSD n'est donc pas encore réellement exécutée
+// sur le bon symbole tant que ce chantier VPS n'est pas fait.
 const AVAILABLE_SYMBOLS = ['USDJPY', 'EURJPY', 'GBPJPY', 'XAUUSD']
 
 export function TasksPage({ taskId } = {}) {
@@ -69,6 +70,7 @@ export function TasksPage({ taskId } = {}) {
   useEffect(() => {
     if (!taskId) {
       setCurrentTaskId(null)
+      setSymbol('USDJPY')
       setScenario(null)
       setFibo100('')
       setFibo0('')
@@ -93,6 +95,7 @@ export function TasksPage({ taskId } = {}) {
       .getTask(taskId)
       .then((task) => {
         if (cancelled) return
+        setSymbol(task.symbol ?? 'USDJPY')
         setScenario(task.scenario ?? null)
         setFibo100(task.fibo100 != null ? String(task.fibo100) : '')
         setFibo0(task.fibo0 != null ? String(task.fibo0) : '')
@@ -123,8 +126,8 @@ export function TasksPage({ taskId } = {}) {
     setPriceLoading(true)
 
     requestAndPoll({
-      request: () => api.requestPrice('USDJPY'),
-      fetch: () => api.price('USDJPY'),
+      request: () => api.requestPrice(symbol),
+      fetch: () => api.price(symbol),
       isFresh: isFreshTs,
       isCancelled: () => cancelled,
     }).then((data) => {
@@ -142,7 +145,7 @@ export function TasksPage({ taskId } = {}) {
     return () => {
       cancelled = true
     }
-  }, [taskId])
+  }, [taskId, symbol])
 
   useEffect(() => {
     api
@@ -293,6 +296,7 @@ export function TasksPage({ taskId } = {}) {
     const parsedRisk = parseFloat(risk)
 
     return {
+      symbol,
       scenario: scenario ?? null,
       scenarioId: (scenario && SCENARIO_IDS[scenario]) ?? null,
       fibo100: Number.isFinite(parsedFibo100) ? parsedFibo100 : null,
@@ -395,8 +399,8 @@ export function TasksPage({ taskId } = {}) {
     const isoTime = `${candleDateTime}:00`
 
     const data = await requestAndPoll({
-      request: () => api.requestCandle('USDJPY', timeframe, isoTime),
-      fetch: () => api.candle('USDJPY'),
+      request: () => api.requestCandle(symbol, timeframe, isoTime),
+      fetch: () => api.candle(symbol),
       isFresh: isFreshTs,
     })
 

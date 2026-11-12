@@ -7,6 +7,9 @@ const router = Router()
 const SCENARIOS = new Set(['buy', 'sell'])
 const TIMEFRAMES = new Set(['M15', 'H1', 'H4'])
 const RISK_TYPES = new Set(['percent', 'amount'])
+// Le VPS, lui, n'a encore que PRICE_SYMBOL codé en dur (USDJPY) — accepter ces
+// valeurs ici ne les rend pas encore réellement exécutables sur le bon symbole.
+const SYMBOLS = new Set(['USDJPY', 'EURJPY', 'GBPJPY', 'XAUUSD'])
 const MAX_RISK_PERCENT = 2 // garde-fou : jamais plus de 2% du capital risqué sur une tâche
 const VPS_ID = process.env.MT5_VPS_ID ?? 'main'
 
@@ -14,6 +17,7 @@ function serialize(doc) {
   const data = doc.data()
   return {
     id: doc.id,
+    symbol: data.symbol ?? 'USDJPY',
     scenario: data.scenario,
     scenarioId: data.scenarioId,
     fibo100: data.fibo100,
@@ -47,6 +51,15 @@ async function fetchAccountSize() {
   const data = doc.data()
   if (data.login == null) return null
   return (data.accounts ?? {})[String(data.login)]?.account_size ?? null
+}
+
+// Optionnel partout (brouillon ET tâche finalisée) : absent -> USDJPY par
+// défaut (voir les routes POST/PATCH), pour ne jamais casser les tâches
+// créées avant l'ajout de ce champ.
+function validateSymbol(body) {
+  const { symbol } = body ?? {}
+  if (symbol != null && !SYMBOLS.has(symbol)) return `Symbole invalide (${[...SYMBOLS].join(', ')})`
+  return null
 }
 
 function validateRiskType(body) {
@@ -97,6 +110,9 @@ function validateTaskBody(body) {
     if (typeof value !== 'number' || !Number.isFinite(value)) return `Champ ${label} invalide`
   }
 
+  const symbolError = validateSymbol(body)
+  if (symbolError) return symbolError
+
   const manualError = validateManualOverrides(body)
   if (manualError) return manualError
 
@@ -137,6 +153,9 @@ function validateDraftBody(body) {
     if (value != null && (typeof value !== 'number' || !Number.isFinite(value))) return `Champ ${label} invalide`
   }
 
+  const symbolError = validateSymbol(body)
+  if (symbolError) return symbolError
+
   const manualError = validateManualOverrides(body)
   if (manualError) return manualError
 
@@ -159,6 +178,7 @@ function serializeArchivedReport(report) {
   return {
     id: report.id,
     source: 'report',
+    symbol: report.symbol ?? 'USDJPY',
     scenario: report.scenario ?? null,
     scenarioId: null,
     fibo100: null,
@@ -209,6 +229,7 @@ router.post('/', requireAuth, async (req, res) => {
   if (capError) return res.status(400).json({ error: capError })
 
   const {
+    symbol,
     scenario,
     scenarioId,
     fibo100,
@@ -228,6 +249,7 @@ router.post('/', requireAuth, async (req, res) => {
   const now = Date.now()
   const docRef = await db.collection('tasks').add({
     userId: req.userId,
+    symbol: symbol ?? 'USDJPY',
     scenario: scenario ?? null,
     scenarioId: typeof scenarioId === 'string' ? scenarioId : null,
     fibo100: fibo100 ?? null,
@@ -268,6 +290,7 @@ router.patch('/:id', requireAuth, async (req, res) => {
   if (capError) return res.status(400).json({ error: capError })
 
   const {
+    symbol,
     scenario,
     scenarioId,
     fibo100,
@@ -285,6 +308,7 @@ router.patch('/:id', requireAuth, async (req, res) => {
   } = merged
 
   await ref.update({
+    symbol: symbol ?? 'USDJPY',
     scenario: scenario ?? null,
     scenarioId: typeof scenarioId === 'string' ? scenarioId : null,
     fibo100: fibo100 ?? null,
