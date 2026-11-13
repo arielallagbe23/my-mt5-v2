@@ -96,6 +96,16 @@ from untracked_positions import check_untracked_positions
 # presque immédiatement avec le même pic de requêtes (voir _run_safely).
 QUOTA_COOLDOWN_SECONDS = 60
 
+# Petite pause ENTRE chaque check (pas juste entre deux tours complets) :
+# les 14 checks de la liste `checks` faisaient tous leur(s) appel(s)
+# Firestore en rafale, sans la moindre pause entre eux — suffisant à lui
+# seul pour déclencher le throttle ci-dessus, même avant d'avoir épuisé le
+# moindre quota journalier (confirmé le 2026-11-13). 0.5s x 14 checks = 7s
+# ajoutés par tour (~17s au lieu de ~10s) : casse la rafale en millisecondes
+# sans trop retarder les déclenchements sensibles au timing (tâches,
+# trailing stop, ordres différés).
+CHECK_SPACING_SECONDS = 0.5
+
 
 def _run_safely(name, func, db):
     """Exécute UN check isolément : une exception ici ne doit jamais empêcher
@@ -161,6 +171,7 @@ def run():
         try:
             for name, func in checks:
                 _run_safely(name, func, db)
+                time.sleep(CHECK_SPACING_SECONDS)
             time.sleep(POLL_INTERVAL)
         except ResourceExhausted:
             print(
