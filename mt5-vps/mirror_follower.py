@@ -766,8 +766,21 @@ if __name__ == "__main__":
     _follower_boot_time = time.time()
     db = firestore.Client.from_service_account_json(SA_PATH)
     print(f"[BOOT] FOLLOWER_ID={FOLLOWER_ID} | terminal={TERMINAL_PATH} | dry_run={DRY_RUN} | poll={POLL_INTERVAL}s")
-    _load_state(db)
-    _load_signal_state(db)
+
+    # _load_state/_load_signal_state tournent AVANT la boucle principale, donc
+    # AVANT son propre filet de sécurité (le except ResourceExhausted plus
+    # bas) — un throttle Firestore actif pile au démarrage de CE process
+    # tuerait sinon le process entier avant même d'avoir pu démarrer (observé
+    # le 2026-11-13 : crash non rattrapé sur _load_state). Même logique de
+    # pause que la boucle principale, en boucle jusqu'à ce que ça passe.
+    for load_fn, label in ((_load_state, "_load_state"), (_load_signal_state, "_load_signal_state")):
+        while True:
+            try:
+                load_fn(db)
+                break
+            except ResourceExhausted:
+                print(f"[BOOT] Firestore throttle (429) pendant {label} — pause de {QUOTA_COOLDOWN_SECONDS}s avant de réessayer")
+                time.sleep(QUOTA_COOLDOWN_SECONDS)
 
     while True:
         try:
