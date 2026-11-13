@@ -19,15 +19,7 @@ const MIN_LABEL_GAP = 4 // % minimum entre deux libellés pour éviter le chevau
 const SCENARIO_IDS = { buy: null, sell: 'sell-1' }
 const MAX_RISK_PERCENT = 2 // garde-fou : jamais plus de 2% du capital risqué sur une tâche
 
-// Le prix live et la bougie de référence suivent maintenant ce choix (voir les
-// deux useEffect plus bas) et symbol est envoyé avec la tâche — mais le VPS,
-// lui, a encore PRICE_SYMBOL codé en dur partout (voir scenarios.py/tasks.py) :
-// une tâche EURJPY/GBPJPY/XAUUSD n'est donc pas encore réellement exécutée
-// sur le bon symbole tant que ce chantier VPS n'est pas fait.
-const AVAILABLE_SYMBOLS = ['USDJPY', 'EURJPY', 'GBPJPY', 'XAUUSD']
-
 export function TasksPage({ taskId } = {}) {
-  const [symbol, setSymbol] = useState('USDJPY')
   const [fibo100, setFibo100] = useState('')
   const [fibo0, setFibo0] = useState('')
   const [priceLoading, setPriceLoading] = useState(!taskId)
@@ -70,7 +62,6 @@ export function TasksPage({ taskId } = {}) {
   useEffect(() => {
     if (!taskId) {
       setCurrentTaskId(null)
-      setSymbol('USDJPY')
       setScenario(null)
       setFibo100('')
       setFibo0('')
@@ -95,7 +86,6 @@ export function TasksPage({ taskId } = {}) {
       .getTask(taskId)
       .then((task) => {
         if (cancelled) return
-        setSymbol(task.symbol ?? 'USDJPY')
         setScenario(task.scenario ?? null)
         setFibo100(task.fibo100 != null ? String(task.fibo100) : '')
         setFibo0(task.fibo0 != null ? String(task.fibo0) : '')
@@ -126,8 +116,8 @@ export function TasksPage({ taskId } = {}) {
     setPriceLoading(true)
 
     requestAndPoll({
-      request: () => api.requestPrice(symbol),
-      fetch: () => api.price(symbol),
+      request: () => api.requestPrice('USDJPY'),
+      fetch: () => api.price('USDJPY'),
       isFresh: isFreshTs,
       isCancelled: () => cancelled,
     }).then((data) => {
@@ -145,7 +135,7 @@ export function TasksPage({ taskId } = {}) {
     return () => {
       cancelled = true
     }
-  }, [taskId, symbol])
+  }, [taskId])
 
   useEffect(() => {
     api
@@ -296,7 +286,6 @@ export function TasksPage({ taskId } = {}) {
     const parsedRisk = parseFloat(risk)
 
     return {
-      symbol,
       scenario: scenario ?? null,
       scenarioId: (scenario && SCENARIO_IDS[scenario]) ?? null,
       fibo100: Number.isFinite(parsedFibo100) ? parsedFibo100 : null,
@@ -399,8 +388,8 @@ export function TasksPage({ taskId } = {}) {
     const isoTime = `${candleDateTime}:00`
 
     const data = await requestAndPoll({
-      request: () => api.requestCandle(symbol, timeframe, isoTime),
-      fetch: () => api.candle(symbol),
+      request: () => api.requestCandle('USDJPY', timeframe, isoTime),
+      fetch: () => api.candle('USDJPY'),
       isFresh: isFreshTs,
     })
 
@@ -414,21 +403,11 @@ export function TasksPage({ taskId } = {}) {
 
   return (
     <div className={`${PAGE} lg:mx-0 lg:max-w-none`}>
-      <div className="flex flex-col">
-        <select
-          value={symbol}
-          onChange={(event) => setSymbol(event.target.value)}
-          className="w-1/3 rounded-sm bg-amber-600 p-2 text-center text-lg font-bold text-white"
-        >
-          {AVAILABLE_SYMBOLS.map((s) => (
-            <option key={s} value={s}>
-              {s}
-            </option>
-          ))}
-        </select>
+      <div className="flex flex-col gap-2">
+        <div className="bg-amber-600 p-2 text-lg font-bold text-white">USDJPY</div>
         <div className="flex items-center gap-2">
-          {priceLoading && <span className="text-sm text-slate-400 mt-2">Récupération du prix...</span>}
-          {loadingTask && <span className="text-sm text-slate-400 mt-2">Chargement du brouillon...</span>}
+          {priceLoading && <span className="text-sm text-slate-400">Récupération du prix...</span>}
+          {loadingTask && <span className="text-sm text-slate-400">Chargement du brouillon...</span>}
         </div>
       </div>
 

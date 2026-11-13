@@ -296,9 +296,7 @@ def _check_closed(db, m, tracked_docs):
     requête Firestore par tour (partagée avec _check_sl_drift — voir
     l'incident 429 Quota exceeded, causé par cette même requête exécutée en
     double, sans le moindre garde-fou, à chaque tour de boucle ~10s)."""
-    # Pas de filtre symbol= : le ticket (clé Firestore) fait le tri, pas le
-    # symbole — une position suivie sur n'importe quel symbole est détectée.
-    open_tickets = {p.ticket for p in (m.positions_get() or ())}
+    open_tickets = {p.ticket for p in (m.positions_get(symbol=PRICE_SYMBOL) or ())}
     for doc in tracked_docs:
         ticket = int(doc.id)
         if ticket in open_tickets:
@@ -353,7 +351,7 @@ SL_DRIFT_TOLERANCE = 0.001  # marge d'arrondi broker, pas un vrai changement en 
 def _check_sl_drift(db, m, tracked_docs):
     """`tracked_docs` : voir _check_closed — même requête partagée, pas
     refaite ici."""
-    open_positions = {p.ticket: p for p in (m.positions_get() or ())}
+    open_positions = {p.ticket: p for p in (m.positions_get(symbol=PRICE_SYMBOL) or ())}
     for doc in tracked_docs:
         ticket = int(doc.id)
         pos = open_positions.get(ticket)
@@ -470,12 +468,6 @@ def check_trailing_stop(db):
             continue
         close = float(candle["close"])
 
-        # Filtre symbol= volontairement conservé ici (contrairement aux autres
-        # positions_get de ce fichier) : `close` vient de la bougie de
-        # PRICE_SYMBOL (_last_closed_candle juste au-dessus), donc traiter une
-        # position sur un autre symbole avec ce close serait faux — pas juste
-        # "pas encore fait", une vraie régression de calcul. À lever seulement
-        # avec un candle-fetch par symbole (voir la todo multi-actifs).
         for pos in m.positions_get(symbol=PRICE_SYMBOL) or ():
             if _resolve_timeframe(db, pos.ticket, pos.comment) != timeframe:
                 continue

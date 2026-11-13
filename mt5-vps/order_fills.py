@@ -7,6 +7,7 @@ suivre le passage ordre -> position, à chaque tour de boucle.
 
 import time
 
+from config import PRICE_SYMBOL
 from mt5_client import ensure_mt5
 from notify import notify
 from position_shared import POSITION_TYPE_NAMES, resolve_timeframe
@@ -36,8 +37,7 @@ def check_order_fills(db):
     if m is None:
         return
 
-    # Pas de filtre symbol= : le ticket fait le tri, pas le symbole.
-    orders = m.orders_get() or ()
+    orders = m.orders_get(symbol=PRICE_SYMBOL) or ()
     current_tickets = {o.ticket for o in orders}
 
     if _last_pending_tickets is None:
@@ -49,7 +49,7 @@ def check_order_fills(db):
 
     filled_tickets = _last_pending_tickets - current_tickets
     if filled_tickets:
-        positions = m.positions_get() or ()
+        positions = m.positions_get(symbol=PRICE_SYMBOL) or ()
         positions_by_ticket = {p.ticket: p for p in positions}
 
         for ticket in filled_tickets:

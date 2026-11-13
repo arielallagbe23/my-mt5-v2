@@ -8,6 +8,7 @@ notifié qu'une fois par position.
 
 from datetime import datetime, timezone
 
+from config import PRICE_SYMBOL
 from mt5_client import ensure_mt5
 from notify import notify
 from position_shared import (
@@ -53,11 +54,7 @@ def check_tp_progress(db):
     if m is None:
         return
 
-    # Pas de filtre symbol= : le ticket fait le tri, pas le symbole — la
-    # bougie utilisée plus bas (candles_current_and_previous) est déjà celle
-    # du symbole propre à CHAQUE position (pos.symbol), donc multi-actifs
-    # sans changement supplémentaire.
-    positions = m.positions_get() or ()
+    positions = m.positions_get(symbol=PRICE_SYMBOL) or ()
 
     for pos in positions:
         ticket = pos.ticket

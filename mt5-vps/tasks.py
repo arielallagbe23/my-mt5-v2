@@ -2,12 +2,6 @@
 tasks.py — Scan et exécution des tâches de trading dues (le cœur de
 l'automatisation). C'est la seule partie du VPS qui agit de son propre chef,
 sans qu'on le lui demande — tout le reste (on_demand.py) ne fait que répondre.
-
-Publie aussi un signal (task_signals/{taskId}, voir _publish_task_signal) dès
-qu'une condition de tâche est remplie — pour le multi-actifs, où un compte
-suppléant peut vouloir trader un symbole que MASTER lui-même ne trade jamais
-(donc rien à mirroiter côté mirror_publish.py/mirror_follower.py, qui ne
-copient qu'une position déjà ouverte sur MASTER).
 """
 
 import time
@@ -52,58 +46,6 @@ def _account_size(db, login):
     data = doc.to_dict()
     entry = (data.get("accounts") or {}).get(str(login)) or {}
     return entry.get("account_size")
-
-
-def _publish_task_signal(db, task_id, symbol, result):
-    """Publie un signal de déclenchement de tâche (symbole + entrée/SL/TP),
-    indépendamment de ce que MASTER fait ensuite sur son propre compte
-    (DRY_RUN, échec d'ordre, marché fermé...) — nouveau mécanisme de
-    diffusion DIRECTE aux comptes qui suivent cette paire, à ne pas
-    confondre avec le miroir USDJPY (mirror_publish.py) qui copie une
-    position DÉJÀ OUVERTE sur MASTER : ici, MASTER peut très bien ne
-    jamais trader lui-même ce symbole (voir la todo multi-actifs,
-    "exécution directe par tâche").
-
-    Le lot n'est PAS inclus : chaque compte le recalculera avec SA propre
-    stratégie de risque le moment venu (même principe que
-    compute_follower_lot_by_strategy côté miroir). set() sur l'ID de la
-    tâche est idempotent — republier le même contenu si ce tour est
-    retenté (ex: attente de spread) n'a aucun effet de bord.
-
-    Côté consommateur (mirror_follower.py, _execute_task_signal) : lit
-    task_signals, vérifie account_settings/{vpsId}.symbols.{symbol}.enabled
-    avant d'exécuter quoi que ce soit — même garde-fou appliqué ici même à
-    MASTER, voir _symbol_enabled plus bas.
-    """
-    db.collection("task_signals").document(task_id).set({
-        "taskId": task_id,
-        "symbol": symbol,
-        "orderType": result["orderType"],
-        "entry": result["entry"],
-        "sl": result["sl"],
-        "tp": result["tp"],
-        "ts": int(time.time() * 1000),
-    })
-
-
-def _symbol_enabled(db, vps_id, symbol):
-    """Un symbole autre que PRICE_SYMBOL (USDJPY, toujours activé — legacy,
-    pas de case à cocher) n'est tradé sur CE compte que si
-    account_settings/{vps_id}.symbols.{symbol}.enabled est explicitement à
-    true (opt-in, voir Mes comptes) — MASTER n'est pas un cas à part :
-    appliqué ici même à VPS_ID, pour que MASTER n'ouvre pas de position sur
-    un symbole qu'il n'a pas lui-même activé, même s'il reste celui qui
-    évalue la condition et publie le signal pour les comptes qui, eux,
-    l'ont activé. Équivalent Python de resolveSymbolSettings
-    (server/src/routes/account.js), dupliqué côté suppléant dans
-    mirror_follower.py (_resolve_symbol_settings) — processus séparés, pas
-    de module Firestore partagé."""
-    if symbol == PRICE_SYMBOL:
-        return True
-    doc = db.collection("account_settings").document(vps_id).get()
-    if not doc.exists:
-        return False
-    return bool((doc.to_dict().get("symbols") or {}).get(symbol, {}).get("enabled", False))
 
 
 def _report_and_delete(db, ref, task_id, task, reason, now_ms):
@@ -182,9 +124,7 @@ def _execute_task(db, ref, task_id, task, target_dt):
         print(f"[TASK] {task_id} : MT5 indisponible, réessai au prochain tour")
         return
 
-    # Symbole propre à CETTE tâche (nouveau champ, ajouté pour le multi-actifs) ;
-    # repli sur PRICE_SYMBOL pour les tâches créées avant son ajout.
-    symbol = task.get("symbol") or PRICE_SYMBOL
+    symbol = PRICE_SYMBOL
     timeframe = task.get("timeframe", "H1")
     tf_map = {"M15": m.TIMEFRAME_M15, "H1": m.TIMEFRAME_H1, "H4": m.TIMEFRAME_H4}
     tf = tf_map.get(timeframe, m.TIMEFRAME_H1)
@@ -271,26 +211,6 @@ def _execute_task(db, ref, task_id, task, target_dt):
             print(f"[TASK] {task_id} : abandon, {reason}")
             return
         _spread_wait_started.pop(task_id, None)
-        _publish_task_signal(db, task_id, symbol, result)
-
-        # Garde-fou multi-actifs : MASTER n'ouvre PAS de position sur son
-        # propre compte si lui-même n'a pas activé ce symbole (voir
-        # _symbol_enabled) — le signal ci-dessus a déjà été publié pour les
-        # comptes qui, eux, l'ont activé, donc rien n'est perdu. USDJPY
-        # n'est jamais concerné (toujours activé, comportement inchangé).
-        if not _symbol_enabled(db, VPS_ID, symbol):
-            notify(
-                "mymt5 — signal diffusé",
-                f"{symbol} {result['orderType']} @ {result['entry']} : MASTER n'a pas activé cette paire, "
-                "aucune position ouverte sur ce compte (signal transmis aux comptes concernés)",
-            )
-            ref.update({
-                "status": "dry_run_done" if DRY_RUN else "done",
-                "result": result,
-                "updatedAt": now_ms,
-            })
-            print(f"[TASK] {task_id} : signal publié pour {symbol}, MASTER n'a pas activé cette paire")
-            return
 
     # --- 3a. Mode simulation (DRY_RUN, activé par défaut) : on notifie ce qui
     # AURAIT été fait, mais order_send n'est jamais appelé. ---

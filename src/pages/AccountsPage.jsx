@@ -22,11 +22,6 @@ const RISK_STRATEGY_OPTIONS = [
   { value: 'strategy-6', label: 'Stratégie 6 (2% fixe)' },
 ]
 
-// USDJPY n'est pas dans cette liste : il reste piloté par le champ
-// historique riskStrategy (toujours actif, pas de case à cocher) — voir
-// updateRiskStrategy. Ces 3-là sont désactivés par défaut (opt-in).
-const OTHER_SYMBOLS = ['EURJPY', 'GBPJPY', 'XAUUSD']
-
 const RISK_STRATEGY_DESCRIPTIONS = {
   manual: 'Le risque est saisi à la main sur chaque tâche, aucun calcul automatique.',
   'strategy-1': '0,5% de risque fixe, quelle que soit la croissance de l\'équité.',
@@ -71,54 +66,6 @@ export function AccountsPage() {
       setRiskStrategyError(err.message)
     } finally {
       setRiskStrategySavingId(null)
-    }
-  }
-
-  const [symbolSavingKey, setSymbolSavingKey] = useState(null)
-  const [symbolError, setSymbolError] = useState('')
-
-  const [deleteConfirmingId, setDeleteConfirmingId] = useState(null)
-  const [deleteSendingId, setDeleteSendingId] = useState(null)
-  const [deleteError, setDeleteError] = useState('')
-
-  // Nettoie uniquement les docs Firestore de l'app (voir la route serveur) —
-  // le compte MT5 réel et le process VPS qui le fait tourner ne sont pas
-  // touchés, c'est un nettoyage manuel à part (voir la note dans l'app).
-  async function deleteAccount(vpsId) {
-    setDeleteError('')
-    setDeleteSendingId(vpsId)
-    try {
-      await api.deleteAccount(vpsId)
-      setAccounts((current) => {
-        const next = { ...current }
-        delete next[vpsId]
-        return next
-      })
-      setDeleteConfirmingId(null)
-    } catch (err) {
-      setDeleteError(err.message)
-    } finally {
-      setDeleteSendingId(null)
-    }
-  }
-
-  async function updateSymbolSetting(vpsId, symbol, patch) {
-    setSymbolError('')
-    const key = `${vpsId}:${symbol}`
-    setSymbolSavingKey(key)
-    try {
-      const updated = await api.updateAccountSymbolSettings(vpsId, symbol, patch)
-      setAccounts((current) => ({
-        ...current,
-        [vpsId]: {
-          ...current[vpsId],
-          symbols: { ...current[vpsId].symbols, [symbol]: updated },
-        },
-      }))
-    } catch (err) {
-      setSymbolError(err.message)
-    } finally {
-      setSymbolSavingKey(null)
     }
   }
 
@@ -282,77 +229,24 @@ export function AccountsPage() {
                 {assignedPseudo && <span>Assigné : {assignedPseudo}</span>}
               </div>
 
-              <div className="mt-3 flex flex-col gap-2 border-t border-white/10 pt-3">
-                <span className="text-xs font-bold tracking-[0.14em] text-slate-500 uppercase">Paires & risque</span>
-
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left text-sm">
-                    <thead>
-                      <tr className="text-xs text-slate-500">
-                        <th className="pb-1.5 font-normal">Paire</th>
-                        <th className="pb-1.5 text-center font-normal">Activé</th>
-                        <th className="pb-1.5 font-normal">Stratégie</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      <tr className="border-t border-white/5">
-                        <td className="py-1.5 pr-2 font-semibold whitespace-nowrap text-white">USDJPY</td>
-                        <td className="py-1.5 text-center text-xs whitespace-nowrap text-emerald-400">Toujours</td>
-                        <td className="py-1.5">
-                          <select
-                            value={riskStrategy}
-                            onChange={(e) => updateRiskStrategy(vpsId, e.target.value)}
-                            disabled={riskStrategySavingId === vpsId}
-                            title={RISK_STRATEGY_DESCRIPTIONS[riskStrategy]}
-                            className={`${FIELD_INPUT} disabled:opacity-60`}
-                          >
-                            {RISK_STRATEGY_OPTIONS.map((option) => (
-                              <option key={option.value} value={option.value}>
-                                {option.label}
-                              </option>
-                            ))}
-                          </select>
-                        </td>
-                      </tr>
-                      {OTHER_SYMBOLS.map((symbol) => {
-                        const symbolInfo = info.symbols?.[symbol] ?? { enabled: false, riskStrategy: 'manual' }
-                        const savingKey = symbolSavingKey === `${vpsId}:${symbol}`
-                        return (
-                          <tr key={symbol} className="border-t border-white/5">
-                            <td className="py-1.5 pr-2 font-semibold whitespace-nowrap text-white">{symbol}</td>
-                            <td className="py-1.5 text-center">
-                              <input
-                                type="checkbox"
-                                checked={symbolInfo.enabled}
-                                onChange={(e) => updateSymbolSetting(vpsId, symbol, { enabled: e.target.checked })}
-                                disabled={savingKey}
-                              />
-                            </td>
-                            <td className="py-1.5">
-                              <select
-                                value={symbolInfo.riskStrategy}
-                                onChange={(e) => updateSymbolSetting(vpsId, symbol, { riskStrategy: e.target.value })}
-                                disabled={savingKey}
-                                title={RISK_STRATEGY_DESCRIPTIONS[symbolInfo.riskStrategy]}
-                                className={`${FIELD_INPUT} disabled:opacity-60`}
-                              >
-                                {RISK_STRATEGY_OPTIONS.map((option) => (
-                                  <option key={option.value} value={option.value}>
-                                    {option.label}
-                                  </option>
-                                ))}
-                              </select>
-                            </td>
-                          </tr>
-                        )
-                      })}
-                    </tbody>
-                  </table>
-                </div>
+              <div className="mt-3 flex flex-col gap-1.5 border-t border-white/10 pt-3">
+                <span className="text-xs text-slate-400">Stratégie de risque</span>
+                <select
+                  value={riskStrategy}
+                  onChange={(e) => updateRiskStrategy(vpsId, e.target.value)}
+                  disabled={riskStrategySavingId === vpsId}
+                  className={`${FIELD_INPUT} disabled:opacity-60`}
+                >
+                  {RISK_STRATEGY_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+                <span className="text-xs text-slate-500">{RISK_STRATEGY_DESCRIPTIONS[riskStrategy]}</span>
                 {autoRisk != null && (
                   <span className="text-xs text-slate-500">
-                    USDJPY — croissance {growthPercent?.toFixed(2)}% → risque actuel :{' '}
-                    <span className="font-semibold text-white">{autoRisk}%</span>
+                    Croissance {growthPercent?.toFixed(2)}% → risque actuel : <span className="font-semibold text-white">{autoRisk}%</span>
                   </span>
                 )}
               </div>
@@ -405,51 +299,14 @@ export function AccountsPage() {
                       </button>
                     </div>
                   </>
-                ) : deleteConfirmingId === vpsId ? (
-                  <div className="flex flex-col gap-2 rounded-sm border border-red-500/30 bg-red-500/10 p-3">
-                    <p className="text-xs text-red-300">
-                      Supprimer ce compte de l'app ? Ses réglages (stratégie, paires activées, pseudo) seront
-                      définitivement perdus. Le compte MT5 réel et son process VPS ne sont pas touchés — à arrêter à
-                      la main si besoin.
-                    </p>
-                    <div className="flex gap-2">
-                      <button
-                        type="button"
-                        onClick={() => setDeleteConfirmingId(null)}
-                        disabled={deleteSendingId === vpsId}
-                        className="min-h-8 flex-1 rounded-sm border border-white/10 bg-white/5 text-xs font-semibold text-slate-300 disabled:opacity-60"
-                      >
-                        Annuler
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => deleteAccount(vpsId)}
-                        disabled={deleteSendingId === vpsId}
-                        className="min-h-8 flex-1 rounded-sm bg-red-600 text-xs font-semibold text-white disabled:opacity-60"
-                      >
-                        {deleteSendingId === vpsId ? 'Suppression...' : 'Confirmer'}
-                      </button>
-                    </div>
-                  </div>
                 ) : (
-                  <div className="flex gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setEditingId(vpsId)}
-                      className="min-h-8 self-start rounded-full bg-white/5 px-3 text-xs font-semibold text-slate-300"
-                    >
-                      Modifier
-                    </button>
-                    {vpsId !== 'main' && (
-                      <button
-                        type="button"
-                        onClick={() => setDeleteConfirmingId(vpsId)}
-                        className="min-h-8 self-start rounded-full bg-red-500/15 px-3 text-xs font-semibold text-red-300"
-                      >
-                        Supprimer
-                      </button>
-                    )}
-                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setEditingId(vpsId)}
+                    className="min-h-8 self-start rounded-full bg-white/5 px-3 text-xs font-semibold text-slate-300"
+                  >
+                    Modifier
+                  </button>
                 )}
               </div>
             </li>
@@ -459,8 +316,6 @@ export function AccountsPage() {
 
       {saveError && <p className="text-sm text-red-400">{saveError}</p>}
       {riskStrategyError && <p className="text-sm text-red-400">{riskStrategyError}</p>}
-      {symbolError && <p className="text-sm text-red-400">{symbolError}</p>}
-      {deleteError && <p className="text-sm text-red-400">{deleteError}</p>}
 
       <div className="mt-4 flex flex-col gap-3 rounded-sm border border-white/10 bg-white/5 p-4 lg:max-w-md">
         <div>

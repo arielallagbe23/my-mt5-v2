@@ -76,15 +76,14 @@ def _stream(name, proc):
         print(f"[{name}] {line}", end="")
 
 
-# Démarrage échelonné (pas tous en même instant) : au boot, MASTER fait 14
-# requêtes Firestore quasi simultanées (un .stream()/.get() par check de sa
-# liste `checks`) ET FOLLOWER en fait autant (3 écouteurs temps réel qui
-# livrent chacun un premier instantané complet dès la connexion) — lancés
-# pile au même moment, ça fait une rafale de ~20 requêtes groupées sur
-# quelques centaines de ms, suffisante pour déclencher la protection
-# anti-pic de Firestore (429 ResourceExhausted) MÊME très en dessous du
-# quota journalier (observé le 2026-11-13 : 54% du quota/jour utilisé au
-# moment du crash). Un petit décalage suffit à étaler cette rafale.
+# Démarrage échelonné (pas tous en même instant) : au boot, MASTER fait une
+# quinzaine de requêtes Firestore quasi simultanées (un .stream()/.get() par
+# check de sa liste `checks`) ET FOLLOWER en fait autant (écouteurs temps
+# réel qui livrent chacun un premier instantané complet dès la connexion) —
+# lancés pile au même moment, ça fait une rafale groupée sur quelques
+# centaines de ms, suffisante pour déclencher la protection anti-pic de
+# Firestore (429 ResourceExhausted) MÊME très en dessous du quota journalier
+# (observé le 2026-11-13). Un petit décalage suffit à étaler cette rafale.
 STARTUP_STAGGER_SECONDS = 15
 
 
