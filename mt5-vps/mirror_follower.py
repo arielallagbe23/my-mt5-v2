@@ -30,9 +30,19 @@ déclenché) : en mode Hedging, l'ordre garde le même ticket en devenant une
 position, donc le même suivi (_mirrored_tickets) gère les deux étapes sans
 distinction ni double mirroring.
 
-Aucune décision de trading ici : ce compte ne fait qu'imiter le compte
-principal (ouverture, ajustement SL/TP, clôture), jamais évaluer de
-scénario lui-même — le compte principal reste le seul "cerveau".
+Aucune décision de trading ici pour le miroir USDJPY : ce compte ne fait
+qu'imiter le compte principal (ouverture, ajustement SL/TP, clôture),
+jamais évaluer de scénario lui-même — le compte principal reste le seul
+"cerveau" pour cette paire-là.
+
+Multi-actifs (task_signals, voir tasks.py et _execute_task_signal) : pour
+un symbole que MASTER lui-même ne trade jamais, il n'y a tout simplement
+aucune position MASTER à imiter — ce process exécute alors DIRECTEMENT le
+signal de la tâche, mais SEULEMENT si CE compte a explicitement activé ce
+symbole (account_settings/{FOLLOWER_ID}.symbols, voir Mes comptes). Le
+"cerveau" (évaluation de la condition) reste côté MASTER (tasks.py) ; ce
+qui change ici, c'est seulement QUI exécute l'ordre une fois la condition
+remplie.
 
 À lancer comme un process à part entière (`python mirror_follower.py`),
 connecté à un DEUXIÈME terminal MT5 (jamais le même que le compte
@@ -128,17 +138,25 @@ _account_size_cache = {}
 # prévient automatiquement dès qu'un document change, pas de lecture entre
 # deux changements réels (contrairement à un .stream() à chaque tour).
 #
-# _positions_ready / _orders_ready : au tout premier démarrage, un écouteur
-# met un court instant à livrer son premier résultat — tant que ce n'est
-# pas fait, le cache est vide alors que le compte principal a peut-être
-# déjà des positions ouvertes. Sans ce garde-fou, sync_mirror agirait sur
-# une image incomplète et pourrait croire (à tort) que tout a fermé côté
-# principal, et fermer des miroirs par erreur.
+# task_signals (3e écouteur) : PAS l'état d'une position MASTER — ce sont
+# les signaux de tâches multi-actifs (voir tasks.py, _publish_task_signal),
+# qui existent même quand MASTER ne trade jamais lui-même le symbole. Même
+# mécanisme d'écoute temps réel que les deux autres, pour la même raison
+# (pas de lecture répétée d'une collection qui ne change presque jamais).
+#
+# _positions_ready / _orders_ready / _signals_ready : au tout premier
+# démarrage, un écouteur met un court instant à livrer son premier résultat
+# — tant que ce n'est pas fait, le cache est vide alors que le compte
+# principal a peut-être déjà des positions ouvertes. Sans ce garde-fou,
+# sync_mirror agirait sur une image incomplète et pourrait croire (à tort)
+# que tout a fermé côté principal, et fermer des miroirs par erreur.
 _master_state_lock = threading.Lock()
 _master_positions_cache = {}
 _master_orders_cache = {}
+_task_signals_cache = {}
 _positions_ready = False
 _orders_ready = False
+_signals_ready = False
 _master_state_listeners_started = False
 _listeners_started_at = None
 
@@ -171,14 +189,24 @@ def _on_orders_snapshot(query_snapshot, changes, read_time):
         _orders_ready = True
 
 
+def _on_task_signals_snapshot(query_snapshot, changes, read_time):
+    global _signals_ready
+    with _master_state_lock:
+        _task_signals_cache.clear()
+        for doc in query_snapshot:
+            _task_signals_cache[doc.id] = doc.to_dict()
+        _signals_ready = True
+
+
 def _start_master_state_listeners(db):
-    """Démarre les deux écouteurs une seule fois (threads gérés par le SDK
+    """Démarre les trois écouteurs une seule fois (threads gérés par le SDK
     Firestore) — idempotent, sans effet si déjà démarrés."""
     global _master_state_listeners_started, _listeners_started_at
     if _master_state_listeners_started:
         return
     db.collection("mirror_positions").on_snapshot(_on_positions_snapshot)
     db.collection("mirror_orders").on_snapshot(_on_orders_snapshot)
+    db.collection("task_signals").on_snapshot(_on_task_signals_snapshot)
     _master_state_listeners_started = True
     _listeners_started_at = time.time()
 
@@ -202,19 +230,41 @@ def _account_size(db, vps_id):
     return value
 
 
-# riskStrategy change rarement (changé à la main sur Mes comptes) — même
+# account_settings change rarement (changé à la main sur Mes comptes) — même
 # cache 60s que _account_size, pour ne pas relire Firestore à chaque tour.
-_risk_strategy_cache = {}
+# Clé = vps_id SEUL (PAS (vps_id, symbol) — bug corrigé : ça relisait le MÊME
+# document une fois par symbole interrogé, donc jusqu'à 3x plus de lectures
+# que nécessaire à chaque expiration de cache. Un seul doc contient déjà tous
+# les symboles, donc une seule lecture suffit pour les résoudre tous).
+_account_settings_cache = {}
 
 
-def _risk_strategy(db, vps_id):
-    cached = _risk_strategy_cache.get(vps_id)
+def _account_settings(db, vps_id):
+    cached = _account_settings_cache.get(vps_id)
     if cached is not None and (time.time() - cached[1]) < ACCOUNT_SIZE_CACHE_SECONDS:
         return cached[0]
 
     doc = db.collection("account_settings").document(vps_id).get()
-    value = doc.to_dict().get("riskStrategy") if doc.exists else None
-    _risk_strategy_cache[vps_id] = (value, time.time())
+    data = doc.to_dict() if doc.exists else {}
+    _account_settings_cache[vps_id] = (data, time.time())
+    return data
+
+
+def _resolve_symbol_settings(db, vps_id, symbol):
+    """Équivalent Python de resolveSymbolSettings (server/src/routes/account.js,
+    dupliqué ici comme _account_size plus haut : processus séparé, pas de
+    module Firestore partagé entre le serveur Node et le VPS). USDJPY reste
+    toujours activé, piloté par le champ historique `riskStrategy` (legacy,
+    pas de case à cocher) ; les autres symboles sont dans
+    account_settings/{vps_id}.symbols.{symbol}, désactivés par défaut
+    (opt-in explicite, voir Mes comptes)."""
+    data = _account_settings(db, vps_id)
+    if symbol == PRICE_SYMBOL:
+        value = {"enabled": True, "riskStrategy": data.get("riskStrategy") or "manual"}
+    else:
+        entry = (data.get("symbols") or {}).get(symbol) or {}
+        value = {"enabled": bool(entry.get("enabled", False)), "riskStrategy": entry.get("riskStrategy") or "manual"}
+
     return value
 
 
@@ -232,15 +282,23 @@ def compute_follower_lot(master_volume, master_account_size, follower_account_si
     return max(0.01, round(master_volume * ratio, 2))
 
 
-def compute_follower_lot_by_strategy(db, m, follower_account_size, entry, sl):
+def compute_follower_lot_by_strategy(db, m, follower_account_size, entry, sl, symbol=PRICE_SYMBOL):
     """Lot calculé à partir du risque PROPRE à ce suppléant (sa Stratégie de
-    risque choisie sur Mes comptes + SA propre équité live), à la distance
-    entrée/SL de la position/ordre mirroré — complètement indépendant du lot
-    ou du risque réellement utilisé côté compte principal. Retourne None si
-    le suppléant est en mode "manuel" (pas de stratégie à appliquer, voir
-    compute_follower_lot) ou si une donnée nécessaire manque."""
-    strategy = _risk_strategy(db, FOLLOWER_ID)
-    preset = RISK_STRATEGY_PRESETS.get(strategy)
+    risque choisie sur Mes comptes POUR CE SYMBOLE + SA propre équité live),
+    à la distance entrée/SL de la position/ordre mirroré ou du signal de
+    tâche — complètement indépendant du lot ou du risque réellement utilisé
+    côté compte principal. Retourne None si le suppléant est en mode
+    "manuel" (pas de stratégie à appliquer, voir compute_follower_lot) ou si
+    une donnée nécessaire manque.
+
+    `symbol` : PRICE_SYMBOL (USDJPY) par défaut pour les deux appels miroir
+    existants (compat), mais passé explicitement pour un signal de tâche
+    multi-actifs (voir _execute_task_signal) — NOTE : compute_lot_size
+    suppose une paire cotée en JPY pour la conversion JPY->devise du compte
+    (voir sa docstring) ; pas encore correct pour XAUUSD, formule séparée à
+    faire (todo multi-actifs, étape 3)."""
+    settings = _resolve_symbol_settings(db, FOLLOWER_ID, symbol)
+    preset = RISK_STRATEGY_PRESETS.get(settings["riskStrategy"])
     if preset is None:
         return None
 
@@ -254,7 +312,7 @@ def compute_follower_lot_by_strategy(db, m, follower_account_size, entry, sl):
         return None
     risk_amount = (risk_percent / 100) * follower_account_size
 
-    tick = m.symbol_info_tick(PRICE_SYMBOL)
+    tick = m.symbol_info_tick(symbol)
     if tick is None:
         return None
 
@@ -319,6 +377,99 @@ def _save_state(db):
         return
     db.collection("mirror_state").document(FOLLOWER_ID).set({"tickets": _mirrored_tickets})
     _last_saved_tickets = dict(_mirrored_tickets)
+
+
+# task_id -> ticket suppléant (int), -1 si dry-run (pas de vrai ticket), ou
+# None si le signal a été ignoré sans être exécuté (trop vieux, voir
+# TASK_SIGNAL_MAX_AGE_SECONDS) — distinct de _mirrored_tickets : un signal
+# de tâche n'est PAS une position mirroitée en continu (pas de SL/TP suivi
+# ici une fois posé, contrairement au miroir USDJPY, voir
+# _execute_task_signal), juste "déjà traité une fois, ne jamais retenter".
+_handled_task_signals = {}
+_last_saved_handled_signals = None
+
+# Au-delà de cet âge, un signal de tâche est ignoré sans être exécuté (le
+# prix d'entrée calculé au déclenchement est sans doute trop loin du marché
+# actuel) — évite qu'activer une paire longtemps après coup ne déclenche
+# soudainement l'exécution d'un signal très ancien. Même ordre de grandeur
+# que SPREAD_WAIT_TIMEOUT_SECONDS côté tasks.py.
+TASK_SIGNAL_MAX_AGE_SECONDS = 60 * 60
+
+
+def _load_signal_state(db):
+    global _handled_task_signals, _last_saved_handled_signals
+    doc = db.collection("task_signal_state").document(FOLLOWER_ID).get()
+    _handled_task_signals = doc.to_dict().get("handled", {}) if doc.exists else {}
+    _last_saved_handled_signals = dict(_handled_task_signals)
+
+
+def _save_signal_state(db):
+    global _last_saved_handled_signals
+    if _handled_task_signals == _last_saved_handled_signals:
+        return
+    db.collection("task_signal_state").document(FOLLOWER_ID).set({"handled": _handled_task_signals})
+    _last_saved_handled_signals = dict(_handled_task_signals)
+
+
+def _execute_task_signal(db, m, follower_account_size, task_id, signal):
+    """Exécute un signal de tâche multi-actifs (task_signals/{task_id}, voir
+    _publish_task_signal dans tasks.py) sur CE compte, SEULEMENT si CE
+    compte a explicitement activé le symbole concerné — indépendamment de
+    ce que MASTER fait (ou ne fait pas) sur son propre compte, voir la todo
+    multi-actifs "exécution directe par tâche".
+
+    Toujours un ordre EN ATTENTE (Buy/Sell Limit — scenario_shared.py ne
+    produit jamais d'autre type de résultat, voir finish_buy_order/
+    finish_sell_order/buy_1.py/sell_1.py), même convention que
+    _open_pending_mirror (type_filling RETURN, magic/comment dédiés).
+
+    PAS de gestion de trailing stop ici, volontairement : le miroir USDJPY
+    suit le SL courant de MASTER (lui-même ajusté par trailing_stop.py) —
+    mais il n'y a ici aucune position MASTER à suivre pour un symbole qu'il
+    ne trade pas. Le SL/TP posé reste donc fixe. À construire séparément si
+    besoin un jour (todo multi-actifs)."""
+    symbol = signal["symbol"]
+    settings = _resolve_symbol_settings(db, FOLLOWER_ID, symbol)
+    if not settings["enabled"]:
+        return  # pas activé sur ce compte — on retentera au prochain tour (coût négligeable, lecture en cache)
+
+    lot = compute_follower_lot_by_strategy(
+        db, m, follower_account_size, signal["entry"], signal["sl"], symbol=symbol
+    )
+    if lot is None:
+        print(f"[SIGNAL] {task_id} ({symbol}) : stratégie de risque absente ou donnée manquante, réessai au prochain tour")
+        return  # pas marqué "handled" : on retente tant que la donnée manque
+
+    m.symbol_select(symbol, True)
+
+    if DRY_RUN:
+        print(f"[SIGNAL] (dry-run) ouvrirait {symbol} {signal['orderType']} lot={lot} @ {signal['entry']} (tâche {task_id})")
+        _handled_task_signals[task_id] = -1
+        return
+
+    order_type = m.ORDER_TYPE_SELL_LIMIT if signal["orderType"] == "Sell Limit" else m.ORDER_TYPE_BUY_LIMIT
+    res = m.order_send({
+        "action": m.TRADE_ACTION_PENDING,
+        "symbol": symbol,
+        "volume": lot,
+        "type": order_type,
+        "price": float(signal["entry"]),
+        "sl": float(signal["sl"]),
+        "tp": float(signal["tp"]),
+        "deviation": 20,
+        "magic": MAGIC,
+        "comment": f"signal-{task_id}"[:28],
+        "type_time": m.ORDER_TIME_GTC,
+        "type_filling": m.ORDER_FILLING_RETURN,
+    })
+
+    if res is None or res.retcode != m.TRADE_RETCODE_DONE:
+        error = str(m.last_error()) if res is None else res.comment
+        print(f"[SIGNAL] échec exécution du signal {task_id} ({symbol}) : {error}")
+        return  # pas marqué "handled" : retenté au prochain tour (ex: marché fermé)
+
+    _handled_task_signals[task_id] = res.order
+    print(f"[SIGNAL] exécuté : {symbol} {signal['orderType']} lot={lot} ticket={res.order} (tâche {task_id})")
 
 
 def _open_mirror(m, master_ticket, master_pos, lot):
@@ -491,17 +642,18 @@ def sync_mirror(db):
 
     _start_master_state_listeners(db)
     with _master_state_lock:
-        if not (_positions_ready and _orders_ready):
+        if not (_positions_ready and _orders_ready and _signals_ready):
             elapsed = time.time() - _listeners_started_at
             if elapsed > LISTENER_STARTUP_WARNING_SECONDS:
                 print(
                     f"[MIRROR] ATTENTION : écouteur(s) Firestore toujours pas prêt(s) après {elapsed:.0f}s "
-                    f"(positions_ready={_positions_ready} orders_ready={_orders_ready}) — "
+                    f"(positions_ready={_positions_ready} orders_ready={_orders_ready} signals_ready={_signals_ready}) — "
                     "vérifie la connexion réseau et les permissions Firestore, aucun mirroring en cours"
                 )
             return  # écouteurs pas encore synchronisés, on attend
         master_positions = dict(_master_positions_cache)
         master_orders = dict(_master_orders_cache)
+        task_signals = dict(_task_signals_cache)
 
     follower_positions = {p.ticket: p for p in (m.positions_get(symbol=PRICE_SYMBOL) or ())}
     follower_orders = {o.ticket: o for o in (m.orders_get(symbol=PRICE_SYMBOL) or ())}
@@ -576,6 +728,23 @@ def sync_mirror(db):
 
     _save_state(db)
 
+    # 4. Signaux de tâches multi-actifs (task_signals, voir tasks.py) — PAS
+    # le miroir ci-dessus : pas la copie d'une position déjà ouverte sur
+    # MASTER, mais l'exécution directe d'un ordre déclenché par une tâche,
+    # pour les symboles que CE compte a explicitement activés (y compris des
+    # symboles que MASTER lui-même ne trade jamais, voir la todo
+    # multi-actifs "exécution directe par tâche").
+    for task_id, signal in task_signals.items():
+        if task_id in _handled_task_signals:
+            continue
+        age_seconds = time.time() - (signal.get("ts", 0) / 1000)
+        if age_seconds > TASK_SIGNAL_MAX_AGE_SECONDS:
+            _handled_task_signals[task_id] = None  # trop vieux, jamais exécuté, mais plus jamais retenté non plus
+            continue
+        _execute_task_signal(db, m, follower_account_size, task_id, signal)
+
+    _save_signal_state(db)
+
 
 if __name__ == "__main__":
     from google.cloud import firestore
@@ -592,6 +761,7 @@ if __name__ == "__main__":
     db = firestore.Client.from_service_account_json(SA_PATH)
     print(f"[BOOT] FOLLOWER_ID={FOLLOWER_ID} | terminal={TERMINAL_PATH} | dry_run={DRY_RUN} | poll={POLL_INTERVAL}s")
     _load_state(db)
+    _load_signal_state(db)
 
     while True:
         try:
