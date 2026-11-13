@@ -66,9 +66,15 @@ import threading
 import time
 import traceback
 
+from google.api_core.exceptions import ResourceExhausted
+
 from account_order import command_doc_id, handle_account_order_request
 from mt5_client import ensure_mt5
 from scenario_shared import RISK_STRATEGY_PRESETS, compute_auto_risk, compute_growth_percent, compute_lot_size
+
+# Durée d'attente après un throttle Firestore (429 ResourceExhausted) avant de
+# retenter — voir la même constante et la même logique dans mt5_status.py.
+QUOTA_COOLDOWN_SECONDS = 60
 
 # Windows ouvre souvent la console avec l'ancien codepage (cp1252), qui ne
 # sait pas encoder certains caractères utilisés dans nos messages (ex: "→")
@@ -766,7 +772,19 @@ if __name__ == "__main__":
     while True:
         try:
             sync_mirror(db)
+            time.sleep(POLL_INTERVAL)
+        except ResourceExhausted:
+            # Même logique que mt5_status.py (_run_safely) : un throttle
+            # Firestore actif (429) ne se résout pas en retentant presque
+            # immédiatement avec le même pic de requêtes (check_account_order_requests,
+            # _publish_own_status, _account_size, les écouteurs...) — on
+            # attend nettement plus longtemps avant de reprendre.
+            print(
+                f"[LOOP] Firestore throttle (429 ResourceExhausted) — pause de "
+                f"{QUOTA_COOLDOWN_SECONDS}s avant de reprendre"
+            )
+            time.sleep(QUOTA_COOLDOWN_SECONDS)
         except Exception:
             print("[LOOP] erreur :")
             traceback.print_exc()
-        time.sleep(POLL_INTERVAL)
+            time.sleep(POLL_INTERVAL)

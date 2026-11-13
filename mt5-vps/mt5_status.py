@@ -61,6 +61,8 @@ import sys
 import time
 import traceback
 
+from google.api_core.exceptions import ResourceExhausted
+
 from alerte_me_by_level import check_closed_positions_notify
 from alerte_pre_cloture import check_pre_close_alerts
 from config import MASTER_TERMINAL_PATH, POLL_INTERVAL, SA_PATH, VPS_ID
@@ -88,6 +90,12 @@ sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 from untracked_positions import check_untracked_positions
 
+# Durée d'attente après un throttle Firestore (429 ResourceExhausted) avant
+# de retenter — nettement plus long que POLL_INTERVAL (~10s) pour laisser le
+# temps à Firestore de lever son throttle, plutôt que de le re-déclencher
+# presque immédiatement avec le même pic de requêtes (voir _run_safely).
+QUOTA_COOLDOWN_SECONDS = 60
+
 
 def _run_safely(name, func, db):
     """Exécute UN check isolément : une exception ici ne doit jamais empêcher
@@ -98,9 +106,21 @@ def _run_safely(name, func, db):
     suivants pour tout le tour (potentiellement ceux qui notifient une
     clôture de position ou une progression de TP), avec pour seule trace un
     traceback perdu dans une console non surveillée. Symptôme observé :
-    notifications manquantes sans aucune erreur visible côté notify()."""
+    notifications manquantes sans aucune erreur visible côté notify().
+
+    EXCEPTION (429, voir run()) : ResourceExhausted n'est PAS absorbée ici,
+    volontairement, contrairement à toute autre erreur — continuer à
+    enchaîner les 13 checks suivants pendant que Firestore throttle déjà
+    ne ferait qu'aggraver le pic (observé le 2026-11-13 : les 14 checks de
+    CE seul process, enchaînés sans la moindre pause entre eux, suffisaient
+    À EUX SEULS à déclencher et entretenir un 429 pendant plusieurs tours
+    de boucle consécutifs, même MASTER démarré seul). Elle remonte donc
+    jusqu'à run(), qui interrompt le tour en cours et attend plus
+    longtemps avant de reprendre."""
     try:
         func(db)
+    except ResourceExhausted:
+        raise
     except Exception:
         print(f"[LOOP] erreur dans {name} :")
         traceback.print_exc()
@@ -138,9 +158,17 @@ def run():
     ]
 
     while True:
-        for name, func in checks:
-            _run_safely(name, func, db)
-        time.sleep(POLL_INTERVAL)
+        try:
+            for name, func in checks:
+                _run_safely(name, func, db)
+            time.sleep(POLL_INTERVAL)
+        except ResourceExhausted:
+            print(
+                f"[LOOP] Firestore throttle (429 ResourceExhausted) — tour interrompu, "
+                f"pause de {QUOTA_COOLDOWN_SECONDS}s avant de reprendre (continuer à enchaîner "
+                "les checks pendant un throttle actif ne ferait qu'aggraver le pic)"
+            )
+            time.sleep(QUOTA_COOLDOWN_SECONDS)
 
 
 if __name__ == "__main__":
